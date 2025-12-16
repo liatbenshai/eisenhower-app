@@ -18,6 +18,7 @@ import TimeAnalytics from '../components/Analytics/TimeAnalytics';
 import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
 import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
 import SmartRecommendations from '../components/Recommendations/SmartRecommendations';
+import HabitTracker from '../components/Habits/HabitTracker';
 
 /**
  * דף לוח המחוונים הראשי
@@ -177,6 +178,11 @@ function Dashboard() {
             label: 'המלצות',
             icon: '💡',
             content: <SmartRecommendations />
+          },
+          {
+            label: 'הרגלים',
+            icon: '📊',
+            content: <HabitTracker />
           },
           {
             label: 'ניתוח זמן',
