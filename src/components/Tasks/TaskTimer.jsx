@@ -20,15 +20,22 @@ function TaskTimer({ task, onUpdate }) {
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [timerMode, setTimerMode] = useState('work'); // 'work' or 'break'
-  const [pomodoroMinutes, setPomodoroMinutes] = useState(25);
+  const [targetMinutes, setTargetMinutes] = useState(task.estimated_duration || 30); // זמן יעד
+  const [hasReachedTarget, setHasReachedTarget] = useState(false);
   const intervalRef = useRef(null);
+  const audioRef = useRef(null);
   
   const timeSpent = (task && task.time_spent) ? parseInt(task.time_spent) : 0;
   const estimated = (task && task.estimated_duration) ? parseInt(task.estimated_duration) : 0;
-  const totalSpent = timeSpent + Math.floor(elapsedSeconds / 60);
-  const progress = estimated > 0 
-    ? Math.min(100, Math.round((totalSpent / estimated) * 100))
+  const currentSessionMinutes = Math.floor(elapsedSeconds / 60);
+  const totalSpent = timeSpent + currentSessionMinutes;
+  
+  // חישוב זמן נותר
+  const remainingMinutes = targetMinutes - currentSessionMinutes;
+  const isTargetReached = currentSessionMinutes >= targetMinutes;
+  
+  const progress = targetMinutes > 0 
+    ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
     : 0;
   
   // עדכון זמן כל שנייה
@@ -54,33 +61,85 @@ function TaskTimer({ task, onUpdate }) {
   // שמירה אוטומטית כל 5 דקות
   useEffect(() => {
     if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0) {
-      saveProgress();
+      saveProgress(false); // שמירה אוטומטית בלי איפוס
     }
   }, [elapsedSeconds, isRunning]);
   
-  // בדיקת סיום פרומדורו
+  // בדיקת הגעה ליעד זמן
   useEffect(() => {
-    if (isRunning && timerMode === 'work') {
-      const workSeconds = pomodoroMinutes * 60;
-      if (elapsedSeconds >= workSeconds) {
+    if (isRunning && targetMinutes > 0 && !hasReachedTarget) {
+      const targetSeconds = targetMinutes * 60;
+      if (elapsedSeconds >= targetSeconds) {
+        setHasReachedTarget(true);
         setIsRunning(false);
-        toast.success('🎉 פרומדורו הושלם! זמן להפסקה');
-        setTimerMode('break');
-        setElapsedSeconds(0);
-        saveProgress();
-      }
-    } else if (isRunning && timerMode === 'break') {
-      const breakSeconds = 5 * 60; // 5 דקות הפסקה
-      if (elapsedSeconds >= breakSeconds) {
-        setIsRunning(false);
-        toast.success('✅ הפסקה הסתיימה! מוכנים לעבודה');
-        setTimerMode('work');
-        setElapsedSeconds(0);
+        playAlarm();
+        toast.success(`⏰ הגעת ליעד של ${targetMinutes} דקות!`, {
+          duration: 5000,
+          icon: '🎉'
+        });
+        // שמירה אוטומטית
+        saveProgress(false);
       }
     }
-  }, [elapsedSeconds, isRunning, timerMode, pomodoroMinutes]);
+  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget]);
+  
+  // צפצוף/התראה
+  const playAlarm = () => {
+    try {
+      // יצירת צליל צפצוף
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 1);
+      
+      // חזרה על הצפצוף 3 פעמים
+      setTimeout(() => {
+        const oscillator2 = audioContext.createOscillator();
+        const gainNode2 = audioContext.createGain();
+        oscillator2.connect(gainNode2);
+        gainNode2.connect(audioContext.destination);
+        oscillator2.frequency.value = 800;
+        oscillator2.type = 'sine';
+        gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+        oscillator2.start(audioContext.currentTime);
+        oscillator2.stop(audioContext.currentTime + 1);
+      }, 500);
+      
+      setTimeout(() => {
+        const oscillator3 = audioContext.createOscillator();
+        const gainNode3 = audioContext.createGain();
+        oscillator3.connect(gainNode3);
+        gainNode3.connect(audioContext.destination);
+        oscillator3.frequency.value = 800;
+        oscillator3.type = 'sine';
+        gainNode3.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+        oscillator3.start(audioContext.currentTime);
+        oscillator3.stop(audioContext.currentTime + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('שגיאה בהשמעת צפצוף:', err);
+    }
+  };
   
   const startTimer = () => {
+    if (hasReachedTarget) {
+      // התחלה מחדש אחרי שהגענו ליעד
+      setElapsedSeconds(0);
+      setHasReachedTarget(false);
+    }
     setStartTime(new Date());
     setIsRunning(true);
     toast.success('טיימר הופעל');
@@ -89,20 +148,26 @@ function TaskTimer({ task, onUpdate }) {
   const stopTimer = async () => {
     setIsRunning(false);
     if (elapsedSeconds > 0) {
-      await saveProgress();
+      await saveProgress(true); // שמירה עם איפוס
     }
     setElapsedSeconds(0);
     setStartTime(null);
   };
   
-  const saveProgress = async () => {
+  const resetTimer = () => {
+    setIsRunning(false);
+    setElapsedSeconds(0);
+    setHasReachedTarget(false);
+    setStartTime(null);
+  };
+  
+  const saveProgress = async (reset = false) => {
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
       if (minutesToAdd > 0 && task && task.id) {
         const newTimeSpent = timeSpent + minutesToAdd;
         
-        // אם זו משימת שלב (יש parent_task_id), עדכן את המשימה עצמה
-        // כי שלבים נשמרים גם ב-tasks table
+        // עדכון המשימה
         await updateTask(task.id, { time_spent: newTimeSpent });
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
@@ -110,14 +175,23 @@ function TaskTimer({ task, onUpdate }) {
           await updateSubtaskProgress(task.subtask_id, newTimeSpent);
         }
         
-        setElapsedSeconds(0);
+        if (reset) {
+          setElapsedSeconds(0);
+        }
         if (onUpdate) onUpdate();
-        toast.success(`נוסף ${minutesToAdd} דקות`);
+        toast.success(`נוסף ${minutesToAdd} דקות. סה"כ: ${newTimeSpent} דקות`);
       }
     } catch (err) {
       console.error('שגיאה בשמירת התקדמות:', err);
       toast.error(err.message || 'שגיאה בשמירת התקדמות');
     }
+  };
+  
+  const continueAfterTarget = () => {
+    setHasReachedTarget(false);
+    setElapsedSeconds(0);
+    setIsRunning(true);
+    toast.success('ממשיכים לעבוד!');
   };
   
   const formatTime = (seconds) => {
@@ -131,75 +205,98 @@ function TaskTimer({ task, onUpdate }) {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
   
-  const remainingSeconds = timerMode === 'work' 
-    ? (pomodoroMinutes * 60) - elapsedSeconds
-    : (5 * 60) - elapsedSeconds;
-  
-  const displayTime = timerMode === 'work' ? remainingSeconds : elapsedSeconds;
+  const displayTime = isTargetReached ? elapsedSeconds : (targetMinutes * 60 - elapsedSeconds);
   
   return (
     <div className={`p-4 rounded-lg border-2 ${
-      timerMode === 'work'
-        ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800'
-        : 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800'
+      hasReachedTarget
+        ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-300 dark:border-green-700 animate-pulse'
+        : 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800'
     }`}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {timerMode === 'work' ? '⏱️ טיימר עבודה' : '☕ הפסקה'}
+          ⏱️ טיימר עבודה
         </h3>
-        {estimated > 0 && timerMode === 'work' && (
-          <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-            {progress}%
+        {hasReachedTarget && (
+          <span className="text-xs font-bold text-green-600 dark:text-green-400 animate-bounce">
+            🎉 הושלם!
           </span>
         )}
       </div>
       
-      {/* מצב פרומדורו */}
-      {timerMode === 'work' && (
-        <div className="mb-2">
+      {/* הגדרת זמן יעד */}
+      {!isRunning && !hasReachedTarget && (
+        <div className="mb-3">
           <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-            משך פרומדורו:
+            זמן יעד (דקות):
           </label>
-          <select
-            value={pomodoroMinutes}
-            onChange={(e) => setPomodoroMinutes(parseInt(e.target.value))}
-            disabled={isRunning}
-            className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
-          >
-            <option value={15}>15 דקות</option>
-            <option value={25}>25 דקות (קלאסי)</option>
-            <option value={45}>45 דקות</option>
-            <option value={60}>60 דקות</option>
-          </select>
+          <input
+            type="number"
+            value={targetMinutes}
+            onChange={(e) => setTargetMinutes(parseInt(e.target.value) || 30)}
+            min="1"
+            max="240"
+            className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 w-full"
+            placeholder="30"
+          />
         </div>
       )}
       
       {/* תצוגת זמן */}
       <div className="text-center mb-4">
-        <div className={`text-4xl font-bold mb-1 ${
-          timerMode === 'work' 
-            ? 'text-gray-900 dark:text-white' 
-            : 'text-green-700 dark:text-green-300'
+        <div className={`text-5xl font-bold mb-1 ${
+          hasReachedTarget
+            ? 'text-green-600 dark:text-green-400'
+            : remainingMinutes <= 5 && isRunning
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-gray-900 dark:text-white'
         }`}>
-          {formatTime(timerMode === 'work' ? displayTime : displayTime)}
+          {formatTime(Math.abs(displayTime))}
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {timerMode === 'work' && timeSpent > 0 && (
-            <span>סה"כ היום: {timeSpent} דקות</span>
+        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          {!hasReachedTarget && isRunning && (
+            <div>
+              {remainingMinutes > 0 ? (
+                <span className="text-orange-600 dark:text-orange-400 font-medium">
+                  נותרו {remainingMinutes} דקות
+                </span>
+              ) : (
+                <span className="text-red-600 dark:text-red-400 font-bold">
+                  עברת את היעד!
+                </span>
+              )}
+            </div>
           )}
-          {timerMode === 'work' && estimated > 0 && (
-            <span className="mr-2">• משוער: {estimated} דקות</span>
-          )}
-          {timerMode === 'break' && (
-            <span>הפסקה של 5 דקות</span>
+          <div>
+            <span className="font-medium">סה"כ עבדת: {totalSpent} דקות</span>
+            {estimated > 0 && (
+              <span className="mr-2">• משוער: {estimated} דקות</span>
+            )}
+          </div>
+          {currentSessionMinutes > 0 && (
+            <div>
+              <span>הסשן הנוכחי: {currentSessionMinutes} דקות</span>
+            </div>
           )}
         </div>
       </div>
       
       {/* פס התקדמות */}
-      {estimated > 0 && timerMode === 'work' && (
+      {targetMinutes > 0 && (
         <div className="mb-4">
-          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-gray-600 dark:text-gray-400">התקדמות ליעד</span>
+            <span className={`font-medium ${
+              progress >= 100
+                ? 'text-green-600 dark:text-green-400'
+                : progress >= 75
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-gray-600 dark:text-gray-400'
+            }`}>
+              {progress}%
+            </span>
+          </div>
+          <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-300 ${
                 progress >= 100 
@@ -210,69 +307,85 @@ function TaskTimer({ task, onUpdate }) {
                   ? 'bg-yellow-500' 
                   : 'bg-orange-500'
               }`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-      
-      {/* פס התקדמות פרומדורו */}
-      {timerMode === 'work' && (
-        <div className="mb-4">
-          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${Math.min(100, (elapsedSeconds / (pomodoroMinutes * 60)) * 100)}%` }}
+              style={{ width: `${Math.min(100, progress)}%` }}
             />
           </div>
         </div>
       )}
       
       {/* כפתורי שליטה */}
-      <div className="flex gap-2">
-        {!isRunning ? (
-          <Button
-            onClick={startTimer}
-            className={`flex-1 text-white ${
-              timerMode === 'work'
-                ? 'bg-green-500 hover:bg-green-600'
-                : 'bg-blue-500 hover:bg-blue-600'
-            }`}
-          >
-            ▶ {timerMode === 'work' ? 'התחל עבודה' : 'התחל הפסקה'}
-          </Button>
+      <div className="space-y-2">
+        {hasReachedTarget ? (
+          <div className="space-y-2">
+            <div className="text-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg border-2 border-green-300 dark:border-green-700">
+              <p className="text-sm font-bold text-green-700 dark:text-green-300 mb-2">
+                🎉 הגעת ליעד של {targetMinutes} דקות!
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                סה"כ עבדת: {totalSpent} דקות
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={continueAfterTarget}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                ▶ המשך לעבוד
+              </Button>
+              <Button
+                onClick={async () => {
+                  await saveProgress(true);
+                  resetTimer();
+                }}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+              >
+                💾 שמור וסיים
+              </Button>
+            </div>
+          </div>
         ) : (
-          <Button
-            onClick={stopTimer}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-          >
-            ⏸ עצור
-          </Button>
-        )}
-        {elapsedSeconds > 0 && !isRunning && timerMode === 'work' && (
-          <Button
-            onClick={saveProgress}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
-          >
-            💾 שמור
-          </Button>
-        )}
-        {timerMode === 'break' && (
-          <Button
-            onClick={() => {
-              setTimerMode('work');
-              setElapsedSeconds(0);
-            }}
-            className="bg-gray-500 hover:bg-gray-600 text-white"
-          >
-            חזור לעבודה
-          </Button>
+          <div className="flex gap-2">
+            {!isRunning ? (
+              <Button
+                onClick={startTimer}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+              >
+                ▶ התחל עבודה
+              </Button>
+            ) : (
+              <Button
+                onClick={stopTimer}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+              >
+                ⏸ עצור ושמור
+              </Button>
+            )}
+            {elapsedSeconds > 0 && !isRunning && (
+              <Button
+                onClick={async () => {
+                  await saveProgress(true);
+                  resetTimer();
+                }}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                💾 שמור
+              </Button>
+            )}
+            {!isRunning && (
+              <Button
+                onClick={resetTimer}
+                className="bg-gray-500 hover:bg-gray-600 text-white"
+              >
+                🔄 איפוס
+              </Button>
+            )}
+          </div>
         )}
       </div>
       
-      {isRunning && timerMode === 'work' && (
+      {isRunning && (
         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-          הטיימר שומר אוטומטית כל 5 דקות • בסיום פרומדורו תתקבל הודעה
+          הטיימר שומר אוטומטית כל 5 דקות • בסיום היעד תתקבל התראה
         </p>
       )}
     </div>
