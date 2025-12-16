@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useCallback } from 'react';
 import { 
   getTasks, 
   createTask, 
+  createProjectTask,
   updateTask, 
   deleteTask, 
   moveTask, 
@@ -70,6 +71,29 @@ export function TaskProvider({ children }) {
     } catch (err) {
       console.error('שגיאה בהוספת משימה:', err);
       throw new Error('שגיאה בהוספת משימה');
+    }
+  };
+
+  // הוספת פרויקט עם שלבים
+  const addProjectTask = async (projectData) => {
+    try {
+      const newProject = await createProjectTask({
+        user_id: user.id,
+        title: projectData.title,
+        description: projectData.description || null,
+        quadrant: projectData.quadrant,
+        dueDate: projectData.dueDate || null,
+        dueTime: projectData.dueTime || null,
+        reminderMinutes: projectData.reminderMinutes || null,
+        totalDuration: projectData.totalDuration || null,
+        subtasks: projectData.subtasks || []
+      });
+      
+      setTasks(prev => [newProject, ...prev]);
+      return newProject;
+    } catch (err) {
+      console.error('שגיאה ביצירת פרויקט:', err);
+      throw new Error('שגיאה ביצירת פרויקט');
     }
   };
 
@@ -195,6 +219,7 @@ export function TaskProvider({ children }) {
     setSortBy,
     loadTasks,
     addTask,
+    addProjectTask,
     editTask,
     removeTask,
     changeQuadrant,

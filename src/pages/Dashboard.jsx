@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useTasks } from '../hooks/useTasks';
 import Matrix from '../components/Matrix/Matrix';
 import TaskForm from '../components/Tasks/TaskForm';
+import ProjectTaskForm from '../components/Tasks/ProjectTaskForm';
 import TaskFilters from '../components/Tasks/TaskFilters';
 import ExportButtons from '../components/Export/ExportButtons';
 import MobileNav from '../components/Layout/MobileNav';
@@ -15,6 +16,7 @@ import Button from '../components/UI/Button';
 function Dashboard() {
   const { loading, error, getStats } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [activeQuadrant, setActiveQuadrant] = useState(null); // לנייד
   const stats = getStats();
@@ -24,17 +26,28 @@ function Dashboard() {
     setEditingTask(null);
     setActiveQuadrant(quadrant);
     setShowTaskForm(true);
+    setShowProjectForm(false);
+  };
+
+  // פתיחת טופס יצירת פרויקט
+  const handleAddProject = (quadrant = 1) => {
+    setEditingTask(null);
+    setActiveQuadrant(quadrant);
+    setShowProjectForm(true);
+    setShowTaskForm(false);
   };
 
   // פתיחת טופס עריכת משימה
   const handleEditTask = (task) => {
     setEditingTask(task);
     setShowTaskForm(true);
+    setShowProjectForm(false);
   };
 
   // סגירת טופס
   const handleCloseForm = () => {
     setShowTaskForm(false);
+    setShowProjectForm(false);
     setEditingTask(null);
   };
 
@@ -102,9 +115,14 @@ function Dashboard() {
           <div className="flex flex-wrap gap-3">
             <TaskFilters />
             <ExportButtons />
-            <Button onClick={() => handleAddTask(1)}>
-              + משימה חדשה
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => handleAddTask(1)} variant="secondary">
+                + משימה
+              </Button>
+              <Button onClick={() => handleAddProject(1)} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800">
+                📋 + פרויקט עם שלבים
+              </Button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -127,6 +145,19 @@ function Dashboard() {
         <TaskForm
           task={editingTask}
           defaultQuadrant={activeQuadrant}
+          onClose={handleCloseForm}
+        />
+      </Modal>
+
+      {/* מודל טופס פרויקט */}
+      <Modal
+        isOpen={showProjectForm}
+        onClose={handleCloseForm}
+        title="פרויקט חדש"
+        size="xl"
+      >
+        <ProjectTaskForm
+          defaultQuadrant={activeQuadrant || 1}
           onClose={handleCloseForm}
         />
       </Modal>

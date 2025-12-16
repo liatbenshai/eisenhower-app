@@ -5,6 +5,21 @@ import { getRelativeDate, formatTime } from '../../utils/dateHelpers';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
 import toast from 'react-hot-toast';
 
+// פונקציה לבדיקה אם שלב באיחור או היום
+const isSubtaskOverdue = (subtask) => {
+  if (!subtask.due_date || subtask.is_completed) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(subtask.due_date);
+  return dueDate < today;
+};
+
+const isSubtaskDueToday = (subtask) => {
+  if (!subtask.due_date || subtask.is_completed) return false;
+  const today = new Date().toISOString().split('T')[0];
+  return subtask.due_date === today;
+};
+
 /**
  * כרטיס משימה
  */
@@ -46,6 +61,18 @@ function TaskCard({
   // בדיקת סטטוס
   const isOverdue = isTaskOverdue(task);
   const isDueToday = isTaskDueToday(task);
+  const isProject = task.is_project;
+  const subtasks = task.subtasks || [];
+  
+  // חישוב התקדמות פרויקט
+  const projectProgress = isProject && subtasks.length > 0
+    ? Math.round((subtasks.filter(st => st.is_completed).length / subtasks.length) * 100)
+    : null;
+  
+  // שלבים קרובים (היום או באיחור)
+  const upcomingSubtasks = subtasks.filter(st => 
+    !st.is_completed && (isSubtaskDueToday(st) || isSubtaskOverdue(st))
+  ).slice(0, 3);
 
   return (
     <motion.div
@@ -90,18 +117,74 @@ function TaskCard({
         {/* תוכן */}
         <div className="flex-1 min-w-0">
           {/* כותרת */}
-          <p className={`
-            font-medium text-gray-900 dark:text-white text-sm
-            ${task.is_completed ? 'line-through text-gray-500' : ''}
-          `}>
-            {task.title}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className={`
+              font-medium text-gray-900 dark:text-white text-sm
+              ${task.is_completed ? 'line-through text-gray-500' : ''}
+            `}>
+              {task.title}
+            </p>
+            {isProject && (
+              <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                פרויקט
+              </span>
+            )}
+          </div>
 
           {/* תיאור */}
           {task.description && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
               {task.description}
             </p>
+          )}
+
+          {/* סטטוס פרויקט */}
+          {isProject && (
+            <div className="mt-2 space-y-1">
+              {/* התקדמות */}
+              {projectProgress !== null && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${projectProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                    {projectProgress}%
+                  </span>
+                </div>
+              )}
+              
+              {/* שלבים קרובים */}
+              {upcomingSubtasks.length > 0 && (
+                <div className="space-y-1">
+                  {upcomingSubtasks.map((st, idx) => (
+                    <div
+                      key={idx}
+                      className={`
+                        text-xs px-2 py-1 rounded
+                        ${isSubtaskOverdue(st) 
+                          ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' 
+                          : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400'}
+                      `}
+                    >
+                      <span className="font-medium">{st.title}</span>
+                      {st.due_date && (
+                        <span className="mr-1"> • {getRelativeDate(st.due_date)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* מספר שלבים */}
+              {subtasks.length > 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {subtasks.filter(st => st.is_completed).length} / {subtasks.length} שלבים הושלמו
+                </div>
+              )}
+            </div>
           )}
 
           {/* תאריך יעד */}
