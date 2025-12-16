@@ -21,6 +21,7 @@ import {
   isFuture,
   differenceInDays
 } from 'date-fns';
+import { he } from 'date-fns/locale';
 import TaskCard from '../Tasks/TaskCard';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
 
@@ -143,11 +144,11 @@ function CalendarView() {
   // פורמט כותרת לפי מצב תצוגה
   const getViewTitle = () => {
     if (viewMode === 'day') {
-      return format(currentDate, 'dd MMMM yyyy');
+      return format(currentDate, 'dd MMMM yyyy', { locale: he });
     } else if (viewMode === 'week') {
       return `${format(viewStart, 'dd/MM')} - ${format(viewEnd, 'dd/MM/yyyy')}`;
     } else {
-      return format(currentDate, 'MMMM yyyy');
+      return format(currentDate, 'MMMM yyyy', { locale: he });
     }
   };
   
@@ -239,7 +240,7 @@ function CalendarView() {
                     {format(currentDate, 'd')}
                   </div>
                   <div className="text-lg text-gray-600 dark:text-gray-400">
-                    {format(currentDate, 'EEEE, MMMM yyyy')}
+                    {format(currentDate, 'EEEE, MMMM yyyy', { locale: he })}
                   </div>
                 </div>
                 
@@ -489,7 +490,7 @@ function CalendarView() {
           <div className="lg:col-span-1">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                {format(selectedDate, 'dd/MM/yyyy')}
+                {format(selectedDate, 'dd/MM/yyyy', { locale: he })}
                 {isToday(selectedDate) && (
                   <span className="mr-2 text-sm text-blue-600 dark:text-blue-400">(היום)</span>
                 )}

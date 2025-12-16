@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTasks } from '../../hooks/useTasks';
 import { format } from 'date-fns';
+import { he } from 'date-fns/locale';
 
 /**
  * תצוגת סיכום כללי
@@ -101,7 +102,7 @@ function SummaryView() {
           סיכום כללי
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {format(new Date(), 'dd MMMM yyyy')}
+          {format(new Date(), 'dd MMMM yyyy', { locale: he })}
         </p>
       </div>
       
