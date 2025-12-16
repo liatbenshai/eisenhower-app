@@ -15,6 +15,7 @@ import CalendarView from '../components/Calendar/CalendarView';
 import ProgressTracker from '../components/Tasks/ProgressTracker';
 import TaskTimer from '../components/Tasks/TaskTimer';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
+import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
 
 /**
  * דף לוח המחוונים הראשי
@@ -159,6 +160,11 @@ function Dashboard() {
             label: 'יומן',
             icon: '📅',
             content: <CalendarView />
+          },
+          {
+            label: 'תבניות',
+            icon: '📋',
+            content: <TaskTemplateManager />
           },
           {
             label: 'ניתוח זמן',

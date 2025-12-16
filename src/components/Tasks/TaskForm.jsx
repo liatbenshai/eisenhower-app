@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTasks } from '../../hooks/useTasks';
+import { useAuth } from '../../hooks/useAuth';
 import { validateTaskForm } from '../../utils/validators';
 import { QUADRANT_NAMES, QUADRANT_ICONS } from '../../utils/taskHelpers';
 import { getTodayISO } from '../../utils/dateHelpers';
+import { createTaskTemplate } from '../../services/supabase';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -12,6 +14,7 @@ import Button from '../UI/Button';
  */
 function TaskForm({ task, defaultQuadrant = 1, onClose }) {
   const { addTask, editTask } = useTasks();
+  const { user } = useAuth();
   const isEditing = !!task;
 
   const [formData, setFormData] = useState({
@@ -193,13 +196,46 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
       </div>
 
       {/* כפתורים */}
-      <div className="flex gap-3 pt-4">
-        <Button type="submit" loading={loading} fullWidth>
-          {isEditing ? 'שמור שינויים' : 'הוסף משימה'}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onClose}>
-          ביטול
-        </Button>
+      <div className="space-y-3 pt-4">
+        <div className="flex gap-3">
+          <Button type="submit" loading={loading} fullWidth>
+            {isEditing ? 'שמור שינויים' : 'הוסף משימה'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            ביטול
+          </Button>
+        </div>
+        {!isEditing && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={async () => {
+              if (!user?.id) {
+                toast.error('יש להתחבר כדי לשמור תבנית');
+                return;
+              }
+              try {
+                await createTaskTemplate({
+                  user_id: user.id,
+                  title: formData.title,
+                  description: formData.description || null,
+                  quadrant: formData.quadrant,
+                  due_time: formData.dueTime || null,
+                  reminder_minutes: formData.reminderMinutes ? parseInt(formData.reminderMinutes) : null,
+                  estimated_duration: formData.estimatedDuration ? parseInt(formData.estimatedDuration) : null,
+                  is_project: false
+                });
+                toast.success('תבנית נשמרה!');
+              } catch (err) {
+                console.error('שגיאה בשמירת תבנית:', err);
+                toast.error('שגיאה בשמירת תבנית');
+              }
+            }}
+            className="w-full"
+          >
+            💾 שמור כתבנית
+          </Button>
+        )}
       </div>
     </form>
   );

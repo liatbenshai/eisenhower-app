@@ -561,5 +561,105 @@ export async function getSubtasksByDate(userId, date) {
   return data;
 }
 
+// === פונקציות תבניות משימות ===
+
+/**
+ * קבלת כל התבניות של המשתמש
+ */
+export async function getTaskTemplates(userId) {
+  const { data, error } = await supabase
+    .from('task_templates')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * יצירת תבנית חדשה
+ */
+export async function createTaskTemplate(template) {
+  const { data, error } = await supabase
+    .from('task_templates')
+    .insert([{
+      user_id: template.user_id,
+      title: template.title,
+      description: template.description || null,
+      quadrant: template.quadrant,
+      due_time: template.due_time || null,
+      reminder_minutes: template.reminder_minutes || null,
+      estimated_duration: template.estimated_duration || null,
+      is_project: template.is_project || false
+    }])
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * עדכון תבנית
+ */
+export async function updateTaskTemplate(templateId, updates) {
+  const { data, error } = await supabase
+    .from('task_templates')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', templateId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * מחיקת תבנית
+ */
+export async function deleteTaskTemplate(templateId) {
+  const { error } = await supabase
+    .from('task_templates')
+    .delete()
+    .eq('id', templateId);
+  
+  if (error) throw error;
+}
+
+/**
+ * יצירת משימה מתבנית
+ */
+export async function createTaskFromTemplate(templateId, userId, dueDate = null) {
+  // קבלת התבנית
+  const { data: template, error: templateError } = await supabase
+    .from('task_templates')
+    .select('*')
+    .eq('id', templateId)
+    .eq('user_id', userId)
+    .single();
+  
+  if (templateError) throw templateError;
+  if (!template) throw new Error('תבנית לא נמצאה');
+  
+  // יצירת משימה מהתבנית
+  const newTask = await createTask({
+    user_id: userId,
+    title: template.title,
+    description: template.description || null,
+    quadrant: template.quadrant,
+    due_date: dueDate || null,
+    due_time: template.due_time || null,
+    reminder_minutes: template.reminder_minutes || null,
+    estimated_duration: template.estimated_duration || null,
+    is_project: template.is_project || false,
+    parent_task_id: null,
+    time_spent: 0,
+    is_completed: false
+  });
+  
+  return newTask;
+}
+
 export default supabase;
 
