@@ -31,9 +31,6 @@ function TaskTimer({ task, onUpdate }) {
     ? Math.min(100, Math.round((totalSpent / estimated) * 100))
     : 0;
   
-  // בדיקה אם זו משימת שלב
-  const isSubtask = !!task.parent_task_id;
-  
   // עדכון זמן כל שנייה
   useEffect(() => {
     if (isRunning) {
@@ -104,12 +101,13 @@ function TaskTimer({ task, onUpdate }) {
       if (minutesToAdd > 0 && task && task.id) {
         const newTimeSpent = timeSpent + minutesToAdd;
         
-        // אם זו משימת שלב, עדכן את ה-subtask
-        if (isSubtask && task.subtask_id) {
+        // אם זו משימת שלב (יש parent_task_id), עדכן את המשימה עצמה
+        // כי שלבים נשמרים גם ב-tasks table
+        await updateTask(task.id, { time_spent: newTimeSpent });
+        
+        // אם יש subtask_id, עדכן גם את ה-subtask table
+        if (task.subtask_id) {
           await updateSubtaskProgress(task.subtask_id, newTimeSpent);
-        } else {
-          // אחרת, עדכן את המשימה הרגילה
-          await updateTask(task.id, { time_spent: newTimeSpent });
         }
         
         setElapsedSeconds(0);
