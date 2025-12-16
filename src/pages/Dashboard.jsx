@@ -16,6 +16,7 @@ import ProgressTracker from '../components/Tasks/ProgressTracker';
 import TaskTimer from '../components/Tasks/TaskTimer';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
 import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
+import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
 
 /**
  * דף לוח המחוונים הראשי
@@ -165,6 +166,11 @@ function Dashboard() {
             label: 'תבניות',
             icon: '📋',
             content: <TaskTemplateManager />
+          },
+          {
+            label: 'תכנון זמן',
+            icon: '📅',
+            content: <TimeBlockManager />
           },
           {
             label: 'ניתוח זמן',
