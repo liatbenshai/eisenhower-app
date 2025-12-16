@@ -316,7 +316,20 @@ export async function createProjectTask(projectData) {
     // יצירת משימות לכל שלב
     for (let i = 0; i < subtasks.length; i++) {
       const st = subtasks[i];
+      
+      // בדיקה שיש תאריך
+      if (!st.dueDate) {
+        console.warn(`שלב ${i + 1} אין לו תאריך, מדלגים`);
+        continue;
+      }
+      
       const quadrant = getQuadrantByDate(st.dueDate, taskData.quadrant);
+      
+      console.log(`יוצר משימה לשלב ${i + 1}:`, {
+        title: `${taskData.title} - ${st.title}`,
+        dueDate: st.dueDate,
+        quadrant: quadrant
+      });
       
       // יצירת משימה לשלב
       const { data: stageTask, error: stageError } = await supabase
@@ -338,6 +351,7 @@ export async function createProjectTask(projectData) {
         .single();
       
       if (stageError) {
+        console.error('שגיאה ביצירת משימה לשלב:', stageError);
         // אם יש שגיאה, נמחק את הפרויקט הראשי
         await supabase.from('tasks').delete().eq('id', projectTask.id);
         throw stageError;
@@ -346,7 +360,7 @@ export async function createProjectTask(projectData) {
       createdTasks.push(stageTask);
       
       // יצירת רשומה ב-subtasks לקישור
-      await supabase
+      const { error: subtaskError } = await supabase
         .from('subtasks')
         .insert([{
           task_id: projectTask.id,
@@ -358,7 +372,13 @@ export async function createProjectTask(projectData) {
           estimated_duration: st.estimatedDuration || null,
           is_completed: false
         }]);
+      
+      if (subtaskError) {
+        console.error('שגיאה ביצירת subtask:', subtaskError);
+      }
     }
+    
+    console.log(`נוצרו ${createdTasks.length} משימות לשלבים`);
   }
   
   // קבלת הפרויקט עם השלבים

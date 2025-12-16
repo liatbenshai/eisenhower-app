@@ -89,7 +89,8 @@ export function TaskProvider({ children }) {
         subtasks: projectData.subtasks || []
       });
       
-      setTasks(prev => [newProject, ...prev]);
+      // טעינה מחדש של כל המשימות כדי לכלול את השלבים שנוצרו
+      await loadTasks();
       return newProject;
     } catch (err) {
       console.error('שגיאה ביצירת פרויקט:', err);

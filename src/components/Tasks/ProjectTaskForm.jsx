@@ -153,13 +153,15 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
 
     setLoading(true);
     try {
+      console.log('יוצר פרויקט עם שלבים:', { formData, subtasks });
       await addProjectTask({
         ...formData,
         subtasks
       });
-      toast.success('הפרויקט נוצר בהצלחה');
+      toast.success(`הפרויקט נוצר בהצלחה עם ${subtasks.length} שלבים`);
       onClose();
     } catch (err) {
+      console.error('שגיאה ביצירת פרויקט:', err);
       toast.error(err.message || 'שגיאה ביצירת הפרויקט');
     } finally {
       setLoading(false);
