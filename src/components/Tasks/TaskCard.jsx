@@ -67,12 +67,6 @@ function TaskCard({
   const subtasks = task.subtasks || [];
   const [showTimer, setShowTimer] = useState(false);
   
-  // התקדמות למשימה רגילה
-  const regularTaskProgress = !isProject && !isSubtask && task.estimated_duration
-    ? Math.min(100, Math.round(((task.time_spent || 0) / task.estimated_duration) * 100))
-    : null;
-  const [showTimer, setShowTimer] = useState(false);
-  
   // חישוב התקדמות פרויקט - לפי שלבים שהושלמו
   const projectProgressByCompletion = isProject && subtasks.length > 0
     ? Math.round((subtasks.filter(st => st.is_completed).length / subtasks.length) * 100)
