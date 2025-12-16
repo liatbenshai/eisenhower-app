@@ -18,7 +18,7 @@ import ProgressTracker from '../components/Tasks/ProgressTracker';
  * דף לוח המחוונים הראשי
  */
 function Dashboard() {
-  const { loading, error, getStats } = useTasks();
+  const { loading, error, getStats, tasks, loadTasks } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -178,16 +178,13 @@ function Dashboard() {
                           <ProgressTracker
                             key={subtask.id}
                             subtask={subtask}
-                            onUpdate={() => {
-                              // טעינה מחדש של המשימות
-                              window.location.reload();
-                            }}
+                            onUpdate={loadTasks}
                           />
                         ))}
                       </div>
                     </div>
                   ))}
-                {tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length === 0 && (
+                {(!tasks || tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length === 0) && (
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     <span className="text-4xl mb-4 block">📋</span>
                     <p>אין פרויקטים עם שלבים</p>
