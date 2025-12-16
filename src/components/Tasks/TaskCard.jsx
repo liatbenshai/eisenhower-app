@@ -165,45 +165,52 @@ function TaskCard({
             </p>
           )}
 
-          {/* טיימר למשימה רגילה */}
-          {!isProject && !isSubtask && task.estimated_duration && (
+          {/* כפתור טיימר לכל משימה */}
+          {!task.is_completed && (
             <div className="mt-2">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowTimer(!showTimer);
                 }}
-                className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 flex items-center gap-1"
               >
-                ⏱️ טיימר
+                ⏱️ {showTimer ? 'הסתר טיימר' : 'טיימר'}
               </button>
-              {regularTaskProgress !== null && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
-                    <span className="font-medium text-blue-600 dark:text-blue-400">
-                      {regularTaskProgress}%
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        regularTaskProgress >= 100 
-                          ? 'bg-green-500' 
-                          : regularTaskProgress >= 75 
-                          ? 'bg-blue-500' 
-                          : regularTaskProgress >= 50 
-                          ? 'bg-yellow-500' 
-                          : 'bg-orange-500'
-                      }`}
-                      style={{ width: `${regularTaskProgress}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {task.time_spent || 0} / {task.estimated_duration} דקות
-                  </div>
-                </div>
+              {task.time_spent > 0 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">
+                  • {task.time_spent} דקות
+                </span>
               )}
+            </div>
+          )}
+          
+          {/* התקדמות למשימה רגילה */}
+          {!isProject && !isSubtask && task.estimated_duration && regularTaskProgress !== null && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
+                <span className="font-medium text-blue-600 dark:text-blue-400">
+                  {regularTaskProgress}%
+                </span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    regularTaskProgress >= 100 
+                      ? 'bg-green-500' 
+                      : regularTaskProgress >= 75 
+                      ? 'bg-blue-500' 
+                      : regularTaskProgress >= 50 
+                      ? 'bg-yellow-500' 
+                      : 'bg-orange-500'
+                  }`}
+                  style={{ width: `${regularTaskProgress}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {task.time_spent || 0} / {task.estimated_duration} דקות
+              </div>
             </div>
           )}
           
@@ -325,8 +332,8 @@ function TaskCard({
         </div>
       </div>
       
-      {/* טיימר */}
-      {showTimer && !isProject && !isSubtask && (
+      {/* טיימר - לכל משימה */}
+      {showTimer && !task.is_completed && (
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
           <TaskTimer
             task={task}
