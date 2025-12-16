@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { getRelativeDate, formatTime } from '../../utils/dateHelpers';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
+import { detectTaskCategory } from '../../utils/taskCategories';
 import toast from 'react-hot-toast';
 import TaskTimer from './TaskTimer';
 
@@ -66,6 +67,9 @@ function TaskCard({
   const isSubtask = !!task.parent_task_id; // משימה שהיא שלב של פרויקט
   const subtasks = task.subtasks || [];
   const [showTimer, setShowTimer] = useState(false);
+  
+  // זיהוי קטגוריה
+  const { category } = detectTaskCategory(task);
   
   // חישוב התקדמות פרויקט - לפי שלבים שהושלמו
   const projectProgressByCompletion = isProject && subtasks.length > 0
@@ -156,6 +160,9 @@ function TaskCard({
                 שלב
               </span>
             )}
+            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full flex items-center gap-1">
+              {category.icon} {category.name}
+            </span>
           </div>
 
           {/* תיאור */}

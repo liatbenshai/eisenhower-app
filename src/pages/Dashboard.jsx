@@ -15,10 +15,12 @@ import CalendarView from '../components/Calendar/CalendarView';
 import ProgressTracker from '../components/Tasks/ProgressTracker';
 import TaskTimer from '../components/Tasks/TaskTimer';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
+import WorkloadAnalysis from '../components/Analytics/WorkloadAnalysis';
 import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
 import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
 import SmartRecommendations from '../components/Recommendations/SmartRecommendations';
 import HabitTracker from '../components/Habits/HabitTracker';
+import AutoScheduler from '../components/SmartScheduler/AutoScheduler';
 
 /**
  * דף לוח המחוונים הראשי
@@ -188,6 +190,16 @@ function Dashboard() {
             label: 'ניתוח זמן',
             icon: '📊',
             content: <TimeAnalytics />
+          },
+          {
+            label: 'תכנון אוטומטי',
+            icon: '🤖',
+            content: <AutoScheduler />
+          },
+          {
+            label: 'ניתוח עומס',
+            icon: '⚖️',
+            content: <WorkloadAnalysis />
           },
           {
             label: 'התקדמות',

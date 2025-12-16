@@ -1,17 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
 // הגדרות Supabase - יש להחליף בערכים האמיתיים
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// יצירת לקוח Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
+// בדיקה שההגדרות קיימות
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'YOUR_SUPABASE_URL' || supabaseAnonKey === 'YOUR_SUPABASE_ANON_KEY') {
+  console.error('❌ שגיאה: חסרות הגדרות Supabase!');
+  console.error('אנא צור קובץ .env עם הערכים הבאים:');
+  console.error('VITE_SUPABASE_URL=https://your-project.supabase.co');
+  console.error('VITE_SUPABASE_ANON_KEY=your-anon-key');
+}
+
+// יצירת לקוח Supabase (אפילו עם ערכים ריקים כדי למנוע קריסה)
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
+    }
   }
-});
+);
 
 // === פונקציות אותנטיקציה ===
 
@@ -140,15 +152,28 @@ export async function getTasks(userId) {
  */
 export async function createTask(task) {
   console.log('createTask נקרא עם:', task);
+  
+  // הכנת נתונים לשמירה - וידוא שכל השדות מועברים נכון
+  const taskData = {
+    user_id: task.user_id,
+    title: task.title,
+    description: task.description || null,
+    quadrant: task.quadrant,
+    due_date: task.due_date || null,
+    due_time: task.due_time || null,
+    reminder_minutes: task.reminder_minutes ? parseInt(task.reminder_minutes) : null,
+    estimated_duration: task.estimated_duration ? parseInt(task.estimated_duration) : null,
+    is_project: task.is_project || false,
+    parent_task_id: task.parent_task_id || null,
+    time_spent: task.time_spent || 0,
+    is_completed: task.is_completed || false
+  };
+  
+  console.log('שומר משימה עם נתונים:', taskData);
+  
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{
-      ...task,
-      is_project: task.is_project || false,
-      parent_task_id: task.parent_task_id || null,
-      time_spent: task.time_spent || 0,
-      estimated_duration: task.estimated_duration || null
-    }])
+    .insert([taskData])
     .select()
     .single();
   
@@ -164,14 +189,33 @@ export async function createTask(task) {
  * עדכון משימה
  */
 export async function updateTask(taskId, updates) {
+  // הכנת נתונים לעדכון - וידוא שכל השדות מעודכנים נכון
+  const updateData = {
+    ...updates,
+    updated_at: new Date().toISOString()
+  };
+  
+  // המרת שדות מספריים אם צריך
+  if (updates.reminder_minutes !== undefined) {
+    updateData.reminder_minutes = updates.reminder_minutes ? parseInt(updates.reminder_minutes) : null;
+  }
+  if (updates.estimated_duration !== undefined) {
+    updateData.estimated_duration = updates.estimated_duration ? parseInt(updates.estimated_duration) : null;
+  }
+  
+  console.log('מעדכן משימה:', taskId, updateData);
+  
   const { data, error } = await supabase
     .from('tasks')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq('id', taskId)
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    console.error('שגיאה בעדכון משימה:', error);
+    throw error;
+  }
   return data;
 }
 
@@ -283,22 +327,26 @@ export async function createProjectTask(projectData) {
   const { subtasks, ...taskData } = projectData;
   
   // יצירת המשימה הראשית (הפרויקט)
+  const projectTaskData = {
+    user_id: taskData.user_id,
+    title: taskData.title,
+    description: taskData.description || null,
+    quadrant: taskData.quadrant,
+    due_date: taskData.dueDate || null,
+    due_time: taskData.dueTime || null,
+    reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
+    is_project: true,
+    parent_task_id: null,
+    estimated_duration: taskData.totalDuration ? parseInt(taskData.totalDuration) : null,
+    time_spent: 0,
+    is_completed: false
+  };
+  
+  console.log('יוצר משימת פרויקט:', projectTaskData);
+  
   const { data: projectTask, error: taskError } = await supabase
     .from('tasks')
-    .insert([{
-      user_id: taskData.user_id,
-      title: taskData.title,
-      description: taskData.description || null,
-      quadrant: taskData.quadrant,
-      due_date: taskData.dueDate || null,
-      due_time: taskData.dueTime || null,
-      reminder_minutes: taskData.reminderMinutes || null,
-      is_project: true,
-      parent_task_id: null,
-      estimated_duration: taskData.totalDuration || null,
-      time_spent: 0,
-      is_completed: false
-    }])
+    .insert([projectTaskData])
     .select()
     .single();
   
@@ -353,22 +401,24 @@ export async function createProjectTask(projectData) {
       });
       
       // יצירת משימה לשלב
+      const stageTaskData = {
+        user_id: taskData.user_id,
+        title: `${taskData.title} - ${st.title}`,
+        description: st.description || null,
+        quadrant: quadrant,
+        due_date: st.dueDate || null,
+        due_time: st.dueTime || null,
+        reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
+        is_project: false,
+        parent_task_id: projectTask.id,
+        estimated_duration: st.estimatedDuration ? parseInt(st.estimatedDuration) : null,
+        time_spent: 0,
+        is_completed: false
+      };
+      
       const { data: stageTask, error: stageError } = await supabase
         .from('tasks')
-        .insert([{
-          user_id: taskData.user_id,
-          title: `${taskData.title} - ${st.title}`,
-          description: st.description || null,
-          quadrant: quadrant,
-          due_date: st.dueDate || null,
-          due_time: st.dueTime || null,
-          reminder_minutes: taskData.reminderMinutes || null,
-          is_project: false,
-          parent_task_id: projectTask.id,
-          estimated_duration: st.estimatedDuration || null,
-          time_spent: 0,
-          is_completed: false
-        }])
+        .insert([stageTaskData])
         .select()
         .single();
       

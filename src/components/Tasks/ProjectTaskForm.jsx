@@ -6,7 +6,7 @@ import {
   suggestNumSubtasks, 
   suggestTotalDuration 
 } from '../../utils/projectPlanner';
-import { QUADRANT_NAMES, QUADRANT_ICONS } from '../../utils/taskHelpers';
+import { QUADRANT_NAMES, QUADRANT_ICONS, determineQuadrant, getQuadrantExplanation } from '../../utils/taskHelpers';
 import { getTodayISO } from '../../utils/dateHelpers';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
@@ -16,7 +16,7 @@ import Button from '../UI/Button';
  * טופס יצירת משימה עם שלבים (פרויקט)
  */
 function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
-  const { addProjectTask } = useTasks();
+  const { addProjectTask, tasks } = useTasks();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -34,6 +34,8 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [autoSuggest, setAutoSuggest] = useState(true);
+  const [autoQuadrant, setAutoQuadrant] = useState(true);
+  const [quadrantExplanation, setQuadrantExplanation] = useState(null);
 
   // חישוב הצעות אוטומטיות
   useEffect(() => {
@@ -57,6 +59,22 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
       }
     }
   }, [formData.startDate, formData.dueDate, formData.totalDuration, autoSuggest]);
+
+  // קביעת הרביע אוטומטית
+  useEffect(() => {
+    if (autoQuadrant && (formData.title || formData.dueDate)) {
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        dueDate: formData.dueDate,
+        dueTime: formData.dueTime
+      };
+      
+      const explanation = getQuadrantExplanation(taskData, tasks || []);
+      setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
+      setQuadrantExplanation(explanation);
+    }
+  }, [formData.title, formData.description, formData.dueDate, formData.dueTime, autoQuadrant, tasks]);
 
   // עדכון מספר שלבים
   useEffect(() => {
@@ -207,15 +225,45 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
 
       {/* בחירת רבע */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          רבע במטריצה
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            רבע במטריצה
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="autoQuadrantProject"
+              checked={autoQuadrant}
+              onChange={(e) => {
+                setAutoQuadrant(e.target.checked);
+                if (e.target.checked) {
+                  const taskData = {
+                    title: formData.title,
+                    description: formData.description,
+                    dueDate: formData.dueDate,
+                    dueTime: formData.dueTime
+                  };
+                  const explanation = getQuadrantExplanation(taskData, tasks || []);
+                  setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
+                  setQuadrantExplanation(explanation);
+                }
+              }}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="autoQuadrantProject" className="text-xs text-gray-600 dark:text-gray-400">
+              קביעה אוטומטית
+            </label>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {[1, 2, 3, 4].map(q => (
             <button
               key={q}
               type="button"
-              onClick={() => setFormData(prev => ({ ...prev, quadrant: q }))}
+              onClick={() => {
+                setFormData(prev => ({ ...prev, quadrant: q }));
+                setAutoQuadrant(false);
+              }}
               className={`
                 flex items-center gap-2 p-3 rounded-lg border-2 transition-all
                 ${formData.quadrant === q
@@ -231,29 +279,44 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
             </button>
           ))}
         </div>
+        {quadrantExplanation && autoQuadrant && (
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded">
+            💡 נקבע אוטומטית: {quadrantExplanation.reason}
+          </p>
+        )}
       </div>
 
-      {/* תאריכים */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* תאריכים ושעה */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="תאריך התחלה"
+            type="date"
+            name="startDate"
+            value={formData.startDate}
+            onChange={handleChange}
+            error={errors.startDate}
+            min={getTodayISO()}
+            required
+          />
+          <Input
+            label="תאריך יעד"
+            type="date"
+            name="dueDate"
+            value={formData.dueDate}
+            onChange={handleChange}
+            error={errors.dueDate}
+            min={formData.startDate || getTodayISO()}
+            required
+          />
+        </div>
         <Input
-          label="תאריך התחלה"
-          type="date"
-          name="startDate"
-          value={formData.startDate}
+          label="שעה (אופציונלי)"
+          type="time"
+          name="dueTime"
+          value={formData.dueTime}
           onChange={handleChange}
-          error={errors.startDate}
-          min={getTodayISO()}
-          required
-        />
-        <Input
-          label="תאריך יעד"
-          type="date"
-          name="dueDate"
-          value={formData.dueDate}
-          onChange={handleChange}
-          error={errors.dueDate}
-          min={formData.startDate || getTodayISO()}
-          required
+          error={errors.dueTime}
         />
       </div>
 
@@ -359,16 +422,25 @@ function ProjectTaskForm({ defaultQuadrant = 1, onClose }) {
                   required
                 />
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    value={subtask.dueDate}
-                    onChange={(e) => updateSubtask(index, 'dueDate', e.target.value)}
-                    className="input-field text-sm"
-                    min={formData.startDate}
-                    max={formData.dueDate}
-                    required
-                  />
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={subtask.dueDate}
+                      onChange={(e) => updateSubtask(index, 'dueDate', e.target.value)}
+                      className="input-field text-sm"
+                      min={formData.startDate}
+                      max={formData.dueDate}
+                      required
+                    />
+                    <input
+                      type="time"
+                      value={subtask.dueTime || ''}
+                      onChange={(e) => updateSubtask(index, 'dueTime', e.target.value)}
+                      className="input-field text-sm"
+                      placeholder="שעה"
+                    />
+                  </div>
                   <input
                     type="number"
                     value={subtask.estimatedDuration}

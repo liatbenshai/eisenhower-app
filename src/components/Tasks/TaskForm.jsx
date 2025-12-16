@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { validateTaskForm } from '../../utils/validators';
-import { QUADRANT_NAMES, QUADRANT_ICONS } from '../../utils/taskHelpers';
+import { QUADRANT_NAMES, QUADRANT_ICONS, determineQuadrant, getQuadrantExplanation } from '../../utils/taskHelpers';
 import { getTodayISO } from '../../utils/dateHelpers';
 import { createTaskTemplate } from '../../services/supabase';
 import { suggestEstimatedTime } from '../../utils/timeEstimation';
@@ -30,6 +30,8 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
+  const [autoQuadrant, setAutoQuadrant] = useState(true); // האם להשתמש בקביעה אוטומטית
+  const [quadrantExplanation, setQuadrantExplanation] = useState(null);
 
   // חישוב הצעת זמן משוער
   const timeSuggestion = useMemo(() => {
@@ -43,6 +45,22 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     
     return suggestEstimatedTime(tasks || [], currentTask);
   }, [formData.title, formData.quadrant, formData.estimatedDuration, tasks]);
+
+  // קביעת הרביע אוטומטית
+  useEffect(() => {
+    if (autoQuadrant && !isEditing && (formData.title || formData.dueDate)) {
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        dueDate: formData.dueDate,
+        dueTime: formData.dueTime
+      };
+      
+      const explanation = getQuadrantExplanation(taskData, tasks || []);
+      setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
+      setQuadrantExplanation(explanation);
+    }
+  }, [formData.title, formData.description, formData.dueDate, formData.dueTime, autoQuadrant, isEditing, tasks]);
 
   // מילוי נתונים בעריכה
   useEffect(() => {
@@ -141,15 +159,46 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
 
       {/* בחירת רבע */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          רבע במטריצה
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            רבע במטריצה
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="autoQuadrant"
+              checked={autoQuadrant}
+              onChange={(e) => {
+                setAutoQuadrant(e.target.checked);
+                if (e.target.checked) {
+                  // עדכון אוטומטי
+                  const taskData = {
+                    title: formData.title,
+                    description: formData.description,
+                    dueDate: formData.dueDate,
+                    dueTime: formData.dueTime
+                  };
+                  const explanation = getQuadrantExplanation(taskData, tasks || []);
+                  setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
+                  setQuadrantExplanation(explanation);
+                }
+              }}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="autoQuadrant" className="text-xs text-gray-600 dark:text-gray-400">
+              קביעה אוטומטית
+            </label>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {[1, 2, 3, 4].map(q => (
             <button
               key={q}
               type="button"
-              onClick={() => setFormData(prev => ({ ...prev, quadrant: q }))}
+              onClick={() => {
+                setFormData(prev => ({ ...prev, quadrant: q }));
+                setAutoQuadrant(false); // ביטול אוטומטי כשמשנים ידנית
+              }}
               className={`
                 flex items-center gap-2 p-3 rounded-lg border-2 transition-all
                 ${formData.quadrant === q
@@ -165,6 +214,11 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
             </button>
           ))}
         </div>
+        {quadrantExplanation && autoQuadrant && (
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded">
+            💡 נקבע אוטומטית: {quadrantExplanation.reason}
+          </p>
+        )}
         {errors.quadrant && (
           <p className="mt-1 text-sm text-red-500">{errors.quadrant}</p>
         )}

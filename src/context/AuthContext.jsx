@@ -30,19 +30,35 @@ export function AuthProvider({ children }) {
     checkUser();
 
     // האזנה לשינויי אותנטיקציה
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          const currentUser = await getCurrentUser();
-          setUser(currentUser);
-        } else {
-          setUser(null);
+    let subscription = null;
+    try {
+      const authStateChange = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (session?.user) {
+            try {
+              const currentUser = await getCurrentUser();
+              setUser(currentUser);
+            } catch (err) {
+              console.error('שגיאה בטעינת משתמש:', err);
+              setUser(null);
+            }
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
         }
-        setLoading(false);
-      }
-    );
+      );
+      subscription = authStateChange?.data?.subscription;
+    } catch (err) {
+      console.error('שגיאה בהגדרת האזנה לאותנטיקציה:', err);
+      setLoading(false);
+    }
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   // התחברות
