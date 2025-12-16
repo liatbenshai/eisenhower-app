@@ -108,7 +108,7 @@ export async function getCurrentUser() {
 // === פונקציות משימות ===
 
 /**
- * קבלת כל המשימות של המשתמש (עם שלבים אם יש)
+ * קבלת כל המשימות של המשתמש (כולל שלבים שמופיעים כמשימות נפרדות)
  */
 export async function getTasks(userId) {
   const { data, error } = await supabase
@@ -128,7 +128,6 @@ export async function getTasks(userId) {
       )
     `)
     .eq('user_id', userId)
-    .is('parent_task_id', null) // רק משימות ראשיות
     .order('created_at', { ascending: false });
   
   if (error) throw error;
@@ -259,12 +258,13 @@ export async function getStats() {
 
 /**
  * יצירת פרויקט עם שלבים
+ * כל שלב יהפוך למשימה נפרדת במטריצה
  */
 export async function createProjectTask(projectData) {
   const { subtasks, ...taskData } = projectData;
   
-  // יצירת המשימה הראשית
-  const { data: task, error: taskError } = await supabase
+  // יצירת המשימה הראשית (הפרויקט)
+  const { data: projectTask, error: taskError } = await supabase
     .from('tasks')
     .insert([{
       user_id: taskData.user_id,
@@ -283,31 +283,85 @@ export async function createProjectTask(projectData) {
   
   if (taskError) throw taskError;
   
-  // יצירת השלבים
+  // יצירת משימות נפרדות לכל שלב
+  const createdTasks = [];
   if (subtasks && subtasks.length > 0) {
-    const subtasksData = subtasks.map((st, index) => ({
-      task_id: task.id,
-      title: st.title,
-      description: st.description || null,
-      order_index: index,
-      due_date: st.dueDate || null,
-      due_time: st.dueTime || null,
-      estimated_duration: st.estimatedDuration || null,
-      is_completed: false
-    }));
+    // פונקציה לקביעת רביע לפי תאריך וחשיבות
+    const getQuadrantByDate = (dueDate, projectQuadrant) => {
+      if (!dueDate) return projectQuadrant;
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(dueDate);
+      due.setHours(0, 0, 0, 0);
+      
+      const daysDiff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+      
+      // קביעת דחיפות
+      const isUrgent = daysDiff <= 2; // דחוף אם בעוד 2 ימים או פחות
+      const isImportant = projectQuadrant === 1 || projectQuadrant === 2; // חשוב אם הפרויקט ברביע 1 או 2
+      
+      // קביעת הרביע לפי דחיפות וחשיבות
+      if (isUrgent && isImportant) {
+        return 1; // דחוף וחשוב
+      } else if (!isUrgent && isImportant) {
+        return 2; // חשוב אך לא דחוף
+      } else if (isUrgent && !isImportant) {
+        return 3; // דחוף אך לא חשוב
+      } else {
+        return 4; // לא דחוף ולא חשוב
+      }
+    };
     
-    const { error: subtasksError } = await supabase
-      .from('subtasks')
-      .insert(subtasksData);
-    
-    if (subtasksError) {
-      // אם יש שגיאה, נמחק את המשימה הראשית
-      await supabase.from('tasks').delete().eq('id', task.id);
-      throw subtasksError;
+    // יצירת משימות לכל שלב
+    for (let i = 0; i < subtasks.length; i++) {
+      const st = subtasks[i];
+      const quadrant = getQuadrantByDate(st.dueDate, taskData.quadrant);
+      
+      // יצירת משימה לשלב
+      const { data: stageTask, error: stageError } = await supabase
+        .from('tasks')
+        .insert([{
+          user_id: taskData.user_id,
+          title: `${taskData.title} - ${st.title}`,
+          description: st.description || null,
+          quadrant: quadrant,
+          due_date: st.dueDate || null,
+          due_time: st.dueTime || null,
+          reminder_minutes: taskData.reminderMinutes || null,
+          is_project: false,
+          parent_task_id: projectTask.id,
+          estimated_duration: st.estimatedDuration || null,
+          is_completed: false
+        }])
+        .select()
+        .single();
+      
+      if (stageError) {
+        // אם יש שגיאה, נמחק את הפרויקט הראשי
+        await supabase.from('tasks').delete().eq('id', projectTask.id);
+        throw stageError;
+      }
+      
+      createdTasks.push(stageTask);
+      
+      // יצירת רשומה ב-subtasks לקישור
+      await supabase
+        .from('subtasks')
+        .insert([{
+          task_id: projectTask.id,
+          title: st.title,
+          description: st.description || null,
+          order_index: i,
+          due_date: st.dueDate || null,
+          due_time: st.dueTime || null,
+          estimated_duration: st.estimatedDuration || null,
+          is_completed: false
+        }]);
     }
   }
   
-  // קבלת המשימה עם השלבים
+  // קבלת הפרויקט עם השלבים
   const { data: fullTask, error: fetchError } = await supabase
     .from('tasks')
     .select(`
@@ -324,7 +378,7 @@ export async function createProjectTask(projectData) {
         completed_at
       )
     `)
-    .eq('id', task.id)
+    .eq('id', projectTask.id)
     .single();
   
   if (fetchError) throw fetchError;

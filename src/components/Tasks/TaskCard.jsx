@@ -62,6 +62,7 @@ function TaskCard({
   const isOverdue = isTaskOverdue(task);
   const isDueToday = isTaskDueToday(task);
   const isProject = task.is_project;
+  const isSubtask = !!task.parent_task_id; // משימה שהיא שלב של פרויקט
   const subtasks = task.subtasks || [];
   
   // חישוב התקדמות פרויקט
@@ -127,6 +128,11 @@ function TaskCard({
             {isProject && (
               <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
                 פרויקט
+              </span>
+            )}
+            {isSubtask && (
+              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+                שלב
               </span>
             )}
           </div>
