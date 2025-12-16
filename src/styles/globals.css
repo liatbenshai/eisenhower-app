@@ -120,12 +120,16 @@
 }
 
 /* === אנימציות גרירה === */
-.dragging {
-  @apply opacity-50 scale-105;
-}
+@layer utilities {
+  .dragging {
+    @apply opacity-50 scale-105;
+  }
 
-.drop-target {
-  @apply ring-2 ring-blue-500 ring-dashed;
+  .drop-target {
+    @apply ring-2 ring-blue-500;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    border: 2px dashed rgb(59, 130, 246);
+  }
 }
 
 /* === צבעי רבעים === */
