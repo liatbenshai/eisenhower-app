@@ -65,9 +65,23 @@ function TaskCard({
   const isSubtask = !!task.parent_task_id; // משימה שהיא שלב של פרויקט
   const subtasks = task.subtasks || [];
   
-  // חישוב התקדמות פרויקט
-  const projectProgress = isProject && subtasks.length > 0
+  // חישוב התקדמות פרויקט - לפי שלבים שהושלמו
+  const projectProgressByCompletion = isProject && subtasks.length > 0
     ? Math.round((subtasks.filter(st => st.is_completed).length / subtasks.length) * 100)
+    : null;
+  
+  // חישוב התקדמות פרויקט - לפי זמן
+  const projectProgressByTime = isProject && subtasks.length > 0
+    ? (() => {
+        const totalEstimated = subtasks.reduce((sum, st) => sum + (st.estimated_duration || 0), 0);
+        const totalSpent = subtasks.reduce((sum, st) => sum + (st.time_spent || 0), 0);
+        return totalEstimated > 0 ? Math.min(100, Math.round((totalSpent / totalEstimated) * 100)) : 0;
+      })()
+    : null;
+  
+  // התקדמות משולבת (ממוצע של שני המדדים)
+  const projectProgress = isProject && subtasks.length > 0
+    ? Math.round((projectProgressByCompletion + projectProgressByTime) / 2)
     : null;
   
   // שלבים קרובים (היום או באיחור)
@@ -146,19 +160,41 @@ function TaskCard({
 
           {/* סטטוס פרויקט */}
           {isProject && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-2">
               {/* התקדמות */}
               {projectProgress !== null && (
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${projectProgress}%` }}
-                    />
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      התקדמות פרויקט
+                    </span>
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                      {projectProgress}%
+                    </span>
                   </div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                    {projectProgress}%
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          projectProgress >= 100 
+                            ? 'bg-green-500' 
+                            : projectProgress >= 75 
+                            ? 'bg-blue-500' 
+                            : projectProgress >= 50 
+                            ? 'bg-yellow-500' 
+                            : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${projectProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                  {projectProgressByTime !== null && projectProgressByCompletion !== null && (
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>זמן: {projectProgressByTime}%</span>
+                      <span>•</span>
+                      <span>שלבים: {projectProgressByCompletion}%</span>
+                    </div>
+                  )}
                 </div>
               )}
               

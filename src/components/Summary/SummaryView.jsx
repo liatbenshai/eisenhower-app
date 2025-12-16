@@ -20,7 +20,9 @@ function SummaryView() {
       const projectSubtasks = subtasks.filter(st => st.parent_task_id === project.id);
       const completedSubtasks = projectSubtasks.filter(st => st.is_completed).length;
       const totalSubtasks = projectSubtasks.length;
-      const progress = totalSubtasks > 0 
+      
+      // התקדמות לפי שלבים שהושלמו
+      const progressByCompletion = totalSubtasks > 0 
         ? Math.round((completedSubtasks / totalSubtasks) * 100)
         : 0;
       
@@ -32,9 +34,19 @@ function SummaryView() {
         sum + (st.time_spent || 0), 0
       );
       
+      // התקדמות לפי זמן
+      const progressByTime = totalEstimated > 0
+        ? Math.min(100, Math.round((totalSpent / totalEstimated) * 100))
+        : 0;
+      
+      // התקדמות משולבת (ממוצע)
+      const progress = Math.round((progressByCompletion + progressByTime) / 2);
+      
       return {
         ...project,
         progress,
+        progressByCompletion,
+        progressByTime,
         totalSubtasks,
         completedSubtasks,
         totalEstimated,
@@ -159,22 +171,52 @@ function SummaryView() {
                     {project.completedSubtasks} / {project.totalSubtasks} שלבים
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${project.progress}%` }}
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">התקדמות כללית</span>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                      {project.progress}%
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {project.progress}%
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          project.progress >= 100 
+                            ? 'bg-green-500' 
+                            : project.progress >= 75 
+                            ? 'bg-blue-500' 
+                            : project.progress >= 50 
+                            ? 'bg-yellow-500' 
+                            : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">זמן: </span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {project.progressByTime}%
+                      </span>
+                      {project.totalEstimated > 0 && (
+                        <span className="text-gray-400 dark:text-gray-500">
+                          {' '}({project.totalSpent}/{project.totalEstimated}ד')
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">שלבים: </span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {project.progressByCompletion}%
+                      </span>
+                      <span className="text-gray-400 dark:text-gray-500">
+                        {' '}({project.completedSubtasks}/{project.totalSubtasks})
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                {project.totalEstimated > 0 && (
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    זמן: {project.totalSpent} / {project.totalEstimated} דקות
-                  </div>
-                )}
               </div>
             ))}
           </div>
