@@ -123,6 +123,7 @@ export async function getTasks(userId) {
         due_date,
         due_time,
         estimated_duration,
+        time_spent,
         is_completed,
         completed_at
       )
@@ -417,6 +418,42 @@ export async function getSubtasks(taskId) {
   
   if (error) throw error;
   return data;
+}
+
+/**
+ * עדכון התקדמות שלב (זמן שבוצע)
+ */
+export async function updateSubtaskProgress(subtaskId, timeSpent) {
+  const { data, error } = await supabase
+    .from('subtasks')
+    .update({ 
+      time_spent: timeSpent,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', subtaskId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * הוספת זמן לשלב (increment)
+ */
+export async function addTimeToSubtask(subtaskId, minutesToAdd) {
+  // קבלת השלב הנוכחי
+  const { data: subtask, error: fetchError } = await supabase
+    .from('subtasks')
+    .select('time_spent')
+    .eq('id', subtaskId)
+    .single();
+  
+  if (fetchError) throw fetchError;
+  
+  const newTimeSpent = (subtask.time_spent || 0) + minutesToAdd;
+  
+  return updateSubtaskProgress(subtaskId, newTimeSpent);
 }
 
 /**

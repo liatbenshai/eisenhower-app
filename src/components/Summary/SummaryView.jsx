@@ -1,0 +1,211 @@
+import { useMemo } from 'react';
+import { useTasks } from '../../hooks/useTasks';
+import { format } from 'date-fns';
+
+/**
+ * תצוגת סיכום כללי
+ */
+function SummaryView() {
+  const { tasks, getStats } = useTasks();
+  const stats = getStats();
+  
+  // חישוב סטטיסטיקות מפורטות
+  const detailedStats = useMemo(() => {
+    const projects = tasks.filter(t => t.is_project);
+    const regularTasks = tasks.filter(t => !t.is_project && !t.parent_task_id);
+    const subtasks = tasks.filter(t => t.parent_task_id);
+    
+    // חישוב התקדמות פרויקטים
+    const projectsWithProgress = projects.map(project => {
+      const projectSubtasks = subtasks.filter(st => st.parent_task_id === project.id);
+      const completedSubtasks = projectSubtasks.filter(st => st.is_completed).length;
+      const totalSubtasks = projectSubtasks.length;
+      const progress = totalSubtasks > 0 
+        ? Math.round((completedSubtasks / totalSubtasks) * 100)
+        : 0;
+      
+      // חישוב זמן כולל
+      const totalEstimated = projectSubtasks.reduce((sum, st) => 
+        sum + (st.estimated_duration || 0), 0
+      );
+      const totalSpent = projectSubtasks.reduce((sum, st) => 
+        sum + (st.time_spent || 0), 0
+      );
+      
+      return {
+        ...project,
+        progress,
+        totalSubtasks,
+        completedSubtasks,
+        totalEstimated,
+        totalSpent
+      };
+    });
+    
+    // משימות לפי רבע
+    const byQuadrant = {
+      1: tasks.filter(t => t.quadrant === 1).length,
+      2: tasks.filter(t => t.quadrant === 2).length,
+      3: tasks.filter(t => t.quadrant === 3).length,
+      4: tasks.filter(t => t.quadrant === 4).length
+    };
+    
+    // משימות קרובות (היום או מחר)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const upcomingTasks = tasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      return (dueDate.getTime() === today.getTime() || dueDate.getTime() === tomorrow.getTime()) && !task.is_completed;
+    });
+    
+    // משימות באיחור
+    const overdueTasks = tasks.filter(task => {
+      if (!task.due_date || task.is_completed) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      return dueDate < today;
+    });
+    
+    return {
+      projects: projectsWithProgress,
+      regularTasks: regularTasks.length,
+      subtasks: subtasks.length,
+      byQuadrant,
+      upcomingTasks,
+      overdueTasks
+    };
+  }, [tasks]);
+  
+  return (
+    <div className="space-y-6">
+      {/* כותרת */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          סיכום כללי
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {format(new Date(), 'dd MMMM yyyy')}
+        </p>
+      </div>
+      
+      {/* סטטיסטיקות כלליות */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <span className="text-2xl">📋</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">סה"כ משימות</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+              <span className="text-2xl">✅</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">הושלמו</p>
+              <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+              <span className="text-2xl">⏰</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">קרובות</p>
+              <p className="text-2xl font-bold text-orange-600">{detailedStats.upcomingTasks.length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">באיחור</p>
+              <p className="text-2xl font-bold text-red-600">{detailedStats.overdueTasks.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* פרויקטים */}
+      {detailedStats.projects.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            פרויקטים ({detailedStats.projects.length})
+          </h3>
+          <div className="space-y-4">
+            {detailedStats.projects.map(project => (
+              <div key={project.id} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-4 last:pb-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-gray-900 dark:text-white">{project.title}</h4>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {project.completedSubtasks} / {project.totalSubtasks} שלבים
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${project.progress}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {project.progress}%
+                  </span>
+                </div>
+                {project.totalEstimated > 0 && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    זמן: {project.totalSpent} / {project.totalEstimated} דקות
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* חלוקה לפי רבעים */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+          חלוקה לפי רבעים
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { id: 1, name: 'דחוף וחשוב', color: 'red', icon: '🔴' },
+            { id: 2, name: 'חשוב אך לא דחוף', color: 'blue', icon: '🔵' },
+            { id: 3, name: 'דחוף אך לא חשוב', color: 'orange', icon: '🟠' },
+            { id: 4, name: 'לא דחוף ולא חשוב', color: 'gray', icon: '⚫' }
+          ].map(quadrant => (
+            <div key={quadrant.id} className="text-center">
+              <div className="text-3xl mb-2">{quadrant.icon}</div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{quadrant.name}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {detailedStats.byQuadrant[quadrant.id]}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default SummaryView;
+

@@ -9,6 +9,10 @@ import ExportButtons from '../components/Export/ExportButtons';
 import MobileNav from '../components/Layout/MobileNav';
 import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
+import Tabs from '../components/UI/Tabs';
+import SummaryView from '../components/Summary/SummaryView';
+import CalendarView from '../components/Calendar/CalendarView';
+import ProgressTracker from '../components/Tasks/ProgressTracker';
 
 /**
  * דף לוח המחוונים הראשי
@@ -127,14 +131,79 @@ function Dashboard() {
         </div>
       </motion.div>
 
-      {/* המטריצה */}
-      <Matrix 
-        onAddTask={handleAddTask}
-        onEditTask={handleEditTask}
+      {/* לשוניות */}
+      <Tabs
+        defaultTab={0}
+        tabs={[
+          {
+            label: 'מטריצה',
+            icon: '📊',
+            content: (
+              <div>
+                <Matrix 
+                  onAddTask={handleAddTask}
+                  onEditTask={handleEditTask}
+                />
+                <MobileNav onAddTask={handleAddTask} />
+              </div>
+            )
+          },
+          {
+            label: 'סיכום',
+            icon: '📈',
+            content: <SummaryView />
+          },
+          {
+            label: 'יומן',
+            icon: '📅',
+            content: <CalendarView />
+          },
+          {
+            label: 'התקדמות',
+            icon: '⏱️',
+            content: (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  מעקב התקדמות בשלבים
+                </h2>
+                {tasks
+                  .filter(t => t.is_project && t.subtasks && t.subtasks.length > 0)
+                  .map(project => (
+                    <div key={project.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                        {project.title}
+                      </h3>
+                      <div className="space-y-3">
+                        {project.subtasks.map(subtask => (
+                          <ProgressTracker
+                            key={subtask.id}
+                            subtask={subtask}
+                            onUpdate={() => {
+                              // טעינה מחדש של המשימות
+                              window.location.reload();
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                {tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length === 0 && (
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <span className="text-4xl mb-4 block">📋</span>
+                    <p>אין פרויקטים עם שלבים</p>
+                    <Button
+                      onClick={() => handleAddProject(1)}
+                      className="mt-4"
+                    >
+                      צור פרויקט חדש
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          }
+        ]}
       />
-
-      {/* ניווט נייד */}
-      <MobileNav onAddTask={handleAddTask} />
 
       {/* מודל טופס משימה */}
       <Modal
