@@ -324,6 +324,18 @@ function TaskCard({
           </button>
         </div>
       </div>
+      
+      {/* טיימר */}
+      {showTimer && !isProject && !isSubtask && (
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <TaskTimer
+            task={task}
+            onUpdate={() => {
+              if (onEdit) onEdit();
+            }}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }
