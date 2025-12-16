@@ -163,37 +163,78 @@ function Dashboard() {
             icon: '⏱️',
             content: (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                  מעקב התקדמות בשלבים
-                </h2>
-                {tasks
-                  .filter(t => t.is_project && t.subtasks && t.subtasks.length > 0)
-                  .map(project => (
-                    <div key={project.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                        {project.title}
-                      </h3>
-                      <div className="space-y-3">
-                        {project.subtasks.map(subtask => (
-                          <ProgressTracker
-                            key={subtask.id}
-                            subtask={subtask}
-                            onUpdate={loadTasks}
-                          />
+                {/* משימות רגילות עם טיימר */}
+                {tasks && tasks.filter(t => !t.is_project && !t.parent_task_id && t.estimated_duration).length > 0 && (
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                      משימות עם טיימר
+                    </h2>
+                    <div className="space-y-4">
+                      {tasks
+                        .filter(t => !t.is_project && !t.parent_task_id && t.estimated_duration)
+                        .map(task => (
+                          <div key={task.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                              {task.title}
+                            </h3>
+                            <TaskTimer
+                              task={task}
+                              onUpdate={loadTasks}
+                            />
+                          </div>
                         ))}
-                      </div>
                     </div>
-                  ))}
-                {(!tasks || tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length === 0) && (
+                  </div>
+                )}
+                
+                {/* פרויקטים עם שלבים */}
+                {tasks && tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length > 0 && (
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                      מעקב התקדמות בשלבים
+                    </h2>
+                    {tasks
+                      .filter(t => t.is_project && t.subtasks && t.subtasks.length > 0)
+                      .map(project => (
+                        <div key={project.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                            {project.title}
+                          </h3>
+                          <div className="space-y-3">
+                            {project.subtasks.map(subtask => (
+                              <ProgressTracker
+                                key={subtask.id}
+                                subtask={subtask}
+                                onUpdate={loadTasks}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+                
+                {/* אין משימות */}
+                {(!tasks || 
+                  (tasks.filter(t => !t.is_project && !t.parent_task_id && t.estimated_duration).length === 0 &&
+                   tasks.filter(t => t.is_project && t.subtasks && t.subtasks.length > 0).length === 0)) && (
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     <span className="text-4xl mb-4 block">📋</span>
-                    <p>אין פרויקטים עם שלבים</p>
-                    <Button
-                      onClick={() => handleAddProject(1)}
-                      className="mt-4"
-                    >
-                      צור פרויקט חדש
-                    </Button>
+                    <p>אין משימות עם מעקב זמן</p>
+                    <div className="flex gap-2 justify-center mt-4">
+                      <Button
+                        onClick={() => handleAddTask(1)}
+                        className="mt-4"
+                      >
+                        צור משימה חדשה
+                      </Button>
+                      <Button
+                        onClick={() => handleAddProject(1)}
+                        className="mt-4"
+                      >
+                        צור פרויקט חדש
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
