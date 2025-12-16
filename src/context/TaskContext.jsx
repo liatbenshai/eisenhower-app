@@ -55,6 +55,7 @@ export function TaskProvider({ children }) {
   // הוספת משימה
   const addTask = async (taskData) => {
     try {
+      console.log('יוצר משימה:', taskData);
       const newTask = await createTask({
         user_id: user.id,
         title: taskData.title,
@@ -63,14 +64,18 @@ export function TaskProvider({ children }) {
         due_date: taskData.dueDate || null,
         due_time: taskData.dueTime || null,
         reminder_minutes: taskData.reminderMinutes || null,
+        is_project: false,
+        parent_task_id: null,
         is_completed: false
       });
       
-      setTasks(prev => [newTask, ...prev]);
+      console.log('משימה נוצרה:', newTask);
+      // טעינה מחדש כדי לוודא שהכל מעודכן
+      await loadTasks();
       return newTask;
     } catch (err) {
       console.error('שגיאה בהוספת משימה:', err);
-      throw new Error('שגיאה בהוספת משימה');
+      throw new Error(err.message || 'שגיאה בהוספת משימה');
     }
   };
 

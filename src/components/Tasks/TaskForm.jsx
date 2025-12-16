@@ -65,12 +65,14 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         await editTask(task.id, formData);
         toast.success('המשימה עודכנה');
       } else {
+        console.log('שולח משימה חדשה:', formData);
         await addTask(formData);
         toast.success('המשימה נוספה');
       }
       onClose();
     } catch (err) {
-      toast.error(err.message);
+      console.error('שגיאה בשליחת טופס:', err);
+      toast.error(err.message || 'שגיאה בשמירת המשימה');
     } finally {
       setLoading(false);
     }

@@ -139,13 +139,22 @@ export async function getTasks(userId) {
  * יצירת משימה חדשה
  */
 export async function createTask(task) {
+  console.log('createTask נקרא עם:', task);
   const { data, error } = await supabase
     .from('tasks')
-    .insert([task])
+    .insert([{
+      ...task,
+      is_project: task.is_project || false,
+      parent_task_id: task.parent_task_id || null
+    }])
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    console.error('שגיאה ב-createTask:', error);
+    throw error;
+  }
+  console.log('משימה נוצרה בהצלחה:', data);
   return data;
 }
 
