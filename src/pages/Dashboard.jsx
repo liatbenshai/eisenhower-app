@@ -17,6 +17,7 @@ import TaskTimer from '../components/Tasks/TaskTimer';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
 import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
 import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
+import SmartRecommendations from '../components/Recommendations/SmartRecommendations';
 
 /**
  * דף לוח המחוונים הראשי
@@ -171,6 +172,11 @@ function Dashboard() {
             label: 'תכנון זמן',
             icon: '📅',
             content: <TimeBlockManager />
+          },
+          {
+            label: 'המלצות',
+            icon: '💡',
+            content: <SmartRecommendations />
           },
           {
             label: 'ניתוח זמן',
