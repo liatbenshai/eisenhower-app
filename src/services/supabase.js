@@ -292,7 +292,9 @@ export async function createProjectTask(projectData) {
       due_time: taskData.dueTime || null,
       reminder_minutes: taskData.reminderMinutes || null,
       is_project: true,
+      parent_task_id: null,
       estimated_duration: taskData.totalDuration || null,
+      time_spent: 0,
       is_completed: false
     }])
     .select()
@@ -362,6 +364,7 @@ export async function createProjectTask(projectData) {
           is_project: false,
           parent_task_id: projectTask.id,
           estimated_duration: st.estimatedDuration || null,
+          time_spent: 0,
           is_completed: false
         }])
         .select()
@@ -387,6 +390,7 @@ export async function createProjectTask(projectData) {
           due_date: st.dueDate || null,
           due_time: st.dueTime || null,
           estimated_duration: st.estimatedDuration || null,
+          time_spent: 0,
           is_completed: false
         }]);
       
