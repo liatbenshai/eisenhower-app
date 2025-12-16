@@ -4,6 +4,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { getRelativeDate, formatTime } from '../../utils/dateHelpers';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
 import toast from 'react-hot-toast';
+import TaskTimer from './TaskTimer';
 
 // פונקציה לבדיקה אם שלב באיחור או היום
 const isSubtaskOverdue = (subtask) => {
@@ -64,6 +65,12 @@ function TaskCard({
   const isProject = task.is_project;
   const isSubtask = !!task.parent_task_id; // משימה שהיא שלב של פרויקט
   const subtasks = task.subtasks || [];
+  const [showTimer, setShowTimer] = useState(false);
+  
+  // התקדמות למשימה רגילה
+  const regularTaskProgress = !isProject && !isSubtask && task.estimated_duration
+    ? Math.min(100, Math.round(((task.time_spent || 0) / task.estimated_duration) * 100))
+    : null;
   const [showTimer, setShowTimer] = useState(false);
   
   // חישוב התקדמות פרויקט - לפי שלבים שהושלמו

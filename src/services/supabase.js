@@ -174,6 +174,13 @@ export async function updateTask(taskId, updates) {
 }
 
 /**
+ * עדכון זמן שבוצע למשימה
+ */
+export async function updateTaskTimeSpent(taskId, timeSpent) {
+  return updateTask(taskId, { time_spent: timeSpent });
+}
+
+/**
  * מחיקת משימה
  */
 export async function deleteTask(taskId) {
