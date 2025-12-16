@@ -145,7 +145,9 @@ export async function createTask(task) {
     .insert([{
       ...task,
       is_project: task.is_project || false,
-      parent_task_id: task.parent_task_id || null
+      parent_task_id: task.parent_task_id || null,
+      time_spent: task.time_spent || 0,
+      estimated_duration: task.estimated_duration || null
     }])
     .select()
     .single();
