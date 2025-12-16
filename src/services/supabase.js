@@ -661,5 +661,112 @@ export async function createTaskFromTemplate(templateId, userId, dueDate = null)
   return newTask;
 }
 
+// === פונקציות בלוקי זמן ===
+
+/**
+ * קבלת בלוקי זמן של המשתמש
+ */
+export async function getTimeBlocks(userId, startDate = null, endDate = null) {
+  let query = supabase
+    .from('time_blocks')
+    .select(`
+      *,
+      tasks (
+        id,
+        title,
+        quadrant
+      )
+    `)
+    .eq('user_id', userId)
+    .order('start_time', { ascending: true });
+
+  if (startDate) {
+    query = query.gte('start_time', startDate.toISOString());
+  }
+  if (endDate) {
+    query = query.lte('start_time', endDate.toISOString());
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * יצירת בלוק זמן
+ */
+export async function createTimeBlock(block) {
+  const { data, error } = await supabase
+    .from('time_blocks')
+    .insert([{
+      user_id: block.user_id,
+      task_id: block.task_id || null,
+      title: block.title,
+      description: block.description || null,
+      start_time: block.start_time,
+      end_time: block.end_time,
+      is_completed: false
+    }])
+    .select(`
+      *,
+      tasks (
+        id,
+        title,
+        quadrant
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * עדכון בלוק זמן
+ */
+export async function updateTimeBlock(blockId, updates) {
+  const { data, error } = await supabase
+    .from('time_blocks')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', blockId)
+    .select(`
+      *,
+      tasks (
+        id,
+        title,
+        quadrant
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * מחיקת בלוק זמן
+ */
+export async function deleteTimeBlock(blockId) {
+  const { error } = await supabase
+    .from('time_blocks')
+    .delete()
+    .eq('id', blockId);
+
+  if (error) throw error;
+}
+
+/**
+ * סימון בלוק כהושלם
+ */
+export async function completeTimeBlock(blockId, actualStartTime = null, actualEndTime = null) {
+  const updates = {
+    is_completed: true,
+    actual_start_time: actualStartTime || new Date().toISOString(),
+    actual_end_time: actualEndTime || new Date().toISOString()
+  };
+
+  return await updateTimeBlock(blockId, updates);
+}
+
 export default supabase;
 
