@@ -1,0 +1,83 @@
+{
+  "name": "מטריצת אייזנהאואר",
+  "short_name": "אייזנהאואר",
+  "description": "אפליקציית ניהול זמן מבוססת מטריצת אייזנהאואר",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "he",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "הוסף משימה",
+      "short_name": "משימה חדשה",
+      "description": "הוסף משימה חדשה למטריצה",
+      "url": "/dashboard?action=add",
+      "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "מטריצת אייזנהאואר - תצוגת מחשב"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "מטריצת אייזנהאואר - תצוגת נייד"
+    }
+  ]
+}
+
