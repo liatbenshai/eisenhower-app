@@ -64,6 +64,7 @@ export function TaskProvider({ children }) {
         due_date: taskData.dueDate || null,
         due_time: taskData.dueTime || null,
         reminder_minutes: taskData.reminderMinutes || null,
+        estimated_duration: taskData.estimatedDuration ? parseInt(taskData.estimatedDuration) : null,
         is_project: false,
         parent_task_id: null,
         is_completed: false
@@ -109,6 +110,7 @@ export function TaskProvider({ children }) {
       const updatedTask = await updateTask(taskId, {
         title: updates.title,
         description: updates.description || null,
+        estimated_duration: updates.estimatedDuration ? parseInt(updates.estimatedDuration) : null,
         quadrant: updates.quadrant,
         due_date: updates.dueDate || null,
         due_time: updates.dueTime || null,

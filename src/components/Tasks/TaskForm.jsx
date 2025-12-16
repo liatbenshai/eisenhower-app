@@ -20,7 +20,8 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     quadrant: defaultQuadrant,
     dueDate: '',
     dueTime: '',
-    reminderMinutes: ''
+    reminderMinutes: '',
+    estimatedDuration: ''
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -34,7 +35,8 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         quadrant: task.quadrant || 1,
         dueDate: task.due_date || '',
         dueTime: task.due_time || '',
-        reminderMinutes: task.reminder_minutes || ''
+        reminderMinutes: task.reminder_minutes || '',
+        estimatedDuration: task.estimated_duration || ''
       });
     }
   }, [task]);
