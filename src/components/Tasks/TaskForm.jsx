@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { validateTaskForm } from '../../utils/validators';
 import { QUADRANT_NAMES, QUADRANT_ICONS } from '../../utils/taskHelpers';
 import { getTodayISO } from '../../utils/dateHelpers';
 import { createTaskTemplate } from '../../services/supabase';
+import { suggestEstimatedTime } from '../../utils/timeEstimation';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -13,7 +14,7 @@ import Button from '../UI/Button';
  * טופס הוספה/עריכת משימה
  */
 function TaskForm({ task, defaultQuadrant = 1, onClose }) {
-  const { addTask, editTask } = useTasks();
+  const { addTask, editTask, tasks } = useTasks();
   const { user } = useAuth();
   const isEditing = !!task;
 
@@ -28,6 +29,20 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [suggestion, setSuggestion] = useState(null);
+
+  // חישוב הצעת זמן משוער
+  const timeSuggestion = useMemo(() => {
+    if (!formData.title || formData.title.length < 3) return null;
+    
+    const currentTask = {
+      title: formData.title,
+      quadrant: formData.quadrant,
+      estimated_duration: formData.estimatedDuration ? parseInt(formData.estimatedDuration) : null
+    };
+    
+    return suggestEstimatedTime(tasks || [], currentTask);
+  }, [formData.title, formData.quadrant, formData.estimatedDuration, tasks]);
 
   // מילוי נתונים בעריכה
   useEffect(() => {
@@ -193,6 +208,55 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
             </option>
           ))}
         </select>
+      </div>
+
+      {/* זמן ביצוע משוער עם הצעה אוטומטית */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            זמן ביצוע משוער (דקות)
+          </label>
+          {timeSuggestion && (
+            <button
+              type="button"
+              onClick={() => {
+                setFormData(prev => ({ ...prev, estimatedDuration: timeSuggestion.suggestedTime.toString() }));
+                toast.success(`הוגדר ${timeSuggestion.suggestedTime} דקות (${timeSuggestion.reason})`);
+              }}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              💡 השתמש בהצעה: {timeSuggestion.suggestedTime} דקות
+            </button>
+          )}
+        </div>
+        <Input
+          type="number"
+          name="estimatedDuration"
+          value={formData.estimatedDuration}
+          onChange={handleChange}
+          error={errors.estimatedDuration}
+          min="1"
+          placeholder="הזן זמן משוער"
+        />
+        {timeSuggestion && (
+          <div className={`mt-1 text-xs p-2 rounded ${
+            timeSuggestion.confidence === 'high' 
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+              : timeSuggestion.confidence === 'medium'
+              ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+              : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400'
+          }`}>
+            <div className="font-medium">💡 הצעה אוטומטית: {timeSuggestion.suggestedTime} דקות</div>
+            <div className="text-xs mt-1">{timeSuggestion.reason}</div>
+            <div className="text-xs mt-1">
+              רמת ביטחון: {
+                timeSuggestion.confidence === 'high' ? 'גבוהה' :
+                timeSuggestion.confidence === 'medium' ? 'בינונית' :
+                timeSuggestion.confidence === 'low' ? 'נמוכה' : 'נמוכה מאוד'
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       {/* כפתורים */}
