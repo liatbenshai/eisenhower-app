@@ -88,7 +88,7 @@ function TaskCard({
   
   // התקדמות למשימה רגילה
   const regularTaskProgress = !isProject && !isSubtask && task.estimated_duration
-    ? Math.min(100, Math.round(((task.time_spent || 0) / task.estimated_duration) * 100))
+    ? Math.min(100, Math.round((((task.time_spent || 0) / task.estimated_duration) * 100)))
     : null;
   
   // שלבים קרובים (היום או באיחור)

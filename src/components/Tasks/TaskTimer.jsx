@@ -7,13 +7,23 @@ import Button from '../UI/Button';
  * טיימר למשימה
  */
 function TaskTimer({ task, onUpdate }) {
+  if (!task || !task.id) {
+    return (
+      <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+          אין משימה זמינה
+        </p>
+      </div>
+    );
+  }
+  
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(null);
   const intervalRef = useRef(null);
   
-  const timeSpent = task.time_spent || 0;
-  const estimated = task.estimated_duration || 0;
+  const timeSpent = (task && task.time_spent) ? parseInt(task.time_spent) : 0;
+  const estimated = (task && task.estimated_duration) ? parseInt(task.estimated_duration) : 0;
   const totalSpent = timeSpent + Math.floor(elapsedSeconds / 60);
   const progress = estimated > 0 
     ? Math.min(100, Math.round((totalSpent / estimated) * 100))
@@ -64,7 +74,7 @@ function TaskTimer({ task, onUpdate }) {
   const saveProgress = async () => {
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
-      if (minutesToAdd > 0) {
+      if (minutesToAdd > 0 && task && task.id) {
         const newTimeSpent = timeSpent + minutesToAdd;
         await updateTask(task.id, { time_spent: newTimeSpent });
         setElapsedSeconds(0);
@@ -73,7 +83,7 @@ function TaskTimer({ task, onUpdate }) {
       }
     } catch (err) {
       console.error('שגיאה בשמירת התקדמות:', err);
-      toast.error('שגיאה בשמירת התקדמות');
+      toast.error(err.message || 'שגיאה בשמירת התקדמות');
     }
   };
   

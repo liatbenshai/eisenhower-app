@@ -37,11 +37,18 @@ export function TaskProvider({ children }) {
     setLoading(true);
     try {
       const data = await getTasks(user.id);
-      setTasks(data || []);
+      // וידוא שכל המשימות יש להן את השדות הנדרשים
+      const safeData = (data || []).map(task => ({
+        ...task,
+        time_spent: task.time_spent || 0,
+        estimated_duration: task.estimated_duration || null
+      }));
+      setTasks(safeData);
       setError(null);
     } catch (err) {
       console.error('שגיאה בטעינת משימות:', err);
-      setError('שגיאה בטעינת משימות');
+      setError(err.message || 'שגיאה בטעינת משימות');
+      setTasks([]);
     } finally {
       setLoading(false);
     }
