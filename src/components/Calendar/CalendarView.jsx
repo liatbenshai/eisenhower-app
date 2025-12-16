@@ -17,10 +17,12 @@ import {
   subWeeks,
   addMonths,
   subMonths,
-  startOfDay as startDay,
-  endOfDay as endDay
+  isPast,
+  isFuture,
+  differenceInDays
 } from 'date-fns';
 import TaskCard from '../Tasks/TaskCard';
+import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
 
 /**
  * תצוגת יומן - יומי, שבועי, חודשי
@@ -61,17 +63,56 @@ function CalendarView() {
     }
   }, [currentDate, viewMode]);
   
-  // קבלת משימות לפי תאריך
+  // קבלת משימות לפי תאריך (כולל שלבים)
   const getTasksForDate = (date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return tasks.filter(task => {
-      if (task.due_date === dateStr) return true;
-      // בדיקת שלבים
-      if (task.subtasks && task.subtasks.length > 0) {
-        return task.subtasks.some(st => st.due_date === dateStr);
+    const tasksForDate = [];
+    
+    tasks.forEach(task => {
+      // משימות רגילות
+      if (task.due_date === dateStr && !task.parent_task_id) {
+        tasksForDate.push(task);
       }
-      return false;
+      
+      // שלבים של פרויקטים
+      if (task.subtasks && task.subtasks.length > 0) {
+        task.subtasks.forEach(st => {
+          if (st.due_date === dateStr) {
+            // יצירת משימה וירטואלית לשלב
+            tasksForDate.push({
+              ...task,
+              id: `subtask-${st.id}`,
+              title: `${task.title} - ${st.title}`,
+              due_date: st.due_date,
+              due_time: st.due_time,
+              is_subtask: true,
+              subtask_data: st,
+              progress: st.estimated_duration > 0 
+                ? Math.min(100, Math.round((st.time_spent || 0) / st.estimated_duration * 100))
+                : 0
+            });
+          }
+        });
+      }
     });
+    
+    return tasksForDate;
+  };
+  
+  // בדיקה אם משימה באיחור או קרובה
+  const getTaskStatus = (task, date) => {
+    if (!task.due_date) return 'normal';
+    const taskDate = new Date(task.due_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    taskDate.setHours(0, 0, 0, 0);
+    
+    if (taskDate < today) return 'overdue';
+    if (taskDate.getTime() === today.getTime()) return 'today';
+    const daysDiff = differenceInDays(taskDate, today);
+    if (daysDiff <= 2) return 'urgent';
+    if (daysDiff <= 7) return 'upcoming';
+    return 'normal';
   };
   
   // ניווט לפי מצב תצוגה
@@ -192,24 +233,99 @@ function CalendarView() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             {viewMode === 'day' ? (
               /* תצוגה יומית */
-              <div className="text-center py-8">
-                <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                  {format(currentDate, 'd')}
+              <div className="space-y-4">
+                <div className="text-center pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="text-5xl font-bold text-gray-900 dark:text-white mb-2">
+                    {format(currentDate, 'd')}
+                  </div>
+                  <div className="text-lg text-gray-600 dark:text-gray-400">
+                    {format(currentDate, 'EEEE, MMMM yyyy')}
+                  </div>
                 </div>
-                <div className="text-lg text-gray-600 dark:text-gray-400 mb-4">
-                  {format(currentDate, 'EEEE, MMMM yyyy')}
-                </div>
-                <div className="flex justify-center gap-2">
-                  {getTasksForDate(currentDate).length > 0 && (
-                    <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm">
-                      {getTasksForDate(currentDate).length} משימות
-                    </span>
+                
+                {/* משימות היום */}
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {getTasksForDate(currentDate).length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <span className="text-3xl block mb-2">📅</span>
+                      <p>אין משימות היום</p>
+                    </div>
+                  ) : (
+                    getTasksForDate(currentDate)
+                      .sort((a, b) => {
+                        // מיון: באיחור ראשון, אחר כך לפי זמן
+                        const aStatus = getTaskStatus(a, currentDate);
+                        const bStatus = getTaskStatus(b, currentDate);
+                        if (aStatus === 'overdue' && bStatus !== 'overdue') return -1;
+                        if (bStatus === 'overdue' && aStatus !== 'overdue') return 1;
+                        return (a.due_time || '').localeCompare(b.due_time || '');
+                      })
+                      .map(task => {
+                        const status = getTaskStatus(task, currentDate);
+                        return (
+                          <div
+                            key={task.id}
+                            className={`
+                              p-3 rounded-lg border-2 transition-all
+                              ${status === 'overdue' 
+                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20' 
+                                : status === 'today'
+                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                                : status === 'urgent'
+                                ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+                                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                              }
+                            `}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900 dark:text-white text-sm">
+                                  {task.title}
+                                </h4>
+                                {task.due_time && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    🕐 {task.due_time}
+                                  </p>
+                                )}
+                              </div>
+                              {status === 'overdue' && (
+                                <span className="px-2 py-1 text-xs bg-red-500 text-white rounded">
+                                  באיחור
+                                </span>
+                              )}
+                              {status === 'today' && (
+                                <span className="px-2 py-1 text-xs bg-orange-500 text-white rounded">
+                                  היום
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* התקדמות אם יש */}
+                            {task.progress !== undefined && task.progress > 0 && (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
+                                  <span className="font-medium text-blue-600 dark:text-blue-400">
+                                    {task.progress}%
+                                  </span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-blue-500 transition-all duration-300"
+                                    style={{ width: `${task.progress}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
                   )}
                 </div>
               </div>
             ) : viewMode === 'week' ? (
               /* תצוגה שבועית */
-              <div>
+              <div className="space-y-2">
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {weekDays.map(day => (
                     <div
@@ -220,39 +336,96 @@ function CalendarView() {
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-2">
                   {days.map(day => {
                     const dayTasks = getTasksForDate(day);
                     const isSelected = isSameDay(day, selectedDate);
                     const isTodayDate = isToday(day);
+                    const overdueTasks = dayTasks.filter(t => getTaskStatus(t, day) === 'overdue');
+                    const urgentTasks = dayTasks.filter(t => getTaskStatus(t, day) === 'urgent' || getTaskStatus(t, day) === 'today');
                     
                     return (
-                      <button
+                      <div
                         key={day.toISOString()}
-                        onClick={() => setSelectedDate(day)}
                         className={`
-                          min-h-[80px] p-2 rounded-lg text-sm transition-all border-2
+                          min-h-[120px] p-2 rounded-lg text-sm transition-all border-2
                           ${isSelected 
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
                             : isTodayDate
                             ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/10'
-                            : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                           }
                         `}
                       >
-                        <div className={`text-xs font-medium mb-1 ${
-                          isSelected ? 'text-blue-700 dark:text-blue-300' : 
-                          isTodayDate ? 'text-blue-600 dark:text-blue-400' : 
-                          'text-gray-600 dark:text-gray-400'
-                        }`}>
-                          {format(day, 'd')}
+                        <button
+                          onClick={() => setSelectedDate(day)}
+                          className={`w-full text-right mb-2 ${
+                            isSelected ? 'text-blue-700 dark:text-blue-300' : 
+                            isTodayDate ? 'text-blue-600 dark:text-blue-400 font-bold' : 
+                            'text-gray-600 dark:text-gray-400'
+                          }`}
+                        >
+                          <div className="text-sm font-medium">
+                            {format(day, 'd')}
+                          </div>
+                        </button>
+                        
+                        {/* משימות היום */}
+                        <div className="space-y-1 max-h-[90px] overflow-y-auto">
+                          {dayTasks.slice(0, 3).map(task => {
+                            const status = getTaskStatus(task, day);
+                            return (
+                              <div
+                                key={task.id}
+                                className={`
+                                  text-xs p-1.5 rounded border
+                                  ${status === 'overdue' 
+                                    ? 'border-red-500 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' 
+                                    : status === 'today' || status === 'urgent'
+                                    ? 'border-orange-500 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                                  }
+                                `}
+                                title={task.title}
+                              >
+                                <div className="truncate font-medium">{task.title}</div>
+                                {task.progress !== undefined && task.progress > 0 && (
+                                  <div className="mt-1 flex items-center gap-1">
+                                    <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-blue-500"
+                                        style={{ width: `${task.progress}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px]">{task.progress}%</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {dayTasks.length > 3 && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 text-center py-1">
+                              +{dayTasks.length - 3} עוד
+                            </div>
+                          )}
                         </div>
-                        {dayTasks.length > 0 && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {dayTasks.length} משימות
+                        
+                        {/* אינדיקטורים */}
+                        {(overdueTasks.length > 0 || urgentTasks.length > 0) && (
+                          <div className="flex gap-1 mt-1">
+                            {overdueTasks.length > 0 && (
+                              <span className="text-[10px] px-1 py-0.5 bg-red-500 text-white rounded">
+                                {overdueTasks.length} באיחור
+                              </span>
+                            )}
+                            {urgentTasks.length > 0 && (
+                              <span className="text-[10px] px-1 py-0.5 bg-orange-500 text-white rounded">
+                                {urgentTasks.length} דחוף
+                              </span>
+                            )}
                           </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -311,101 +484,103 @@ function CalendarView() {
           </div>
         </div>
         
-        {/* משימות של התאריך/תאריכים הנבחרים */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            {viewMode === 'day' ? (
-              <>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                  {format(selectedDate, 'dd/MM/yyyy')}
-                </h3>
-                {selectedTasks.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    אין משימות בתאריך זה
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {selectedTasks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        quadrantId={task.quadrant}
-                        onEdit={() => {}}
-                        onDragStart={() => {}}
-                        onDragEnd={() => {}}
-                      />
-                    ))}
-                  </div>
+        {/* משימות מפורטות של התאריך הנבחר */}
+        {viewMode !== 'day' && (
+          <div className="lg:col-span-1">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                {format(selectedDate, 'dd/MM/yyyy')}
+                {isToday(selectedDate) && (
+                  <span className="mr-2 text-sm text-blue-600 dark:text-blue-400">(היום)</span>
                 )}
-              </>
-            ) : viewMode === 'week' ? (
-              <>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                  משימות השבוע
-                </h3>
-                <div className="space-y-4 max-h-[500px] overflow-y-auto">
-                  {days.map(day => {
-                    const dayTasks = getTasksForDate(day);
-                    if (dayTasks.length === 0) return null;
-                    
-                    return (
-                      <div key={day.toISOString()} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-3 last:pb-0">
-                        <h4 className={`text-sm font-medium mb-2 ${
-                          isToday(day) 
-                            ? 'text-blue-600 dark:text-blue-400' 
-                            : 'text-gray-600 dark:text-gray-400'
-                        }`}>
-                          {format(day, 'dd/MM/yyyy')} {isToday(day) && '(היום)'}
-                        </h4>
-                        <div className="space-y-2">
-                          {dayTasks.map(task => (
-                            <TaskCard
-                              key={task.id}
-                              task={task}
-                              quadrantId={task.quadrant}
-                              onEdit={() => {}}
-                              onDragStart={() => {}}
-                              onDragEnd={() => {}}
-                            />
-                          ))}
+              </h3>
+              
+              {selectedTasks.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                  אין משימות בתאריך זה
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {selectedTasks
+                    .sort((a, b) => {
+                      const aStatus = getTaskStatus(a, selectedDate);
+                      const bStatus = getTaskStatus(b, selectedDate);
+                      if (aStatus === 'overdue' && bStatus !== 'overdue') return -1;
+                      if (bStatus === 'overdue' && aStatus !== 'overdue') return 1;
+                      return (a.due_time || '').localeCompare(b.due_time || '');
+                    })
+                    .map(task => {
+                      const status = getTaskStatus(task, selectedDate);
+                      return (
+                        <div
+                          key={task.id}
+                          className={`
+                            p-3 rounded-lg border-2 transition-all
+                            ${status === 'overdue' 
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20' 
+                              : status === 'today'
+                              ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                              : status === 'urgent'
+                              ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+                              : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30'
+                            }
+                          `}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900 dark:text-white text-sm">
+                                {task.title}
+                              </h4>
+                              {task.due_time && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  🕐 {task.due_time}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              {status === 'overdue' && (
+                                <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded">
+                                  באיחור
+                                </span>
+                              )}
+                              {status === 'today' && (
+                                <span className="px-2 py-0.5 text-xs bg-orange-500 text-white rounded">
+                                  היום
+                                </span>
+                              )}
+                              {status === 'urgent' && (
+                                <span className="px-2 py-0.5 text-xs bg-yellow-500 text-white rounded">
+                                  דחוף
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* התקדמות */}
+                          {task.progress !== undefined && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
+                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                  {task.progress}%
+                                </span>
+                              </div>
+                              <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-blue-500 transition-all duration-300"
+                                  style={{ width: `${task.progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    );
-                  })}
-                  {days.every(day => getTasksForDate(day).length === 0) && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                      אין משימות השבוע
-                    </p>
-                  )}
+                      );
+                    })}
                 </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                  {format(selectedDate, 'dd/MM/yyyy')}
-                </h3>
-                {selectedTasks.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    אין משימות בתאריך זה
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {selectedTasks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        quadrantId={task.quadrant}
-                        onEdit={() => {}}
-                        onDragStart={() => {}}
-                        onDragEnd={() => {}}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
