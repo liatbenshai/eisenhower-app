@@ -13,6 +13,7 @@ import Tabs from '../components/UI/Tabs';
 import SummaryView from '../components/Summary/SummaryView';
 import CalendarView from '../components/Calendar/CalendarView';
 import ProgressTracker from '../components/Tasks/ProgressTracker';
+import TaskTimer from '../components/Tasks/TaskTimer';
 
 /**
  * דף לוח המחוונים הראשי
