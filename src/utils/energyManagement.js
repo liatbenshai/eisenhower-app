@@ -3,7 +3,7 @@
  * המערכת לומדת את דפוסי האנרגיה של המשתמש ומתכננת בהתאם
  */
 
-import { TASK_CATEGORIES } from './taskCategories';
+import { TASK_CATEGORIES, detectTaskCategory } from './taskCategories';
 
 /**
  * רמות אנרגיה
@@ -60,7 +60,7 @@ export function calculateEnergyLevel(hour, dayOfWeek = null, workPatterns = null
  */
 export function hasEnoughEnergy(task, hour, workPatterns = null) {
   const energyLevel = calculateEnergyLevel(hour, null, workPatterns);
-  const { category } = require('./taskCategories').detectTaskCategory(task);
+  const { category } = detectTaskCategory(task);
   
   // מיפוי רמת אנרגיה נדרשת
   const requiredEnergy = {
@@ -84,7 +84,7 @@ export function hasEnoughEnergy(task, hour, workPatterns = null) {
  * מציאת שעות אופטימליות למשימה לפי רמת אנרגיה
  */
 export function findOptimalHoursForTask(task, workPatterns = null) {
-  const { category } = require('./taskCategories').detectTaskCategory(task);
+  const { category } = detectTaskCategory(task);
   const requiredEnergy = category.energyLevel;
   
   const optimalHours = [];
@@ -160,7 +160,7 @@ export function analyzeEnergyPatterns(tasks, timeBlocks = []) {
       energyByHour[hour].tasksCompleted++;
       energyByHour[hour].totalTime += task.time_spent || 0;
       
-      const { category } = require('./taskCategories').detectTaskCategory(task);
+      const { category } = detectTaskCategory(task);
       if (category.energyLevel === 'high') {
         energyByHour[hour].highEnergyTasks++;
       }
