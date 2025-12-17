@@ -168,11 +168,18 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     // אימות
     const validation = validateTaskForm(formData);
     console.log('🔍 תוצאת אימות:', validation);
+    console.log('📝 formData שנשלח לאימות:', {
+      title: formData.title,
+      quadrant: formData.quadrant,
+      dueDate: formData.dueDate,
+      dueTime: formData.dueTime
+    });
     
     if (!validation.valid) {
       console.error('❌ האימות נכשל:', validation.errors);
+      console.error('📋 שגיאות מפורטות:', JSON.stringify(validation.errors, null, 2));
       setErrors(validation.errors);
-      toast.error('יש שגיאות בטופס - בדקי את השדות');
+      toast.error(`יש שגיאות בטופס: ${Object.keys(validation.errors).join(', ')}`);
       return;
     }
 
