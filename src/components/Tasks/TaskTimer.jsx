@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { updateTask, updateSubtaskProgress } from '../../services/supabase';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
@@ -63,7 +63,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0) {
       saveProgress(false); // שמירה אוטומטית בלי איפוס
     }
-  }, [elapsedSeconds, isRunning, saveProgress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsedSeconds, isRunning]);
   
   // בדיקת הגעה ליעד זמן
   useEffect(() => {
@@ -81,10 +82,11 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         saveProgress(false);
       }
     }
-  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget, saveProgress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget]);
   
   // צפצוף/התראה
-  const playAlarm = useCallback(() => {
+  const playAlarm = () => {
     try {
       // יצירת צליל צפצוף
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -132,7 +134,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     } catch (err) {
       console.error('שגיאה בהשמעת צפצוף:', err);
     }
-  }, []);
+  };
   
   const startTimer = () => {
     if (hasReachedTarget) {
@@ -172,7 +174,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setStartTime(null);
   };
   
-  const saveProgress = useCallback(async (reset = false, skipUpdate = false) => {
+  const saveProgress = async (reset = false, skipUpdate = false) => {
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
       if (minutesToAdd > 0 && task && task.id) {
@@ -208,7 +210,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       toast.error(err.message || 'שגיאה בשמירת התקדמות');
       return { success: false, error: err };
     }
-  }, [elapsedSeconds, task, timeSpent, onUpdate]);
+  };
   
   const continueAfterTarget = () => {
     setHasReachedTarget(false);
