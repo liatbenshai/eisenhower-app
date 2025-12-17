@@ -3,12 +3,11 @@
   "short_name": "אייזנהאואר",
   "description": "ניהול משימות חכם עם מטריצת אייזנהאואר",
   "start_url": "/",
-  "display": "standalone",
+  "display": "browser",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
   "dir": "rtl",
-  "lang": "he",
-  "icons": []
+  "lang": "he"
 }
 
