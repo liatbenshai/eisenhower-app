@@ -2,7 +2,7 @@
  * Service Worker - PWA
  */
 
-const CACHE_NAME = 'eisenhower-v1';
+const CACHE_NAME = 'eisenhower-v2-20241217'; // עדכון גרסה
 const OFFLINE_URL = '/offline.html';
 
 // קבצים לשמירה במטמון
@@ -14,71 +14,124 @@ const urlsToCache = [
 
 // התקנה
 self.addEventListener('install', (event) => {
+  console.log('SW: התקנה - גרסה חדשה');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('SW: פתיחת מטמון');
-        return cache.addAll(urlsToCache);
+        console.log('SW: פתיחת מטמון חדש');
+        return cache.addAll(urlsToCache).catch(err => {
+          console.warn('SW: שגיאה בהוספת קבצים למטמון:', err);
+          // ממשיכים גם אם יש שגיאה
+          return Promise.resolve();
+        });
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('SW: קפיצה לגרסה חדשה');
+        return self.skipWaiting();
+      })
   );
 });
 
-// הפעלה
+// הפעלה - מנקה מטמונים ישנים
 self.addEventListener('activate', (event) => {
+  console.log('SW: הפעלה - ניקוי מטמונים ישנים');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
+      console.log('SW: מטמונים קיימים:', cacheNames);
       return Promise.all(
         cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .filter((cacheName) => {
+            const isOldCache = cacheName !== CACHE_NAME;
+            if (isOldCache) {
+              console.log('SW: מוחק מטמון ישן:', cacheName);
+            }
+            return isOldCache;
+          })
           .map((cacheName) => caches.delete(cacheName))
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('SW: תופס שליטה על כל הלקוחות');
+      return self.clients.claim();
+    }).then(() => {
+      // שליחת הודעה לכל הלקוחות שיש גרסה חדשה
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'SW_UPDATED',
+            message: 'גרסה חדשה זמינה!'
+          });
+        });
+      });
+    })
   );
 });
 
-// בקשות רשת
+// בקשות רשת - Network First עם Fallback למטמון
 self.addEventListener('fetch', (event) => {
   // רק בקשות GET
   if (event.request.method !== 'GET') return;
   
-  // דילוג על בקשות API
+  // דילוג על בקשות API - תמיד מהרשת
   if (event.request.url.includes('/api/') || 
-      event.request.url.includes('supabase')) {
+      event.request.url.includes('supabase.co') ||
+      event.request.url.includes('chrome-extension://')) {
     return;
   }
 
+  // עבור קבצי HTML/JS/CSS - Network First (תמיד הגרסה החדשה)
+  if (event.request.url.includes('.html') || 
+      event.request.url.includes('.js') || 
+      event.request.url.includes('.css') ||
+      event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // אם הרשת עובדת, שומר במטמון ומחזיר
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // אם אין רשת, נסה מטמון
+          return caches.match(event.request).then(cachedResponse => {
+            if (cachedResponse) {
+              console.log('SW: משתמש במטמון עבור:', event.request.url);
+              return cachedResponse;
+            }
+            // אם אין כלום, דף offline
+            if (event.request.mode === 'navigate') {
+              return caches.match(OFFLINE_URL);
+            }
+          });
+        })
+    );
+    return;
+  }
+
+  // עבור שאר הקבצים (תמונות וכו') - Cache First
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // מחזיר מהמטמון אם קיים
         if (response) {
           return response;
         }
-
-        // אחרת, מביא מהרשת
         return fetch(event.request)
           .then((response) => {
-            // בדיקה אם התשובה תקינה
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // שמירה במטמון
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => {
+            if (response && response.status === 200) {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
                 cache.put(event.request, responseToCache);
               });
-
+            }
             return response;
           });
       })
       .catch(() => {
-        // אם אין רשת ואין מטמון, מחזיר דף offline
-        if (event.request.mode === 'navigate') {
-          return caches.match(OFFLINE_URL);
-        }
+        console.warn('SW: שגיאה בטעינת:', event.request.url);
       })
   );
 });
