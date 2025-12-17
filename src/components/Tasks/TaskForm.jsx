@@ -177,18 +177,31 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     }
 
     setLoading(true);
+    setErrors({}); // ניקוי שגיאות קודמות
+    
     try {
       if (isEditing) {
         console.log('✏️ עורך משימה קיימת');
-        await editTask(task.id, formData);
+        const result = await editTask(task.id, formData);
+        console.log('✅ תוצאת עריכה:', result);
         toast.success('המשימה עודכנה');
       } else {
         console.log('➕ מוסיף משימה חדשה:', formData);
-        await addTask(formData);
+        const result = await addTask(formData);
+        console.log('✅ תוצאת הוספה:', result);
         toast.success('✅ המשימה נוספה בהצלחה!');
       }
+      
       console.log('✨ הכל עבר בהצלחה, סוגר טופס');
-      onClose();
+      
+      // סגירת הטופס תמיד צריכה לקרות
+      if (typeof onClose === 'function') {
+        setLoading(false); // וידוא שהספינר נעלם לפני סגירה
+        onClose();
+      } else {
+        console.error('⚠️ onClose is not a function!');
+        setLoading(false);
+      }
     } catch (err) {
       console.error('💥 שגיאה בשליחת טופס:', err);
       console.error('📋 פרטי שגיאה:', {
@@ -199,9 +212,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
       toast.error(err.message || 'שגיאה בשמירת המשימה - בדקי את ה-Console', {
         duration: 5000
       });
-    } finally {
-      setLoading(false);
-      console.log('🔄 loading הושלם');
+      setLoading(false); // וידוא שהספינר נעלם גם בשגיאה
     }
   };
 
