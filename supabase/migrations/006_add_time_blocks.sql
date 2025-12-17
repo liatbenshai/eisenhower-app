@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS public.time_blocks (
 CREATE INDEX IF NOT EXISTS idx_time_blocks_user_id ON public.time_blocks(user_id);
 CREATE INDEX IF NOT EXISTS idx_time_blocks_task_id ON public.time_blocks(task_id);
 CREATE INDEX IF NOT EXISTS idx_time_blocks_start_time ON public.time_blocks(start_time);
-CREATE INDEX IF NOT EXISTS idx_time_blocks_date ON public.time_blocks((start_time::date));
 
 -- טריגר לעדכון updated_at
 DROP TRIGGER IF EXISTS update_time_blocks_updated_at ON public.time_blocks;
