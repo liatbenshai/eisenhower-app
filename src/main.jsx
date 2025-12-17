@@ -21,34 +21,38 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// ניקוי Service Worker ישן ומטמונים - פעם אחת בלבד
+// ניקוי חד-פעמי של Service Worker ומטמונים ישנים
+// קוד זה ירוץ פעם אחת ויסיר את כל השאריות
 if ('serviceWorker' in navigator) {
-  // מחיקת כל ה-Service Workers הישנים
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     if (registrations.length > 0) {
       console.log('🧹 מוחק', registrations.length, 'Service Workers ישנים...');
       registrations.forEach((reg) => {
         reg.unregister().then(() => {
-          console.log('✅ Service Worker נמחק');
+          console.log('✅ Service Worker הוסר');
         });
       });
+    } else {
+      console.log('✅ אין Service Workers לניקוי');
     }
   });
-  
-  // מחיקת כל המטמונים הישנים
-  if ('caches' in window) {
-    caches.keys().then((names) => {
-      if (names.length > 0) {
-        console.log('🧹 מוחק', names.length, 'מטמונים...');
-        names.forEach((name) => {
-          caches.delete(name).then(() => {
-            console.log('✅ מטמון נמחק:', name);
-          });
-        });
-      }
-    });
-  }
-  
-  console.log('✨ אפליקציה פועלת ללא Service Worker - ללא בעיות רענון!');
 }
+
+// ניקוי מטמונים ישנים
+if ('caches' in window) {
+  caches.keys().then((names) => {
+    if (names.length > 0) {
+      console.log('🧹 מוחק', names.length, 'מטמונים ישנים...');
+      names.forEach((name) => {
+        caches.delete(name).then(() => {
+          console.log('✅ מטמון הוסר:', name);
+        });
+      });
+    } else {
+      console.log('✅ אין מטמונים לניקוי');
+    }
+  });
+}
+
+console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
 
