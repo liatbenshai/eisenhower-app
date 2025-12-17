@@ -6,6 +6,8 @@ import { QUADRANT_NAMES, QUADRANT_ICONS, determineQuadrant, getQuadrantExplanati
 import { getTodayISO } from '../../utils/dateHelpers';
 import { createTaskTemplate } from '../../services/supabase';
 import { suggestEstimatedTime } from '../../utils/timeEstimation';
+import { TASK_CATEGORIES, detectTaskCategory } from '../../utils/taskCategories';
+import { predictTaskDuration } from '../../utils/taskTypeLearning';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -25,13 +27,16 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     dueDate: '',
     dueTime: '',
     reminderMinutes: '',
-    estimatedDuration: ''
+    estimatedDuration: '',
+    taskType: 'other' // סוג המשימה
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
   const [autoQuadrant, setAutoQuadrant] = useState(true); // האם להשתמש בקביעה אוטומטית
   const [quadrantExplanation, setQuadrantExplanation] = useState(null);
+  const [detectedCategory, setDetectedCategory] = useState(null);
+  const [aiPrediction, setAiPrediction] = useState(null);
 
   // חישוב הצעת זמן משוער
   const timeSuggestion = useMemo(() => {
@@ -72,10 +77,50 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         dueDate: task.due_date || '',
         dueTime: task.due_time || '',
         reminderMinutes: task.reminder_minutes || '',
-        estimatedDuration: task.estimated_duration || ''
+        estimatedDuration: task.estimated_duration || '',
+        taskType: task.task_type || 'other'
       });
     }
   }, [task]);
+
+  // זיהוי אוטומטי של סוג משימה ושליפת חיזוי
+  useEffect(() => {
+    if (!isEditing && formData.title && formData.title.length >= 3) {
+      // זיהוי קטגוריה
+      const detection = detectTaskCategory({
+        title: formData.title,
+        description: formData.description
+      });
+      
+      setDetectedCategory(detection);
+      
+      // אם יש זיהוי טוב והמשתמש לא שינה ידנית, עדכן אוטומטית
+      if (detection.confidence > 50 && formData.taskType === 'other') {
+        setFormData(prev => ({ ...prev, taskType: detection.category.id }));
+      }
+      
+      // שליפת חיזוי AI אם יש משתמש מחובר
+      if (user?.id) {
+        predictTaskDuration(user.id, detection.category.id, {
+          quadrant: formData.quadrant,
+          title: formData.title,
+          description: formData.description
+        }).then(prediction => {
+          setAiPrediction(prediction);
+          
+          // אם אין זמן משוער עדיין, הצע את החיזוי
+          if (!formData.estimatedDuration) {
+            setFormData(prev => ({ 
+              ...prev, 
+              estimatedDuration: prediction.predictedTime.toString() 
+            }));
+          }
+        }).catch(err => {
+          console.error('שגיאה בחיזוי:', err);
+        });
+      }
+    }
+  }, [formData.title, formData.description, isEditing, user?.id]);
 
   // טיפול בשינוי שדה
   const handleChange = (e) => {
@@ -154,6 +199,62 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         />
         {errors.description && (
           <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+        )}
+      </div>
+
+      {/* בחירת סוג משימה */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          סוג משימה {detectedCategory && detectedCategory.confidence > 50 && (
+            <span className="text-xs text-blue-600 dark:text-blue-400 mr-2">
+              (זוהה אוטומטית: {detectedCategory.category.name})
+            </span>
+          )}
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {Object.values(TASK_CATEGORIES).map(category => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => {
+                setFormData(prev => ({ ...prev, taskType: category.id }));
+                // עדכון חיזוי לפי הסוג החדש
+                if (user?.id) {
+                  predictTaskDuration(user.id, category.id, {
+                    quadrant: formData.quadrant,
+                    title: formData.title
+                  }).then(prediction => {
+                    setAiPrediction(prediction);
+                  });
+                }
+              }}
+              className={`
+                flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-right
+                ${formData.taskType === category.id
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                }
+                ${detectedCategory?.category.id === category.id && formData.taskType !== category.id
+                  ? 'border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10'
+                  : ''
+                }
+              `}
+            >
+              <span className="text-xl">{category.icon}</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {category.name}
+              </span>
+            </button>
+          ))}
+        </div>
+        {detectedCategory && detectedCategory.confidence > 30 && (
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+            💡 זוהה אוטומטית: {detectedCategory.category.name} 
+            ({Math.round(detectedCategory.confidence)}% ביטחון)
+            {detectedCategory.detectedKeywords.length > 0 && (
+              <span> - מילות מפתח: {detectedCategory.detectedKeywords.join(', ')}</span>
+            )}
+          </p>
         )}
       </div>
 
@@ -264,22 +365,22 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         </select>
       </div>
 
-      {/* זמן ביצוע משוער עם הצעה אוטומטית */}
+      {/* זמן ביצוע משוער עם הצעה חכמה */}
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             זמן ביצוע משוער (דקות)
           </label>
-          {timeSuggestion && (
+          {aiPrediction && aiPrediction.predictedTime && (
             <button
               type="button"
               onClick={() => {
-                setFormData(prev => ({ ...prev, estimatedDuration: timeSuggestion.suggestedTime.toString() }));
-                toast.success(`הוגדר ${timeSuggestion.suggestedTime} דקות (${timeSuggestion.reason})`);
+                setFormData(prev => ({ ...prev, estimatedDuration: aiPrediction.predictedTime.toString() }));
+                toast.success(`הוגדר ${aiPrediction.predictedTime} דקות`);
               }}
               className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
             >
-              💡 השתמש בהצעה: {timeSuggestion.suggestedTime} דקות
+              🤖 השתמש בחיזוי: {aiPrediction.predictedTime} דקות
             </button>
           )}
         </div>
@@ -292,21 +393,33 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
           min="1"
           placeholder="הזן זמן משוער"
         />
-        {timeSuggestion && (
-          <div className={`mt-1 text-xs p-2 rounded ${
-            timeSuggestion.confidence === 'high' 
-              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-              : timeSuggestion.confidence === 'medium'
-              ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
-              : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400'
+        {aiPrediction && (
+          <div className={`mt-2 text-xs p-3 rounded-lg border ${
+            aiPrediction.confidence === 'high' 
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
+              : aiPrediction.confidence === 'medium'
+              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+              : 'bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700'
           }`}>
-            <div className="font-medium">💡 הצעה אוטומטית: {timeSuggestion.suggestedTime} דקות</div>
-            <div className="text-xs mt-1">{timeSuggestion.reason}</div>
-            <div className="text-xs mt-1">
+            <div className="font-bold mb-1">
+              🤖 חיזוי חכם: {aiPrediction.predictedTime} דקות
+            </div>
+            <div className="text-xs mb-1">{aiPrediction.reason}</div>
+            {aiPrediction.stats && (
+              <div className="text-xs mt-2 pt-2 border-t border-current/20">
+                <div className="grid grid-cols-2 gap-1">
+                  <div>• משימות קודמות: {aiPrediction.stats.totalTasks}</div>
+                  <div>• דיוק ממוצע: {aiPrediction.stats.accuracy}%</div>
+                  <div>• זמן ממוצע: {aiPrediction.stats.averageTime} דק'</div>
+                  <div>• טווח: {aiPrediction.stats.minTime}-{aiPrediction.stats.maxTime} דק'</div>
+                </div>
+              </div>
+            )}
+            <div className="text-xs mt-2 font-medium">
               רמת ביטחון: {
-                timeSuggestion.confidence === 'high' ? 'גבוהה' :
-                timeSuggestion.confidence === 'medium' ? 'בינונית' :
-                timeSuggestion.confidence === 'low' ? 'נמוכה' : 'נמוכה מאוד'
+                aiPrediction.confidence === 'high' ? '🟢 גבוהה' :
+                aiPrediction.confidence === 'medium' ? '🟡 בינונית' :
+                '🟠 נמוכה (עדיין לא מספיק נתונים)'
               }
             </div>
           </div>

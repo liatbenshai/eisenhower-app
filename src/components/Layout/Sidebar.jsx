@@ -15,6 +15,7 @@ function Sidebar({ isOpen, onClose }) {
   // קישורי ניווט
   const navLinks = [
     { path: '/dashboard', label: 'לוח משימות', icon: '📋' },
+    { path: '/insights', label: 'תובנות למידה', icon: '📊' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];
 

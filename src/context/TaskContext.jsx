@@ -72,6 +72,7 @@ export function TaskProvider({ children }) {
         due_time: taskData.dueTime || null,
         reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
         estimated_duration: taskData.estimatedDuration ? parseInt(taskData.estimatedDuration) : null,
+        task_type: taskData.taskType || 'other',
         is_project: false,
         parent_task_id: null,
         is_completed: false
@@ -121,7 +122,8 @@ export function TaskProvider({ children }) {
         quadrant: updates.quadrant,
         due_date: updates.dueDate || null,
         due_time: updates.dueTime || null,
-        reminder_minutes: updates.reminderMinutes ? parseInt(updates.reminderMinutes) : null
+        reminder_minutes: updates.reminderMinutes ? parseInt(updates.reminderMinutes) : null,
+        task_type: updates.taskType || null
       });
       
       setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));

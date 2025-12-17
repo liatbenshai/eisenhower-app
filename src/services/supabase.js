@@ -163,6 +163,7 @@ export async function createTask(task) {
     due_time: task.due_time || null,
     reminder_minutes: task.reminder_minutes ? parseInt(task.reminder_minutes) : null,
     estimated_duration: task.estimated_duration ? parseInt(task.estimated_duration) : null,
+    task_type: task.task_type || 'other',
     is_project: task.is_project || false,
     parent_task_id: task.parent_task_id || null,
     time_spent: task.time_spent || 0,

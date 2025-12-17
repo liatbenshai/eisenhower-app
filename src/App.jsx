@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
+import TaskInsights from './pages/TaskInsights';
 
 // רכיבים
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -62,6 +63,12 @@ function App() {
         <Route path="/settings" element={
           <ProtectedRoute>
             <Settings />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/insights" element={
+          <ProtectedRoute>
+            <TaskInsights />
           </ProtectedRoute>
         } />
         
