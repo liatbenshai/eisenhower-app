@@ -154,6 +154,9 @@ function TaskTimer({ task, onUpdate }) {
     setIsRunning(false);
     if (elapsedSeconds > 0) {
       await saveProgress(true); // שמירה עם איפוס
+      toast.success('🎯 הטיימר נעצר. עכשיו אפשר לסמן את המשימה כהושלמה!', {
+        duration: 4000
+      });
     }
     setElapsedSeconds(0);
     setStartTime(null);
@@ -183,8 +186,16 @@ function TaskTimer({ task, onUpdate }) {
         if (reset) {
           setElapsedSeconds(0);
         }
-        if (onUpdate) onUpdate();
-        toast.success(`נוסף ${minutesToAdd} דקות. סה"כ: ${newTimeSpent} דקות`);
+        // עדכון רק אם יש callback - אבל זה לא יסגור את הכרטיס
+        if (onUpdate) {
+          onUpdate();
+        }
+        toast.success(`✅ נשמר! ${minutesToAdd} דקות נוספו. סה"כ: ${newTimeSpent} דקות`, {
+          duration: 3000,
+          icon: '💾'
+        });
+      } else if (minutesToAdd === 0) {
+        toast('עבדת פחות מדקה - לא נשמר', { icon: '⏱️' });
       }
     } catch (err) {
       console.error('שגיאה בשמירת התקדמות:', err);
@@ -381,23 +392,31 @@ function TaskTimer({ task, onUpdate }) {
             
             {/* כפתורים משניים */}
             {elapsedSeconds > 0 && !isRunning && (
-              <div className="flex gap-2">
-                <Button
-                  onClick={async () => {
-                    await saveProgress(true);
-                    resetTimer();
-                  }}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
-                >
-                  💾 שמור וסיים
-                </Button>
-                <Button
-                  onClick={resetTimer}
-                  className="bg-gray-500 hover:bg-gray-600 text-white"
-                  title="מחק את הזמן הנוכחי בלי לשמור"
-                >
-                  🔄 איפוס
-                </Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      await saveProgress(true);
+                      resetTimer();
+                      toast.success('✅ הזמן נשמר! עכשיו תוכל לסמן את המשימה כהושלמה', {
+                        duration: 4000
+                      });
+                    }}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    💾 שמור וסיים
+                  </Button>
+                  <Button
+                    onClick={resetTimer}
+                    className="bg-gray-500 hover:bg-gray-600 text-white"
+                    title="מחק את הזמן הנוכחי בלי לשמור"
+                  >
+                    🔄 איפוס
+                  </Button>
+                </div>
+                <div className="text-xs text-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                  💡 לחצי "שמור וסיים" ואז סמני את המשימה כהושלמה ✓
+                </div>
               </div>
             )}
           </div>
