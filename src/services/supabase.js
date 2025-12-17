@@ -151,39 +151,83 @@ export async function getTasks(userId) {
  * יצירת משימה חדשה
  */
 export async function createTask(task) {
-  console.log('createTask נקרא עם:', task);
+  console.log('🔵 createTask נקרא עם:', task);
+  
+  // וידוא שיש user_id
+  if (!task.user_id) {
+    const error = new Error('❌ חסר user_id!');
+    console.error(error);
+    throw error;
+  }
+  
+  // וידוא שיש כותרת
+  if (!task.title || task.title.trim() === '') {
+    const error = new Error('❌ חסרה כותרת משימה!');
+    console.error(error);
+    throw error;
+  }
   
   // הכנת נתונים לשמירה - וידוא שכל השדות מועברים נכון
   const taskData = {
     user_id: task.user_id,
-    title: task.title,
-    description: task.description || null,
-    quadrant: task.quadrant,
+    title: task.title.trim(),
+    description: task.description?.trim() || null,
+    quadrant: task.quadrant || 1,
     due_date: task.due_date || null,
     due_time: task.due_time || null,
     reminder_minutes: task.reminder_minutes ? parseInt(task.reminder_minutes) : null,
     estimated_duration: task.estimated_duration ? parseInt(task.estimated_duration) : null,
-    task_type: task.task_type || 'other',
+    task_type: task.task_type || 'other', // תמיד יש ערך
     is_project: task.is_project || false,
     parent_task_id: task.parent_task_id || null,
     time_spent: task.time_spent || 0,
     is_completed: task.is_completed || false
   };
   
-  console.log('שומר משימה עם נתונים:', taskData);
+  console.log('💾 שומר משימה עם נתונים:', taskData);
   
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert([taskData])
-    .select()
-    .single();
-  
-  if (error) {
-    console.error('שגיאה ב-createTask:', error);
-    throw error;
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([taskData])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('❌ שגיאה מ-Supabase:', error);
+      console.error('📋 פרטי שגיאה:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      
+      // הודעות שגיאה ידידותיות
+      if (error.message?.includes('task_type')) {
+        throw new Error('❌ שדה task_type לא קיים! האם הרצת את ה-migration 007?');
+      }
+      if (error.code === '42501') {
+        throw new Error('❌ אין הרשאות! בדוק את ה-RLS policies');
+      }
+      if (error.code === '23505') {
+        throw new Error('❌ המשימה כבר קיימת');
+      }
+      
+      throw error;
+    }
+    
+    if (!data) {
+      console.error('❌ לא הוחזר data מ-Supabase!');
+      throw new Error('❌ המשימה לא נוצרה (אין data)');
+    }
+    
+    console.log('✅ משימה נוצרה בהצלחה:', data);
+    return data;
+    
+  } catch (err) {
+    console.error('💥 Exception ב-createTask:', err);
+    throw err;
   }
-  console.log('משימה נוצרה בהצלחה:', data);
-  return data;
 }
 
 /**

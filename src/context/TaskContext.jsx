@@ -61,13 +61,21 @@ export function TaskProvider({ children }) {
 
   // הוספת משימה
   const addTask = async (taskData) => {
+    console.log('🟢 TaskContext.addTask נקרא עם:', taskData);
+    console.log('🔑 User ID:', user?.id);
+    
+    if (!user?.id) {
+      const error = new Error('❌ אין משתמש מחובר!');
+      console.error(error);
+      throw error;
+    }
+    
     try {
-      console.log('יוצר משימה:', taskData);
-      const newTask = await createTask({
+      const taskToCreate = {
         user_id: user.id,
         title: taskData.title,
         description: taskData.description || null,
-        quadrant: taskData.quadrant,
+        quadrant: taskData.quadrant || 1,
         due_date: taskData.dueDate || null,
         due_time: taskData.dueTime || null,
         reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
@@ -76,14 +84,24 @@ export function TaskProvider({ children }) {
         is_project: false,
         parent_task_id: null,
         is_completed: false
-      });
+      };
       
-      console.log('משימה נוצרה:', newTask);
+      console.log('📤 שולח ל-createTask:', taskToCreate);
+      
+      const newTask = await createTask(taskToCreate);
+      
+      console.log('✅ משימה נוצרה:', newTask);
+      
       // טעינה מחדש כדי לוודא שהכל מעודכן
+      console.log('🔄 טוען משימות מחדש...');
       await loadTasks();
+      
+      console.log('✨ הכל הצליח!');
       return newTask;
+      
     } catch (err) {
-      console.error('שגיאה בהוספת משימה:', err);
+      console.error('❌ שגיאה בהוספת משימה:', err);
+      console.error('📋 פרטי שגיאה מלאים:', err);
       throw new Error(err.message || 'שגיאה בהוספת משימה');
     }
   };
