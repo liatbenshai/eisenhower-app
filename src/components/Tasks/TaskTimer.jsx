@@ -155,7 +155,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const stopTimer = async () => {
     setIsRunning(false);
     if (elapsedSeconds > 0) {
-      const result = await saveProgress(true); // שמירה עם aiפוס
+      const result = await saveProgress(true, true); // שמירה עם איפוס, בלי onUpdate
       if (result && result.success) {
         toast.success(`🎯 נשמר! ${result.minutesToAdd} דקות נוספו. סה"כ: ${result.newTimeSpent} דקות`, {
           duration: 4000,
@@ -359,8 +359,10 @@ function TaskTimer({ task, onUpdate, onComplete }) {
               </Button>
               <Button
                 onClick={async () => {
-                  await saveProgress(true);
+                  console.log('🟢 לחיצה על: שמור וסיים (אחרי הגעה ליעד)');
+                  await saveProgress(true, true); // reset + skipUpdate
                   resetTimer();
+                  toast.success('✅ התקדמות נשמרה וטיימר אופס');
                 }}
                 className="flex-1 bg-green-500 hover:bg-green-600 text-white"
               >
@@ -460,7 +462,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
                   <Button
                     onClick={async () => {
                       console.log('💾 לחיצה על: רק שמור');
-                      const result = await saveProgress(true);
+                      const result = await saveProgress(true, true); // reset + skipUpdate
                       if (result && result.success) {
                         resetTimer();
                         toast.success(`💾 נשמר! ${result.minutesToAdd} דקות נוספו. סה"כ: ${result.newTimeSpent} דקות`, {
