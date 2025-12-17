@@ -145,6 +145,11 @@ function TaskTimer({ task, onUpdate }) {
     toast.success('טיימר הופעל');
   };
   
+  const pauseTimer = () => {
+    setIsRunning(false);
+    toast.success('טיימר הושהה - יכול לעבור למשימה אחרת');
+  };
+  
   const stopTimer = async () => {
     setIsRunning(false);
     if (elapsedSeconds > 0) {
@@ -344,40 +349,56 @@ function TaskTimer({ task, onUpdate }) {
             </div>
           </div>
         ) : (
-          <div className="flex gap-2">
-            {!isRunning ? (
-              <Button
-                onClick={startTimer}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-              >
-                ▶ התחל עבודה
-              </Button>
-            ) : (
-              <Button
-                onClick={stopTimer}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-              >
-                ⏸ עצור ושמור
-              </Button>
-            )}
+          <div className="space-y-2">
+            {/* כפתורים עיקריים */}
+            <div className="flex gap-2">
+              {!isRunning ? (
+                <Button
+                  onClick={startTimer}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                >
+                  ▶ התחל עבודה
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={pauseTimer}
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white"
+                    title="השהה את הטיימר בלי לשמור - תוכל לעבור למשימה אחרת"
+                  >
+                    ⏸ השהה
+                  </Button>
+                  <Button
+                    onClick={stopTimer}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                    title="עצור ושמור את הזמן שעבדת"
+                  >
+                    ⏹ עצור ושמור
+                  </Button>
+                </>
+              )}
+            </div>
+            
+            {/* כפתורים משניים */}
             {elapsedSeconds > 0 && !isRunning && (
-              <Button
-                onClick={async () => {
-                  await saveProgress(true);
-                  resetTimer();
-                }}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                💾 שמור
-              </Button>
-            )}
-            {!isRunning && (
-              <Button
-                onClick={resetTimer}
-                className="bg-gray-500 hover:bg-gray-600 text-white"
-              >
-                🔄 איפוס
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={async () => {
+                    await saveProgress(true);
+                    resetTimer();
+                  }}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  💾 שמור וסיים
+                </Button>
+                <Button
+                  onClick={resetTimer}
+                  className="bg-gray-500 hover:bg-gray-600 text-white"
+                  title="מחק את הזמן הנוכחי בלי לשמור"
+                >
+                  🔄 איפוס
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -385,7 +406,12 @@ function TaskTimer({ task, onUpdate }) {
       
       {isRunning && (
         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-          הטיימר שומר אוטומטית כל 5 דקות • בסיום היעד תתקבל התראה
+          💡 לחץ "השהה" לעבור למשימה אחרת • שמירה אוטומטית כל 5 דקות
+        </p>
+      )}
+      {elapsedSeconds > 0 && !isRunning && (
+        <p className="text-xs text-center text-blue-600 dark:text-blue-400 mt-2">
+          💡 הטיימר מושהה - תוכל לחזור או לעבור למשימה אחרת
         </p>
       )}
     </div>

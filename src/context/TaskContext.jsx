@@ -72,7 +72,7 @@ export function TaskProvider({ children }) {
         due_time: taskData.dueTime || null,
         reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
         estimated_duration: taskData.estimatedDuration ? parseInt(taskData.estimatedDuration) : null,
-        task_type: taskData.taskType || 'other',
+        task_type: taskData.taskType || 'other', // תמיד יש ערך
         is_project: false,
         parent_task_id: null,
         is_completed: false

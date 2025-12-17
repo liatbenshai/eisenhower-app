@@ -28,7 +28,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     dueTime: '',
     reminderMinutes: '',
     estimatedDuration: '',
-    taskType: 'other' // סוג המשימה
+    taskType: 'other' // ברירת מחדל חשובה!
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
