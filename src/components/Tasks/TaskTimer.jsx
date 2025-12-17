@@ -390,9 +390,25 @@ function TaskTimer({ task, onUpdate, onComplete }) {
               )}
             </div>
             
-            {/* כפתורים משניים */}
+            {/* כפתורים משניים - כשמושהה */}
             {elapsedSeconds > 0 && !isRunning && (
               <div className="space-y-2">
+                {/* כפתור המשך עבודה - בולט */}
+                <Button
+                  onClick={() => {
+                    setIsRunning(true);
+                    toast.success('▶ ממשיכה לעבוד!');
+                  }}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold shadow-lg text-lg py-3"
+                >
+                  ▶ המשך עבודה
+                </Button>
+                
+                {/* קו הפרדה */}
+                <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+                  או
+                </div>
+                
                 {/* כפתור מהיר - שומר ומסמן כהושלם */}
                 <Button
                   onClick={async () => {
