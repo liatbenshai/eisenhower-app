@@ -8,7 +8,6 @@ import { format, startOfWeek, addDays } from 'date-fns';
 import { he } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
-import Modal from '../UI/Modal';
 
 /**
  * תכנון אוטומטי של היום והשבוע
@@ -33,19 +32,57 @@ function AutoScheduler() {
 
   // חישוב תכנון
   useEffect(() => {
-    if (tasks && workPatterns) {
+    if (tasks && tasks.length > 0) {
       calculateSchedule();
+    } else {
+      // אם אין משימות, צור תכנון ריק
+      if (viewMode === 'day') {
+        setSchedule({
+          scheduledBlocks: [],
+          unscheduledTasks: [],
+          totalScheduledTime: 0,
+          utilizationRate: 0
+        });
+      } else {
+        setSchedule({
+          weekSchedule: {},
+          summary: {
+            totalScheduled: 0,
+            totalUnscheduled: 0,
+            totalTime: 0,
+            averageUtilization: 0
+          }
+        });
+      }
     }
   }, [selectedDate, tasks, workPatterns, viewMode]);
 
   const calculateSchedule = () => {
-    if (viewMode === 'day') {
-      const daySchedule = scheduleDay(tasks, selectedDate, workPatterns, []);
-      setSchedule(daySchedule);
-    } else {
-      const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
-      const weekSchedule = scheduleWeek(tasks, weekStart, workPatterns, []);
-      setSchedule(weekSchedule);
+    try {
+      console.log('📅 AutoScheduler: מחשב תכנון עבור', tasks.length, 'משימות');
+      
+      if (viewMode === 'day') {
+        const daySchedule = scheduleDay(tasks, selectedDate, workPatterns, []);
+        console.log('📅 תכנון יום:', daySchedule);
+        setSchedule(daySchedule);
+      } else {
+        const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
+        const weekSchedule = scheduleWeek(tasks, weekStart, workPatterns, []);
+        console.log('📅 תכנון שבוע:', weekSchedule);
+        setSchedule(weekSchedule);
+      }
+    } catch (err) {
+      console.error('❌ שגיאה בחישוב תכנון:', err);
+      toast.error('שגיאה בחישוב תכנון: ' + err.message);
+      // צור תכנון ריק במקרה של שגיאה
+      if (viewMode === 'day') {
+        setSchedule({
+          scheduledBlocks: [],
+          unscheduledTasks: tasks,
+          totalScheduledTime: 0,
+          utilizationRate: 0
+        });
+      }
     }
   };
 
@@ -94,11 +131,38 @@ function AutoScheduler() {
     return [];
   }, [schedule, tasks, viewMode]);
 
+  // טעינה
   if (!schedule) {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mx-auto"></div>
         <p className="mt-2 text-gray-500 dark:text-gray-400">מחשב תכנון...</p>
+      </div>
+    );
+  }
+
+  // אין משימות
+  const activeTasks = tasks?.filter(t => !t.is_completed) || [];
+  if (activeTasks.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+            תכנון אוטומטי
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            המערכת מתכננת את היום/שבוע שלך לפי עדיפויות, אנרגיה ודפוסי עבודה
+          </p>
+        </div>
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+          <span className="text-4xl mb-4 block">📅</span>
+          <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+            אין משימות פעילות לתכנן
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            הוסיפי משימות עם זמן משוער כדי שהמערכת תוכל לתכנן אותן
+          </p>
+        </div>
       </div>
     );
   }

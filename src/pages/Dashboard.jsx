@@ -21,6 +21,7 @@ import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
 import SmartRecommendations from '../components/Recommendations/SmartRecommendations';
 import HabitTracker from '../components/Habits/HabitTracker';
 import AutoScheduler from '../components/SmartScheduler/AutoScheduler';
+import CompletedTasksView from '../components/Tasks/CompletedTasksView';
 
 /**
  * דף לוח המחוונים הראשי
@@ -182,13 +183,18 @@ function Dashboard() {
             content: <SmartRecommendations />
           },
           {
+            label: 'משימות שהושלמו',
+            icon: '✅',
+            content: <CompletedTasksView />
+          },
+          {
             label: 'הרגלים',
             icon: '📊',
             content: <HabitTracker />
           },
           {
             label: 'ניתוח זמן',
-            icon: '📊',
+            icon: '⏱️',
             content: <TimeAnalytics />
           },
           {

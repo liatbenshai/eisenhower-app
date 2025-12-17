@@ -272,15 +272,54 @@ export async function updateTaskTimeSpent(taskId, timeSpent) {
 }
 
 /**
- * מחיקת משימה
+ * מחיקת משימה - שומר נתוני למידה לפני מחיקה
  */
 export async function deleteTask(taskId) {
+  // קבלת המשימה לפני מחיקה כדי לשמור נתוני למידה
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+  
+  if (fetchError) throw fetchError;
+  
+  // אם המשימה הושלמה אבל לא נשמרה בהיסטוריה, נשמור אותה עכשיו
+  if (task && task.is_completed && task.estimated_duration && task.time_spent > 0) {
+    const taskAccuracy = Math.max(0, 100 - Math.abs(task.time_spent - task.estimated_duration) * 100 / Math.max(task.estimated_duration, task.time_spent));
+    
+    try {
+      await supabase
+        .from('task_completion_history')
+        .insert([{
+          user_id: task.user_id,
+          task_id: task.id,
+          task_type: task.task_type || 'other',
+          task_title: task.title,
+          quadrant: task.quadrant,
+          estimated_duration: task.estimated_duration,
+          actual_duration: task.time_spent,
+          accuracy_percentage: Math.round(taskAccuracy),
+          completed_at: task.completed_at || new Date().toISOString(),
+          day_of_week: new Date(task.completed_at || new Date()).getDay(),
+          hour_of_day: new Date(task.completed_at || new Date()).getHours()
+        }]);
+      console.log('✅ נתוני למידה נשמרו לפני מחיקה');
+    } catch (historyError) {
+      console.error('⚠️ שגיאה בשמירת היסטוריה:', historyError);
+      // ממשיכים למחיקה גם אם השמירה נכשלה
+    }
+  }
+  
+  // מחיקת המשימה
   const { error } = await supabase
     .from('tasks')
     .delete()
     .eq('id', taskId);
   
   if (error) throw error;
+  
+  console.log('✅ משימה נמחקה, נתוני למידה נשמרו');
 }
 
 /**

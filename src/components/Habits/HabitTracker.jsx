@@ -21,21 +21,47 @@ function HabitTracker() {
 
   // ניתוח הרגלים
   const habitsAnalysis = useMemo(() => {
-    if (!tasks || tasks.length === 0) return null;
+    if (!tasks || tasks.length === 0) {
+      console.log('📊 Habits: אין משימות');
+      return null;
+    }
 
-    const completedTasks = tasks.filter(t => t.is_completed && t.completed_at);
+    const completedTasks = tasks.filter(t => {
+      const isCompleted = t.is_completed;
+      const hasCompletedAt = t.completed_at && t.completed_at !== null;
+      if (isCompleted && !hasCompletedAt) {
+        console.warn('⚠️ משימה הושלמה אבל אין completed_at:', t.title);
+      }
+      return isCompleted && hasCompletedAt;
+    });
+    
+    console.log(`📊 Habits: מצאתי ${completedTasks.length} משימות שהושלמו מתוך ${tasks.length}`);
+    
+    if (completedTasks.length === 0) {
+      console.log('📊 Habits: אין משימות שהושלמו');
+      return null;
+    }
     
     // ניתוח לפי שעות
     const hourStats = {};
     completedTasks.forEach(task => {
       if (!task.completed_at) return;
-      const hour = new Date(task.completed_at).getHours();
-      if (!hourStats[hour]) {
-        hourStats[hour] = { count: 0, totalTime: 0, tasks: [] };
+      try {
+        const completedDate = new Date(task.completed_at);
+        if (isNaN(completedDate.getTime())) {
+          console.warn('⚠️ תאריך לא תקין:', task.completed_at);
+          return;
+        }
+        const hour = completedDate.getHours();
+        if (!hourStats[hour]) {
+          hourStats[hour] = { count: 0, totalTime: 0, tasks: [] };
+        }
+        hourStats[hour].count++;
+        hourStats[hour].totalTime += task.time_spent || 0;
+        hourStats[hour].tasks.push(task);
+      } catch (err) {
+        console.error('שגיאה בניתוח משימה:', err, task);
       }
-      hourStats[hour].count++;
-      hourStats[hour].totalTime += task.time_spent || 0;
-      hourStats[hour].tasks.push(task);
     });
 
     // ניתוח לפי ימים
@@ -116,11 +142,25 @@ function HabitTracker() {
   };
 
   if (!habitsAnalysis || habitsAnalysis.totalCompleted === 0) {
+    const totalTasks = tasks?.length || 0;
+    const completedCount = tasks?.filter(t => t.is_completed)?.length || 0;
+    
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
         <span className="text-4xl mb-4 block">📊</span>
-        <p>אין מספיק נתונים למעקב הרגלים</p>
-        <p className="text-sm mt-2">השלמי כמה משימות כדי לראות את הדפוסים שלך</p>
+        <p className="text-lg font-medium mb-2">אין מספיק נתונים למעקב הרגלים</p>
+        <p className="text-sm mt-2">
+          {completedCount > 0 
+            ? `יש לך ${completedCount} משימות שהושלמו, אבל חסרים נתוני זמן השלמה.`
+            : 'השלימי משימות והגדירי את זמן ההשלמה כדי לראות את הדפוסים שלך.'
+          }
+        </p>
+        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg max-w-md mx-auto">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            💡 <strong>טיפ:</strong> כשאת מסיימת משימה, לחצי על ✓ כדי לסמן אותה כהושלמה. 
+            המערכת תשמור מתי סיימת ותלמד את הדפוסים שלך!
+          </p>
+        </div>
       </div>
     );
   }

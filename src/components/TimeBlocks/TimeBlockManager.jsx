@@ -113,34 +113,74 @@ function TimeBlockManager() {
   // שמירת בלוק
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!user?.id) return;
+    if (!user?.id) {
+      toast.error('אין משתמש מחובר');
+      return;
+    }
+
+    // בדיקות תקינות
+    if (!formData.title || formData.title.trim() === '') {
+      toast.error('חובה להזין כותרת');
+      return;
+    }
+
+    const startTime = new Date(formData.start_time);
+    const endTime = new Date(formData.end_time);
+
+    if (isNaN(startTime.getTime())) {
+      toast.error('זמן התחלה לא תקין');
+      return;
+    }
+
+    if (isNaN(endTime.getTime())) {
+      toast.error('זמן סיום לא תקין');
+      return;
+    }
+
+    if (endTime <= startTime) {
+      toast.error('זמן הסיום חייב להיות אחרי זמן ההתחלה');
+      return;
+    }
+
+    const durationHours = (endTime - startTime) / (1000 * 60 * 60);
+    if (durationHours > 12) {
+      toast.error('בלוק זמן לא יכול להיות יותר מ-12 שעות');
+      return;
+    }
 
     try {
       if (editingBlock) {
         await updateTimeBlock(editingBlock.id, {
           task_id: formData.task_id || null,
-          title: formData.title,
-          description: formData.description || null,
-          start_time: new Date(formData.start_time).toISOString(),
-          end_time: new Date(formData.end_time).toISOString()
+          title: formData.title.trim(),
+          description: formData.description?.trim() || null,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString()
         });
-        toast.success('בלוק עודכן');
+        toast.success('בלוק עודכן בהצלחה');
       } else {
         await createTimeBlock({
           user_id: user.id,
           task_id: formData.task_id || null,
-          title: formData.title,
-          description: formData.description || null,
-          start_time: new Date(formData.start_time).toISOString(),
-          end_time: new Date(formData.end_time).toISOString()
+          title: formData.title.trim(),
+          description: formData.description?.trim() || null,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString()
         });
-        toast.success('בלוק נוצר');
+        toast.success('בלוק נוצר בהצלחה');
       }
       setShowForm(false);
+      setFormData({
+        task_id: '',
+        title: '',
+        description: '',
+        start_time: '',
+        end_time: ''
+      });
       loadBlocks();
     } catch (err) {
       console.error('שגיאה בשמירת בלוק:', err);
-      toast.error('שגיאה בשמירת בלוק');
+      toast.error(err.message || 'שגיאה בשמירת בלוק. נסה שוב.');
     }
   };
 

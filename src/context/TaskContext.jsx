@@ -190,9 +190,14 @@ export function TaskProvider({ children }) {
     }
   };
 
-  // קבלת משימות לפי רבע
+  // קבלת משימות לפי רבע (ללא משימות שהושלמו)
   const getTasksByQuadrant = (quadrant) => {
-    return getFilteredTasks().filter(t => t.quadrant === quadrant);
+    return tasks
+      .filter(t => t.quadrant === quadrant && !t.is_completed)
+      .sort((a, b) => {
+        // מיון לפי תאריך יצירה (חדשות יותר למעלה)
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
   };
 
   // קבלת משימות מסוננות וממוינות
@@ -229,6 +234,18 @@ export function TaskProvider({ children }) {
     return filtered;
   };
 
+  // קבלת משימות שהושלמו
+  const getCompletedTasks = () => {
+    return tasks
+      .filter(t => t.is_completed)
+      .sort((a, b) => {
+        // מיון לפי תאריך השלמה (החדשות ביותר ראשונות)
+        if (!a.completed_at) return 1;
+        if (!b.completed_at) return -1;
+        return new Date(b.completed_at) - new Date(a.completed_at);
+      });
+  };
+
   // סטטיסטיקות
   const getStats = () => {
     return {
@@ -260,6 +277,7 @@ export function TaskProvider({ children }) {
     changeQuadrant,
     toggleComplete,
     getTasksByQuadrant,
+    getCompletedTasks,
     getFilteredTasks,
     getStats
   };
