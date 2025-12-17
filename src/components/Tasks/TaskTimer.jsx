@@ -58,10 +58,10 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     };
   }, [isRunning]);
   
-  // שמירה אוטומטית כל 5 דקות
+  // שמירה אוטומטית כל 5 דקות (בלי onUpdate למניעת לולאה)
   useEffect(() => {
     if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0) {
-      saveProgress(false); // שמירה אוטומטית בלי איפוס
+      saveProgress(false, true); // שמירה אוטומטית בלי איפוס ובלי onUpdate
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, isRunning]);
@@ -78,8 +78,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           duration: 5000,
           icon: '🎉'
         });
-        // שמירה אוטומטית
-        saveProgress(false);
+        // שמירה אוטומטית בלי onUpdate למניעת לולאה
+        saveProgress(false, true);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
