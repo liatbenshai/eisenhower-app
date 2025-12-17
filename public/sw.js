@@ -1,81 +1,65 @@
 /**
- * Service Worker - Self-Destruct Version
- * גרסה זו מוחקת את עצמה ואת כל המטמונים
+ * Service Worker - Disabled Version
+ * Service Worker זה לא עושה כלום - פשוט מבטל את כל המטמון
+ * גרסה זו פותרת את בעיית הרענון
  */
 
-const SELF_DESTRUCT_VERSION = 'v4-self-destruct';
+const VERSION = 'v5-disabled';
 
-console.log('🔴 Service Worker: מצב מחיקה עצמית מופעל!');
+console.log('🟢 [SW] Service Worker מותקן - מצב מושבת');
 
-// התקנה - מחיקת מטמונים
+// התקנה - מחיקת כל המטמונים הישנים
 self.addEventListener('install', (event) => {
-  console.log('🗑️ [SW Install] מתחיל מחיקה...');
+  console.log('📦 [SW] Install - מוחק מטמונים ישנים');
   
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
-        console.log('🗑️ [SW] מוצא מטמונים:', cacheNames);
+        console.log('🗑️ [SW] מוחק', cacheNames.length, 'מטמונים');
         return Promise.all(
-          cacheNames.map((cacheName) => {
-            console.log('🗑️ [SW] מוחק:', cacheName);
-            return caches.delete(cacheName);
-          })
+          cacheNames.map((cacheName) => caches.delete(cacheName))
         );
       })
       .then(() => {
-        console.log('✅ [SW] כל המטמונים נמחקו');
+        console.log('✅ [SW] מטמונים נמחקו');
         return self.skipWaiting();
       })
   );
 });
 
-// הפעלה - הסרת רישום
+// הפעלה - השתלטות מיידית
 self.addEventListener('activate', (event) => {
-  console.log('💀 [SW Activate] מוחק את עצמי...');
+  console.log('⚡ [SW] Activate - משתלט על דף');
   
   event.waitUntil(
     Promise.all([
       // מחיקת כל המטמונים (שוב, למקרה שנשארו)
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            console.log('🗑️ [SW] מוחק מטמון:', cacheName);
-            return caches.delete(cacheName);
-          })
-        );
-      }),
-      // השתלטות על לקוחות
+      caches.keys().then((names) => 
+        Promise.all(names.map((name) => caches.delete(name)))
+      ),
+      // השתלטות מיידית
       self.clients.claim()
-    ])
-    .then(() => {
-      console.log('📢 [SW] שולח הודעה ללקוחות');
-      return self.clients.matchAll();
-    })
-    .then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_REMOVED',
-          message: 'Service Worker נמחק - רענן את הדף'
-        });
-      });
-      console.log('💀 [SW] מסיר רישום...');
-      // הסרת עצמית
-      return self.registration.unregister();
-    })
-    .then((success) => {
-      if (success) {
-        console.log('✅ [SW] הוסר בהצלחה!');
-      } else {
-        console.warn('⚠️ [SW] לא הצליח להסיר את עצמו');
-      }
+    ]).then(() => {
+      console.log('✅ [SW] מוכן - ללא מטמון');
     })
   );
 });
 
-// בקשות - לא עושה כלום, רק מעביר ישר לרשת
+// בקשות - לא עושה CACHE בכלל, תמיד מהרשת
 self.addEventListener('fetch', (event) => {
-  // לא מטפלים בבקשות - תן לדפדפן לטפל בזה רגיל
-  return;
+  // פשוט תן לדפדפן לטפל בזה - ללא מטמון
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // החזר תשובה מהרשת ישירות, ללא שמירה במטמון
+        return response;
+      })
+      .catch((error) => {
+        console.error('[SW] Fetch failed:', error);
+        // אם אין אינטרנט, פשוט תחזיר את השגיאה
+        throw error;
+      })
+  );
 });
 
-console.log('🔴 Service Worker: מוכן למחיקה עצמית');
+console.log('✅ [SW] מוכן - ללא מטמון, תמיד מהרשת');

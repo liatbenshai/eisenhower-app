@@ -13,22 +13,91 @@ function WorkloadAnalysis() {
   const [analysis, setAnalysis] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [trends, setTrends] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (tasks) {
+    if (!tasks || tasks.length === 0) {
+      console.log('⚖️ WorkloadAnalysis: אין משימות');
+      setAnalysis({
+        totalTasks: 0,
+        overdueTasks: 0,
+        dueToday: 0,
+        dueTomorrow: 0,
+        totalEstimatedTime: 0,
+        scheduledTime: 0,
+        availableTime: 360,
+        utilizationRate: 0,
+        riskLevel: 'low',
+        recommendations: [],
+        workloadByDay: {},
+        categoryAnalysis: null
+      });
+      return;
+    }
+
+    try {
+      console.log('⚖️ WorkloadAnalysis: מנתח', tasks.length, 'משימות');
       const workload = analyzeWorkload(tasks, [], selectedDate);
+      console.log('⚖️ ניתוח עומס:', workload);
       setAnalysis(workload);
+      setError(null);
       
       const trendData = analyzeTrends(tasks, [], 30);
       setTrends(trendData);
+    } catch (err) {
+      console.error('❌ שגיאה בניתוח עומס:', err);
+      setError(err.message);
+      setAnalysis({
+        totalTasks: 0,
+        overdueTasks: 0,
+        dueToday: 0,
+        dueTomorrow: 0,
+        totalEstimatedTime: 0,
+        scheduledTime: 0,
+        availableTime: 360,
+        utilizationRate: 0,
+        riskLevel: 'low',
+        recommendations: [],
+        workloadByDay: {},
+        categoryAnalysis: null
+      });
     }
   }, [tasks, selectedDate]);
+
+  if (error) {
+    return (
+      <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <span className="text-4xl mb-4 block">⚠️</span>
+        <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+          שגיאה בניתוח עומס
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {error}
+        </p>
+      </div>
+    );
+  }
 
   if (!analysis) {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mx-auto"></div>
         <p className="mt-2 text-gray-500 dark:text-gray-400">מנתח עומס עבודה...</p>
+      </div>
+    );
+  }
+
+  // אם אין משימות פעילות
+  if (analysis.totalTasks === 0) {
+    return (
+      <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <span className="text-4xl mb-4 block">⚖️</span>
+        <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+          אין משימות פעילות
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          הוסיפי משימות כדי לראות ניתוח עומס
+        </p>
       </div>
     );
   }
@@ -94,7 +163,7 @@ function WorkloadAnalysis() {
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">ניצול זמן</div>
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {analysis.utilizationRate}%
+            {analysis.utilizationRate || 0}%
           </div>
         </div>
       </div>
