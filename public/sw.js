@@ -5,11 +5,10 @@
 const CACHE_NAME = 'eisenhower-v2-20241217'; // עדכון גרסה
 const OFFLINE_URL = '/offline.html';
 
-// קבצים לשמירה במטמון
+// קבצים לשמירה במטמון (רשימה מינימלית)
 const urlsToCache = [
   '/',
-  '/index.html',
-  '/manifest.json'
+  '/index.html'
 ];
 
 // התקנה
@@ -144,8 +143,7 @@ self.addEventListener('push', (event) => {
   
   const options = {
     body: data.body || 'יש לך משימה חדשה!',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    // הסרת אייקונים שלא קיימים
     dir: 'rtl',
     lang: 'he',
     vibrate: [200, 100, 200],
