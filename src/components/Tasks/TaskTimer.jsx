@@ -153,10 +153,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const stopTimer = async () => {
     setIsRunning(false);
     if (elapsedSeconds > 0) {
-      await saveProgress(true); // שמירה עם איפוס
-      toast.success('🎯 הטיימר נעצר. עכשיו אפשר לסמן את המשימה כהושלמה!', {
-        duration: 4000
-      });
+      const result = await saveProgress(true); // שמירה עם aiפוס
+      if (result && result.success) {
+        toast.success(`🎯 נשמר! ${result.minutesToAdd} דקות נוספו. סה"כ: ${result.newTimeSpent} דקות`, {
+          duration: 4000,
+          icon: '💾'
+        });
+      }
     }
     setElapsedSeconds(0);
     setStartTime(null);
@@ -169,11 +172,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setStartTime(null);
   };
   
-  const saveProgress = async (reset = false) => {
+  const saveProgress = async (reset = false, skipUpdate = false) => {
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
       if (minutesToAdd > 0 && task && task.id) {
         const newTimeSpent = timeSpent + minutesToAdd;
+        
+        console.log('💾 saveProgress:', { minutesToAdd, newTimeSpent, reset, skipUpdate });
         
         // עדכון המשימה
         await updateTask(task.id, { time_spent: newTimeSpent });
@@ -186,20 +191,22 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         if (reset) {
           setElapsedSeconds(0);
         }
-        // עדכון רק אם יש callback - אבל זה לא יסגור את הכרטיס
-        if (onUpdate) {
+        
+        // עדכון רק אם לא ביקשו לדלג (למניעת סגירת הכרטיס באמצע פעולה)
+        if (onUpdate && !skipUpdate) {
+          console.log('🔄 קורא ל-onUpdate');
           onUpdate();
         }
-        toast.success(`✅ נשמר! ${minutesToAdd} דקות נוספו. סה"כ: ${newTimeSpent} דקות`, {
-          duration: 3000,
-          icon: '💾'
-        });
+        
+        return { success: true, minutesToAdd, newTimeSpent };
       } else if (minutesToAdd === 0) {
         toast('עבדת פחות מדקה - לא נשמר', { icon: '⏱️' });
+        return { success: false, reason: 'less_than_minute' };
       }
     } catch (err) {
-      console.error('שגיאה בשמירת התקדמות:', err);
+      console.error('❌ שגיאה בשמירת התקדמות:', err);
       toast.error(err.message || 'שגיאה בשמירת התקדמות');
+      return { success: false, error: err };
     }
   };
   
@@ -412,18 +419,33 @@ function TaskTimer({ task, onUpdate, onComplete }) {
                 {/* כפתור מהיר - שומר ומסמן כהושלם */}
                 <Button
                   onClick={async () => {
-                    await saveProgress(true);
-                    resetTimer();
-                    if (onComplete) {
-                      // סימון המשימה כהושלמה
-                      onComplete();
-                      toast.success('🎉 המשימה הושלמה! הזמן נשמר והמערכת למדה ממנה', {
-                        duration: 4000
-                      });
+                    console.log('🟢 לחיצה על: שמור וסמן כהושלם');
+                    
+                    // שמירה BLI onUpdate כדי שהכרטיס לא ייסגר באמצע
+                    const result = await saveProgress(true, true);
+                    
+                    if (result && result.success) {
+                      console.log('✅ שמירה הצליחה:', result);
+                      resetTimer();
+                      
+                      if (onComplete) {
+                        console.log('🎯 מסמן משימה כהושלמה');
+                        // סימון המשימה כהושלמה - זה יעדכן הכל
+                        await onComplete();
+                        toast.success('🎉 המשימה הושלמה! הזמן נשמר והמערכת למדה ממנה', {
+                          duration: 4000
+                        });
+                      } else {
+                        console.warn('⚠️ אין onComplete callback');
+                        toast.success('✅ הזמן נשמר!', {
+                          duration: 3000
+                        });
+                      }
                     } else {
-                      toast.success('✅ הזמן נשמר!', {
-                        duration: 3000
-                      });
+                      console.error('❌ השמירה נכשלה:', result);
+                      if (result && result.reason !== 'less_than_minute') {
+                        toast.error('שגיאה בשמירת הזמן');
+                      }
                     }
                   }}
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold shadow-lg"
@@ -435,11 +457,14 @@ function TaskTimer({ task, onUpdate, onComplete }) {
                 <div className="flex gap-2">
                   <Button
                     onClick={async () => {
-                      await saveProgress(true);
-                      resetTimer();
-                      toast.success('💾 הזמן נשמר!', {
-                        duration: 3000
-                      });
+                      console.log('💾 לחיצה על: רק שמור');
+                      const result = await saveProgress(true);
+                      if (result && result.success) {
+                        resetTimer();
+                        toast.success(`💾 נשמר! ${result.minutesToAdd} דקות נוספו. סה"כ: ${result.newTimeSpent} דקות`, {
+                          duration: 3000
+                        });
+                      }
                     }}
                     className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
                   >
