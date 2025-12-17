@@ -341,7 +341,10 @@ function TaskCard({
       
       {/* טיימר - לכל משימה */}
       {showTimer && !task.is_completed && (
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
+        >
           <TaskTimer
             task={task}
             onUpdate={async () => {
