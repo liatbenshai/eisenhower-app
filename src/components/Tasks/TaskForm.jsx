@@ -134,30 +134,47 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
   // שליחת הטופס
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('🟢 handleSubmit נקרא');
+    console.log('📋 formData:', formData);
 
     // אימות
     const validation = validateTaskForm(formData);
+    console.log('🔍 תוצאת אימות:', validation);
+    
     if (!validation.valid) {
+      console.error('❌ האימות נכשל:', validation.errors);
       setErrors(validation.errors);
+      toast.error('יש שגיאות בטופס - בדקי את השדות');
       return;
     }
 
     setLoading(true);
     try {
       if (isEditing) {
+        console.log('✏️ עורך משימה קיימת');
         await editTask(task.id, formData);
         toast.success('המשימה עודכנה');
       } else {
-        console.log('שולח משימה חדשה:', formData);
+        console.log('➕ מוסיף משימה חדשה:', formData);
         await addTask(formData);
-        toast.success('המשימה נוספה');
+        toast.success('✅ המשימה נוספה בהצלחה!');
       }
+      console.log('✨ הכל עבר בהצלחה, סוגר טופס');
       onClose();
     } catch (err) {
-      console.error('שגיאה בשליחת טופס:', err);
-      toast.error(err.message || 'שגיאה בשמירת המשימה');
+      console.error('💥 שגיאה בשליחת טופס:', err);
+      console.error('📋 פרטי שגיאה:', {
+        message: err.message,
+        stack: err.stack,
+        formData: formData
+      });
+      toast.error(err.message || 'שגיאה בשמירת המשימה - בדקי את ה-Console', {
+        duration: 5000
+      });
     } finally {
       setLoading(false);
+      console.log('🔄 loading הושלם');
     }
   };
 

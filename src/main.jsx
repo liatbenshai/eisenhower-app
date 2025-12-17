@@ -21,49 +21,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// רישום Service Worker עם טיפול בעדכונים
+// ביטול Service Worker זמני - עד לתיקון הבעיות
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('✅ Service Worker נרשם בהצלחה');
-        
-        // בדיקת עדכונים כל 60 שניות
-        setInterval(() => {
-          registration.update();
-        }, 60000);
-        
-        // האזנה לעדכון
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          console.log('🔄 Service Worker חדש נמצא');
-          
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('✨ גרסה חדשה זמינה!');
-              // הצג הודעה למשתמש
-              if (confirm('יש גרסה חדשה! לחצ/י OK לרענן את האפליקציה')) {
-                window.location.reload();
-              }
-            }
-          });
-        });
-      })
-      .catch((err) => {
-        console.warn('⚠️ Service Worker לא נרשם:', err);
+  // מחיקת כל Service Workers קיימים
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
+      console.log('🗑️ Service Worker הוסר:', registration);
+    });
+  });
+  
+  // ניקוי כל המטמונים
+  if ('caches' in window) {
+    caches.keys().then((names) => {
+      names.forEach((name) => {
+        caches.delete(name);
+        console.log('🗑️ מטמון הוסר:', name);
       });
-  });
-
-  // האזנה להודעות מה-Service Worker
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SW_UPDATED') {
-      console.log('📢 Service Worker עודכן:', event.data.message);
-      // רענון אוטומטי אחרי 3 שניות
-      setTimeout(() => {
-        console.log('🔄 מרענן את האפליקציה...');
-        window.location.reload();
-      }, 3000);
-    }
-  });
+    });
+  }
+  
+  console.log('✅ Service Worker מבוטל - האפליקציה תעבוד ללא מטמון');
 }
 
