@@ -22,6 +22,7 @@ import SmartRecommendations from '../components/Recommendations/SmartRecommendat
 import HabitTracker from '../components/Habits/HabitTracker';
 import AutoScheduler from '../components/SmartScheduler/AutoScheduler';
 import CompletedTasksView from '../components/Tasks/CompletedTasksView';
+import TimeCorrectionRules from '../components/Learning/TimeCorrectionRules';
 
 /**
  * דף לוח המחוונים הראשי
@@ -186,6 +187,11 @@ function Dashboard() {
             label: 'משימות שהושלמו',
             icon: '✅',
             content: <CompletedTasksView />
+          },
+          {
+            label: 'למידה אישית',
+            icon: '🎯',
+            content: <TimeCorrectionRules />
           },
           {
             label: 'הרגלים',

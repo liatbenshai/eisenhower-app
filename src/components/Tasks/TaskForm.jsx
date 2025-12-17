@@ -8,6 +8,7 @@ import { createTaskTemplate } from '../../services/supabase';
 import { suggestEstimatedTime } from '../../utils/timeEstimation';
 import { TASK_CATEGORIES, detectTaskCategory } from '../../utils/taskCategories';
 import { predictTaskDuration } from '../../utils/taskTypeLearning';
+import { getSuggestedTimeWithCorrection, markRuleAsApplied } from '../../utils/timeCorrectionRules';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -37,6 +38,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
   const [quadrantExplanation, setQuadrantExplanation] = useState(null);
   const [detectedCategory, setDetectedCategory] = useState(null);
   const [aiPrediction, setAiPrediction] = useState(null);
+  const [correctionSuggestion, setCorrectionSuggestion] = useState(null);
 
   // חישוב הצעת זמן משוער
   const timeSuggestion = useMemo(() => {
@@ -121,6 +123,31 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
       }
     }
   }, [formData.title, formData.description, isEditing, user?.id]);
+
+  // טיפול בכללי תיקון זמן
+  useEffect(() => {
+    if (!isEditing && user?.id && formData.taskType && formData.estimatedDuration) {
+      const estimatedMinutes = parseInt(formData.estimatedDuration);
+      if (estimatedMinutes > 0) {
+        getSuggestedTimeWithCorrection(user.id, formData.taskType, estimatedMinutes)
+          .then(suggestion => {
+            if (suggestion.hasCorrection) {
+              setCorrectionSuggestion(suggestion);
+            } else {
+              setCorrectionSuggestion(null);
+            }
+          })
+          .catch(err => {
+            console.error('שגיאה בקבלת כלל תיקון:', err);
+            setCorrectionSuggestion(null);
+          });
+      } else {
+        setCorrectionSuggestion(null);
+      }
+    } else {
+      setCorrectionSuggestion(null);
+    }
+  }, [formData.taskType, formData.estimatedDuration, isEditing, user?.id]);
 
   // טיפול בשינוי שדה
   const handleChange = (e) => {
@@ -438,6 +465,48 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
                 aiPrediction.confidence === 'medium' ? '🟡 בינונית' :
                 '🟠 נמוכה (עדיין לא מספיק נתונים)'
               }
+            </div>
+          </div>
+        )}
+        
+        {/* הצעה לתיקון זמן לפי כללי למידה */}
+        {correctionSuggestion && correctionSuggestion.hasCorrection && (
+          <div className="mt-2 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <div className="text-sm font-bold text-purple-800 dark:text-purple-200 mb-1">
+                  🎯 המערכת למדה אותך!
+                </div>
+                <div className="text-xs text-purple-700 dark:text-purple-300 mb-2">
+                  {correctionSuggestion.explanation}
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="text-gray-600 dark:text-gray-400">
+                    הערכה שלך: <span className="font-medium line-through">{correctionSuggestion.original} דקות</span>
+                  </div>
+                  <div className="text-purple-700 dark:text-purple-300 font-bold">
+                    → המערכת ממליצה: <span className="text-lg">{correctionSuggestion.corrected} דקות</span>
+                  </div>
+                </div>
+                {correctionSuggestion.rule.notes && (
+                  <div className="text-xs text-purple-600 dark:text-purple-400 mt-1 italic">
+                    📝 {correctionSuggestion.rule.notes}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setFormData(prev => ({ ...prev, estimatedDuration: correctionSuggestion.corrected.toString() }));
+                  if (user?.id) {
+                    await markRuleAsApplied(user.id, formData.taskType, true);
+                  }
+                  toast.success(`עודכן ל-${correctionSuggestion.corrected} דקות`);
+                }}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+              >
+                קבל המלצה
+              </button>
             </div>
           </div>
         )}
