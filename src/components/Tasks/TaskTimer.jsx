@@ -6,7 +6,7 @@ import Button from '../UI/Button';
 /**
  * טיימר למשימה - פרומדורו
  */
-function TaskTimer({ task, onUpdate }) {
+function TaskTimer({ task, onUpdate, onComplete }) {
   if (!task || !task.id) {
     return (
       <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -393,18 +393,41 @@ function TaskTimer({ task, onUpdate }) {
             {/* כפתורים משניים */}
             {elapsedSeconds > 0 && !isRunning && (
               <div className="space-y-2">
+                {/* כפתור מהיר - שומר ומסמן כהושלם */}
+                <Button
+                  onClick={async () => {
+                    await saveProgress(true);
+                    resetTimer();
+                    if (onComplete) {
+                      // סימון המשימה כהושלמה
+                      onComplete();
+                      toast.success('🎉 המשימה הושלמה! הזמן נשמר והמערכת למדה ממנה', {
+                        duration: 4000
+                      });
+                    } else {
+                      toast.success('✅ הזמן נשמר!', {
+                        duration: 3000
+                      });
+                    }
+                  }}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold shadow-lg"
+                >
+                  ✅ שמור וסמן כהושלם
+                </Button>
+                
+                {/* כפתורים נוספים */}
                 <div className="flex gap-2">
                   <Button
                     onClick={async () => {
                       await saveProgress(true);
                       resetTimer();
-                      toast.success('✅ הזמן נשמר! עכשיו תוכל לסמן את המשימה כהושלמה', {
-                        duration: 4000
+                      toast.success('💾 הזמן נשמר!', {
+                        duration: 3000
                       });
                     }}
                     className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
                   >
-                    💾 שמור וסיים
+                    💾 רק שמור
                   </Button>
                   <Button
                     onClick={resetTimer}
@@ -413,9 +436,6 @@ function TaskTimer({ task, onUpdate }) {
                   >
                     🔄 איפוס
                   </Button>
-                </div>
-                <div className="text-xs text-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-                  💡 לחצי "שמור וסיים" ואז סמני את המשימה כהושלמה ✓
                 </div>
               </div>
             )}

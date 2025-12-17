@@ -348,6 +348,10 @@ function TaskCard({
               // עדכון המשימה ברשימה בלי לפתוח את הטופס
               await loadTasks();
             }}
+            onComplete={async () => {
+              // סימון המשימה כהושלמה
+              await handleToggleComplete({ stopPropagation: () => {} });
+            }}
           />
         </div>
       )}
