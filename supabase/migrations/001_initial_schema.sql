@@ -205,6 +205,10 @@ CREATE POLICY "notification_settings_insert_own" ON public.notification_settings
 CREATE POLICY "notification_settings_update_own" ON public.notification_settings
   FOR UPDATE USING (auth.uid() = user_id);
 
+-- משתמש יכול למחוק רק את ההגדרות שלו
+CREATE POLICY "notification_settings_delete_own" ON public.notification_settings
+  FOR DELETE USING (auth.uid() = user_id);
+
 -- ==============================================
 -- יצירת מנהל ראשוני (אופציונלי)
 -- ==============================================

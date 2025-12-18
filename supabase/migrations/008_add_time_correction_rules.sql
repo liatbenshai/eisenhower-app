@@ -167,7 +167,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- טריגר לעדכון אוטומטי של מקדמי תיקון
 DROP TRIGGER IF EXISTS auto_update_correction_trigger ON public.tasks;

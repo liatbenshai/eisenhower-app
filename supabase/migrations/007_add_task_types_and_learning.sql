@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS public.task_type_stats (
   completed_tasks INTEGER DEFAULT 0,
   total_time_spent INTEGER DEFAULT 0, -- סה"כ זמן בדקות
   average_time INTEGER DEFAULT 0, -- ממוצע זמן בדקות
-  min_time INTEGER DEFAULT 0,
+  min_time INTEGER DEFAULT NULL,
   max_time INTEGER DEFAULT 0,
   
   -- סטטיסטיקות דיוק
@@ -150,8 +150,8 @@ BEGIN
       1,
       NEW.time_spent,
       NEW.time_spent,
-      NEW.time_spent,
-      NEW.time_spent,
+      NEW.time_spent, -- min_time
+      NEW.time_spent, -- max_time
       1,
       CASE WHEN task_accuracy >= 80 THEN 1 ELSE 0 END,
       task_accuracy,
@@ -162,7 +162,10 @@ BEGIN
       completed_tasks = task_type_stats.completed_tasks + 1,
       total_time_spent = task_type_stats.total_time_spent + NEW.time_spent,
       average_time = (task_type_stats.total_time_spent + NEW.time_spent) / (task_type_stats.completed_tasks + 1),
-      min_time = LEAST(task_type_stats.min_time, NEW.time_spent),
+      min_time = CASE 
+        WHEN task_type_stats.min_time IS NULL THEN NEW.time_spent
+        ELSE LEAST(task_type_stats.min_time, NEW.time_spent)
+      END,
       max_time = GREATEST(task_type_stats.max_time, NEW.time_spent),
       total_estimates = task_type_stats.total_estimates + 1,
       accurate_estimates = task_type_stats.accurate_estimates + CASE WHEN task_accuracy >= 80 THEN 1 ELSE 0 END,
@@ -172,7 +175,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- טריגר לעדכון סטטיסטיקות
 DROP TRIGGER IF EXISTS update_task_type_stats_trigger ON public.tasks;
