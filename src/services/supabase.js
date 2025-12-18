@@ -266,6 +266,8 @@ export async function updateTask(taskId, updates) {
   
   console.log('מעדכן משימה:', taskId, updateData);
   
+  console.log('📤 שולח עדכון ל-Supabase:', { taskId, updateData });
+  
   const { data, error } = await supabase
     .from('tasks')
     .update(updateData)
@@ -273,19 +275,27 @@ export async function updateTask(taskId, updates) {
     .select()
     .single();
   
+  console.log('📥 תגובה מ-Supabase:', { data, error });
+  
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
     console.error('פרטי שגיאה:', {
       message: error.message,
       details: error.details,
       hint: error.hint,
-      code: error.code
+      code: error.code,
+      taskId,
+      updateData
     });
     throw error;
   }
   
   if (!data) {
-    console.error('❌ לא הוחזר data מ-Supabase בעדכון משימה!');
+    console.error('❌ לא הוחזר data מ-Supabase בעדכון משימה!', {
+      taskId,
+      updateData,
+      response: { data, error }
+    });
     throw new Error('המשימה לא עודכנה - אין data');
   }
   

@@ -219,13 +219,14 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       clearTimeout(savingTimeoutRef.current);
     }
     
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-10 שניות, נסיר את הדגל
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
+    // (הארכתי ל-30 שניות כי לפעמים יש עיכובים ברשת)
     savingTimeoutRef.current = setTimeout(() => {
       if (savingRef.current) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן, מסיר דגל...');
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
         savingRef.current = false;
       }
-    }, 10000);
+    }, 30000);
     
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);

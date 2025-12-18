@@ -193,10 +193,15 @@ export function TaskProvider({ children }) {
     if (updatingTasksRef.current.has(taskId)) {
       console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין...');
       // נחכה קצת וננסה שוב
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       if (updatingTasksRef.current.has(taskId)) {
-        console.warn('⚠️ עדכון עדיין בתהליך, מדלג');
-        return;
+        console.warn('⚠️ עדכון עדיין בתהליך, מנסה שוב...');
+        // במקום לדלג, ננסה שוב (למקרה שהעדכון הקודם הסתיים)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (updatingTasksRef.current.has(taskId)) {
+          console.error('❌ עדכון תקוע, מדלג');
+          return null;
+        }
       }
     }
     
@@ -207,7 +212,13 @@ export function TaskProvider({ children }) {
       console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
       
       // עדכון ב-DB קודם - זה המקור האמת
-      const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
+      // נוסיף timeout למניעת תקיעות
+      const updatePromise = updateTask(taskId, { time_spent: timeSpentInt });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('עדכון לוקח יותר מדי זמן')), 25000)
+      );
+      
+      const updatedTask = await Promise.race([updatePromise, timeoutPromise]);
       
       if (!updatedTask) {
         throw new Error('המשימה לא עודכנה - אין data מהשרת');
