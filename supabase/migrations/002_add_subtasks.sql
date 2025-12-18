@@ -85,10 +85,5 @@ CREATE POLICY "subtasks_delete_own" ON public.subtasks
 
 -- מנהל יכול לראות את כל השלבים
 CREATE POLICY "admin_select_all_subtasks" ON public.subtasks
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR SELECT USING (public.is_admin());
 

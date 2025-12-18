@@ -122,6 +122,20 @@ ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_settings ENABLE ROW LEVEL SECURITY;
 
 -- ==============================================
+-- פונקציה לבדיקת אם משתמש הוא admin
+-- ==============================================
+-- פונקציה זו מונעת infinite recursion ב-policies
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE id = auth.uid() AND role = 'super_admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- ==============================================
 -- מדיניות RLS - משתמשים
 -- ==============================================
 
@@ -135,30 +149,15 @@ CREATE POLICY "users_update_own" ON public.users
 
 -- מנהל יכול לראות את כל המשתמשים
 CREATE POLICY "admin_select_all_users" ON public.users
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR SELECT USING (public.is_admin());
 
 -- מנהל יכול לעדכן את כל המשתמשים
 CREATE POLICY "admin_update_all_users" ON public.users
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR UPDATE USING (public.is_admin());
 
 -- מנהל יכול למחוק משתמשים
 CREATE POLICY "admin_delete_users" ON public.users
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR DELETE USING (public.is_admin());
 
 -- ==============================================
 -- מדיניות RLS - משימות
@@ -182,12 +181,7 @@ CREATE POLICY "tasks_delete_own" ON public.tasks
 
 -- מנהל יכול לראות את כל המשימות (לסטטיסטיקות)
 CREATE POLICY "admin_select_all_tasks" ON public.tasks
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR SELECT USING (public.is_admin());
 
 -- ==============================================
 -- מדיניות RLS - הגדרות התראות

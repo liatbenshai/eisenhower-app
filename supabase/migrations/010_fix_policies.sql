@@ -32,20 +32,10 @@ CREATE POLICY "users_insert_own_history" ON public.task_completion_history
 
 -- מנהל יכול לראות הכל
 CREATE POLICY "admin_select_all_stats" ON public.task_type_stats
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "admin_select_all_history" ON public.task_completion_history
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.users 
-      WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR SELECT USING (public.is_admin());
 
 -- הודעת הצלחה
 DO $$
