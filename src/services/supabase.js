@@ -289,6 +289,21 @@ export async function updateTask(taskId, updates) {
     throw new Error('המשימה לא עודכנה - אין data');
   }
   
+  // וידוא שהנתונים נשמרו נכון
+  if (updateData.time_spent !== undefined) {
+    const savedTimeSpent = parseInt(data.time_spent) || 0;
+    const expectedTimeSpent = parseInt(updateData.time_spent) || 0;
+    if (savedTimeSpent !== expectedTimeSpent) {
+      console.error('⚠️ time_spent לא נשמר נכון!', {
+        expected: expectedTimeSpent,
+        saved: savedTimeSpent,
+        data: data
+      });
+    } else {
+      console.log('✅ time_spent נשמר נכון:', savedTimeSpent);
+    }
+  }
+  
   console.log('✅ משימה עודכנה בהצלחה:', data);
   return data;
 }

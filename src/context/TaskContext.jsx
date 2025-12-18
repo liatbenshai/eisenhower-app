@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   getTasks, 
   createTask, 
@@ -25,6 +25,9 @@ export function TaskProvider({ children }) {
   // סינון ומיון
   const [filter, setFilter] = useState('all'); // all, active, completed
   const [sortBy, setSortBy] = useState('created_at'); // created_at, due_date, title
+  
+  // מניעת race conditions - שמירת עדכונים בתהליך
+  const updatingTasksRef = useRef(new Set());
 
   // טעינת משימות
   const loadTasks = useCallback(async () => {
@@ -184,32 +187,73 @@ export function TaskProvider({ children }) {
     }
   };
 
-  // עדכון זמן שבוצע למשימה (מ-TaskTimer)
-  const updateTaskTime = async (taskId, timeSpent) => {
+  // עדכון זמן שבוצע למשימה (מ-TaskTimer) - עם מניעת race conditions
+  const updateTaskTime = useCallback(async (taskId, timeSpent) => {
+    // מניעת עדכונים כפולים במקביל
+    if (updatingTasksRef.current.has(taskId)) {
+      console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין...');
+      // נחכה קצת וננסה שוב
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (updatingTasksRef.current.has(taskId)) {
+        console.warn('⚠️ עדכון עדיין בתהליך, מדלג');
+        return;
+      }
+    }
+    
+    updatingTasksRef.current.add(taskId);
+    
     try {
       const timeSpentInt = parseInt(timeSpent) || 0;
       console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
       
-      // עדכון מיידי ב-state לפני שמירה ב-DB (optimistic update)
-      setTasks(prev => prev.map(t => {
-        if (t.id === taskId) {
-          return { ...t, time_spent: timeSpentInt };
-        }
-        return t;
-      }));
-      
-      // עדכון ב-DB
+      // עדכון ב-DB קודם - זה המקור האמת
       const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
       
-      // עדכון נוסף עם הנתונים מהשרת (למקרה שיש שינויים נוספים)
-      if (updatedTask) {
-        setTasks(prev => prev.map(t => {
+      if (!updatedTask) {
+        throw new Error('המשימה לא עודכנה - אין data מהשרת');
+      }
+      
+      console.log('✅ משימה עודכנה ב-DB:', updatedTask);
+      console.log('📊 time_spent מהשרת:', updatedTask.time_spent);
+      
+      // עדכון ב-state עם הנתונים מהשרת
+      setTasks(prev => {
+        const taskExists = prev.find(t => t.id === taskId);
+        if (!taskExists) {
+          console.warn('⚠️ משימה לא נמצאה ב-state, טוען מחדש...');
+          loadTasks();
+          return prev;
+        }
+        
+        const updated = prev.map(t => {
           if (t.id === taskId) {
-            return { ...t, ...updatedTask, time_spent: updatedTask.time_spent || timeSpentInt };
+            // עדכון עם כל הנתונים מהשרת - וידוא ש-time_spent הוא מספר
+            const newTask = {
+              ...t,
+              ...updatedTask,
+              time_spent: parseInt(updatedTask.time_spent) || timeSpentInt
+            };
+            console.log('🔄 מעדכן משימה ב-state:', {
+              id: newTask.id,
+              time_spent_old: t.time_spent,
+              time_spent_new: newTask.time_spent
+            });
+            return newTask;
           }
           return t;
-        }));
-      }
+        });
+        
+        // וידוא שהעדכון קרה
+        const updatedTaskInState = updated.find(t => t.id === taskId);
+        if (updatedTaskInState && updatedTaskInState.time_spent !== timeSpentInt) {
+          console.warn('⚠️ time_spent לא עודכן נכון ב-state!', {
+            expected: timeSpentInt,
+            actual: updatedTaskInState.time_spent
+          });
+        }
+        
+        return updated;
+      });
       
       console.log('✅ TaskContext: משימה עודכנה ב-state ו-DB:', updatedTask);
       return updatedTask;
@@ -222,8 +266,10 @@ export function TaskProvider({ children }) {
         console.error('❌ שגיאה בטעינת משימות אחרי שגיאה:', loadErr);
       }
       throw err;
+    } finally {
+      updatingTasksRef.current.delete(taskId);
     }
-  };
+  }, [loadTasks]);
 
   // סימון כהושלם/לא הושלם
   const toggleComplete = async (taskId) => {

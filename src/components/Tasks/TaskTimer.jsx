@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { updateSubtaskProgress } from '../../services/supabase';
 import { useTasks } from '../../hooks/useTasks';
 import toast from 'react-hot-toast';
@@ -20,8 +20,22 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     );
   }
   
-  // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop
-  const currentTask = tasks.find(t => t.id === task.id) || task;
+  // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop - עם useMemo לעדכון אוטומטי
+  const currentTask = useMemo(() => {
+    const found = tasks.find(t => t.id === task.id);
+    if (found) {
+      // אם time_spent השתנה, נדווח
+      if (found.time_spent !== task.time_spent) {
+        console.log('🔄 TaskTimer: משימה עודכנה מה-context', {
+          id: found.id,
+          time_spent_old: task.time_spent,
+          time_spent_new: found.time_spent
+        });
+      }
+      return found;
+    }
+    return task;
+  }, [tasks, task.id]);
   
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -181,12 +195,24 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setStartTime(null);
   };
   
+  // מניעת שמירות כפולות במקביל
+  const savingRef = useRef(false);
+  
   const saveProgress = async (reset = false, skipUpdate = false) => {
+    // מניעת שמירות כפולות
+    if (savingRef.current) {
+      console.log('⏳ שמירה כבר בתהליך, ממתין...');
+      return { success: false, reason: 'already_saving' };
+    }
+    
+    savingRef.current = true;
+    
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
       if (minutesToAdd > 0 && currentTask && currentTask.id) {
-        // שימוש במשימה העדכנית מה-TaskContext
-        const currentTimeSpent = (currentTask.time_spent) ? parseInt(currentTask.time_spent) : 0;
+        // שימוש במשימה העדכנית מה-TaskContext - טעינה מחדש מה-context
+        const latestTask = tasks.find(t => t.id === currentTask.id) || currentTask;
+        const currentTimeSpent = (latestTask.time_spent) ? parseInt(latestTask.time_spent) : 0;
         const newTimeSpent = currentTimeSpent + minutesToAdd;
         
         console.log('💾 saveProgress:', { 
@@ -195,17 +221,26 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           newTimeSpent, 
           reset, 
           skipUpdate,
-          taskId: currentTask.id
+          taskId: latestTask.id,
+          taskFromContext: latestTask.time_spent
         });
         
         // עדכון המשימה דרך TaskContext - זה יעדכן גם את ה-DB וגם את ה-state
-        const updatedTask = await updateTaskTime(currentTask.id, newTimeSpent);
+        const updatedTask = await updateTaskTime(latestTask.id, newTimeSpent);
         
-        console.log('✅ משימה עודכנה:', updatedTask);
+        if (!updatedTask) {
+          throw new Error('המשימה לא עודכנה - אין data');
+        }
+        
+        console.log('✅ משימה עודכנה:', {
+          id: updatedTask.id,
+          time_spent: updatedTask.time_spent,
+          expected: newTimeSpent
+        });
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
-        if (currentTask.subtask_id) {
-          await updateSubtaskProgress(currentTask.subtask_id, newTimeSpent);
+        if (latestTask.subtask_id) {
+          await updateSubtaskProgress(latestTask.subtask_id, newTimeSpent);
         }
         
         if (reset) {
@@ -227,6 +262,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       console.error('❌ שגיאה בשמירת התקדמות:', err);
       toast.error(err.message || 'שגיאה בשמירת התקדמות');
       return { success: false, error: err };
+    } finally {
+      savingRef.current = false;
     }
   };
   
