@@ -281,12 +281,37 @@ export async function updateTask(taskId, updates) {
   console.log('📤 שולח עדכון ל-Supabase:', { taskId, updateData });
   const startTime = Date.now();
   
-  const { data, error } = await supabase
-    .from('tasks')
-    .update(updateData)
-    .eq('id', taskId)
-    .select()
-    .single();
+  // ננסה לעדכן בלי SELECT קודם, ואז נטען את המשימה בנפרד
+  // זה יכול לעזור אם יש בעיה עם ה-SELECT אחרי ה-UPDATE
+  let data, error;
+  
+  try {
+    // עדכון בלי SELECT
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId);
+    
+    if (updateError) {
+      error = updateError;
+    } else {
+      // אם העדכון הצליח, נטען את המשימה בנפרד
+      console.log('✅ עדכון הצליח, טוען משימה מחדש...');
+      const { data: taskData, error: selectError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+      
+      if (selectError) {
+        error = selectError;
+      } else {
+        data = taskData;
+      }
+    }
+  } catch (err) {
+    error = err;
+  }
   
   const duration = Date.now() - startTime;
   console.log(`📥 תגובה מ-Supabase (לקח ${duration}ms):`, { 
