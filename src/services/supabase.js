@@ -199,11 +199,14 @@ export async function createTask(task) {
   console.log('💾 שומר משימה עם נתונים:', taskData);
   
   try {
+    console.log('📤 שולח insert ל-Supabase...');
     const { data, error } = await supabase
       .from('tasks')
       .insert([taskData])
       .select()
       .single();
+    
+    console.log('📥 תגובה מ-Supabase:', { hasData: !!data, hasError: !!error, error });
     
     if (error) {
       console.error('❌ שגיאה מ-Supabase:', error);
@@ -211,7 +214,8 @@ export async function createTask(task) {
         message: error.message,
         details: error.details,
         hint: error.hint,
-        code: error.code
+        code: error.code,
+        taskData
       });
       
       // הודעות שגיאה ידידותיות
@@ -229,7 +233,10 @@ export async function createTask(task) {
     }
     
     if (!data) {
-      console.error('❌ לא הוחזר data מ-Supabase!');
+      console.error('❌ לא הוחזר data מ-Supabase!', {
+        taskData,
+        response: { data, error }
+      });
       throw new Error('❌ המשימה לא נוצרה (אין data)');
     }
     
@@ -238,6 +245,11 @@ export async function createTask(task) {
     
   } catch (err) {
     console.error('💥 Exception ב-createTask:', err);
+    console.error('📋 פרטי Exception:', {
+      message: err.message,
+      stack: err.stack,
+      taskData
+    });
     throw err;
   }
 }
