@@ -71,3 +71,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   }
 })();
 
+// מניעת תקיעות - בדיקת תקינות כל כמה דקות
+if (typeof window !== 'undefined') {
+  // בדיקה שהדפדפן עדיין פעיל
+  setInterval(() => {
+    // בדיקה פשוטה שהדף עדיין מגיב
+    if (document.visibilityState === 'visible') {
+      // אם הדף פעיל, נבדוק שהכל תקין
+      const hasError = document.querySelector('.error-message');
+      if (hasError) {
+        console.warn('⚠️ נמצאה שגיאה בדף, מנסה לרענן...');
+        // לא נרענן אוטומטית, רק נדווח
+      }
+    }
+  }, 2 * 60 * 1000); // כל 2 דקות
+}
+

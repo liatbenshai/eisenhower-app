@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect, useRef } from 'react';
 import { supabase, getCurrentUser, signIn, signUp, signOut, resetPassword } from '../services/supabase';
 
 // יצירת קונטקסט
@@ -11,11 +11,20 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const userRef = useRef(null); // שמירת user ב-ref למניעת stale closures
+
+  // Wrapper function לעדכון user - מעדכן גם את ה-state וגם את ה-ref
+  const updateUser = (newUser) => {
+    setUser(newUser);
+    userRef.current = newUser;
+  };
 
   // האזנה לשינויים באותנטיקציה
   useEffect(() => {
     let mounted = true;
     let subscription = null;
+    let sessionCheckInterval = null;
+    let visibilityHandler = null;
 
     // טעינת משתמש ראשונית - בדיקת סשן קיים
     const initializeAuth = async () => {
@@ -26,7 +35,7 @@ export function AuthProvider({ children }) {
         if (sessionError) {
           console.error('שגיאה בקבלת סשן:', sessionError);
           if (mounted) {
-            setUser(null);
+            updateUser(null);
             setLoading(false);
           }
           return;
@@ -36,18 +45,18 @@ export function AuthProvider({ children }) {
           try {
             const currentUser = await getCurrentUser();
             if (mounted) {
-              setUser(currentUser);
+            updateUser(currentUser);
             }
           } catch (err) {
             console.error('שגיאה בטעינת פרטי משתמש:', err);
             // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
             if (mounted) {
-              setUser(session.user);
+              updateUser(session.user);
             }
           }
         } else {
           if (mounted) {
-            setUser(null);
+            updateUser(null);
           }
         }
       } catch (err) {
@@ -62,8 +71,48 @@ export function AuthProvider({ children }) {
       }
     };
 
+    // בדיקת תקינות סשן כל 5 דקות
+    const checkSession = async () => {
+      if (!mounted) return;
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('⚠️ שגיאה בבדיקת סשן:', error);
+          return;
+        }
+        
+        const currentUser = userRef.current;
+        if (!session && currentUser) {
+          console.warn('⚠️ סשן פג, מנתק משתמש');
+          if (mounted) {
+            updateUser(null);
+          }
+        } else if (session && !currentUser) {
+          console.log('🔄 סשן נמצא, טוען משתמש מחדש');
+          await initializeAuth();
+        }
+      } catch (err) {
+        console.error('שגיאה בבדיקת סשן:', err);
+      }
+    };
+
+    // טיפול ב-visibility change - כשהדפדפן חוזר להיות פעיל
+    visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ דפדפן חזר להיות פעיל, בודק סשן...');
+        checkSession();
+      }
+    };
+
     // אתחול ראשוני
     initializeAuth();
+    
+    // בדיקה תקופתית של הסשן (כל 5 דקות)
+    sessionCheckInterval = setInterval(checkSession, 5 * 60 * 1000);
+    
+    // האזנה לשינויי visibility
+    document.addEventListener('visibilitychange', visibilityHandler);
 
     // האזנה לשינויי אותנטיקציה
     try {
@@ -96,7 +145,7 @@ export function AuthProvider({ children }) {
           // רק עבור SIGNED_OUT - מחק את המשתמש
           if (event === 'SIGNED_OUT') {
             if (mounted) {
-              setUser(null);
+              updateUser(null);
               setLoading(false);
             }
             return;
@@ -126,7 +175,7 @@ export function AuthProvider({ children }) {
           if (event === 'INITIAL_SESSION') {
             if (!session && mounted) {
               // אין סשן - המשתמש לא מחובר
-              setUser(null);
+              updateUser(null);
               setLoading(false);
             } else if (session?.user && mounted) {
               // יש סשן - עדכן את המשתמש (למקרה ש-initializeAuth לא הצליח)
@@ -173,13 +222,19 @@ export function AuthProvider({ children }) {
       }
     }
 
-    return () => {
-      mounted = false;
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
-  }, []);
+        return () => {
+          mounted = false;
+          if (subscription) {
+            subscription.unsubscribe();
+          }
+          if (sessionCheckInterval) {
+            clearInterval(sessionCheckInterval);
+          }
+          if (visibilityHandler) {
+            document.removeEventListener('visibilitychange', visibilityHandler);
+          }
+        };
+      }, []); // ריק - רק פעם אחת בעת mount
 
   // התחברות
   const login = async (email, password) => {
@@ -225,7 +280,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       await signOut();
-      setUser(null);
+      updateUser(null);
     } catch (err) {
       setError('שגיאה בהתנתקות');
       throw err;
