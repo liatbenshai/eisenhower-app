@@ -17,7 +17,7 @@ export const TaskContext = createContext(null);
  * ספק משימות
  */
 export function TaskProvider({ children }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,13 +28,21 @@ export function TaskProvider({ children }) {
 
   // טעינת משימות
   const loadTasks = useCallback(async () => {
+    // אם האותנטיקציה עדיין נטענת, נחכה
+    if (authLoading) {
+      return;
+    }
+
+    // אם אין משתמש, ננקה את המשימות
     if (!user?.id) {
       setTasks([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
       const data = await getTasks(user.id);
       // וידוא שכל המשימות יש להן את השדות הנדרשים
@@ -44,7 +52,6 @@ export function TaskProvider({ children }) {
         estimated_duration: task.estimated_duration || null
       }));
       setTasks(safeData);
-      setError(null);
     } catch (err) {
       console.error('שגיאה בטעינת משימות:', err);
       setError(err.message || 'שגיאה בטעינת משימות');
@@ -52,12 +59,14 @@ export function TaskProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
-  // טעינה ראשונית
+  // טעינה ראשונית - רק אחרי שהאותנטיקציה נטענה
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    if (!authLoading) {
+      loadTasks();
+    }
+  }, [loadTasks, authLoading]);
 
   // הוספת משימה
   const addTask = async (taskData) => {

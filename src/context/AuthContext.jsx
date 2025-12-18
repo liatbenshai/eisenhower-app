@@ -14,47 +14,99 @@ export function AuthProvider({ children }) {
 
   // האזנה לשינויים באותנטיקציה
   useEffect(() => {
-    // בדיקת משתמש נוכחי
-    const checkUser = async () => {
+    let mounted = true;
+    let subscription = null;
+
+    // טעינת משתמש ראשונית - בדיקת סשן קיים
+    const initializeAuth = async () => {
       try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
+        // קבלת סשן קיים
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('שגיאה בקבלת סשן:', sessionError);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (session?.user) {
+          try {
+            const currentUser = await getCurrentUser();
+            if (mounted) {
+              setUser(currentUser);
+            }
+          } catch (err) {
+            console.error('שגיאה בטעינת פרטי משתמש:', err);
+            // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
+            if (mounted) {
+              setUser(session.user);
+            }
+          }
+        } else {
+          if (mounted) {
+            setUser(null);
+          }
+        }
       } catch (err) {
-        console.error('שגיאה בבדיקת משתמש:', err);
-        setUser(null);
+        console.error('שגיאה באתחול אותנטיקציה:', err);
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    checkUser();
+    // אתחול ראשוני
+    initializeAuth();
 
     // האזנה לשינויי אותנטיקציה
-    let subscription = null;
     try {
       const authStateChange = supabase.auth.onAuthStateChange(
         async (event, session) => {
+          if (!mounted) return;
+
+          console.log('אירוע אותנטיקציה:', event, session ? 'יש סשן' : 'אין סשן');
+          
           if (session?.user) {
             try {
               const currentUser = await getCurrentUser();
-              setUser(currentUser);
+              if (mounted) {
+                setUser(currentUser);
+              }
             } catch (err) {
               console.error('שגיאה בטעינת משתמש:', err);
-              setUser(null);
+              // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
+              if (mounted) {
+                setUser(session.user);
+              }
             }
           } else {
-            setUser(null);
+            if (mounted) {
+              setUser(null);
+            }
           }
-          setLoading(false);
+          
+          if (mounted) {
+            setLoading(false);
+          }
         }
       );
       subscription = authStateChange?.data?.subscription;
     } catch (err) {
       console.error('שגיאה בהגדרת האזנה לאותנטיקציה:', err);
-      setLoading(false);
+      if (mounted) {
+        setLoading(false);
+      }
     }
 
     return () => {
+      mounted = false;
       if (subscription) {
         subscription.unsubscribe();
       }

@@ -108,13 +108,25 @@ export async function getCurrentUser() {
   if (!user) return null;
   
   // קבלת פרטים נוספים מטבלת users
-  const { data: profile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-  
-  return { ...user, profile };
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    // אם יש שגיאה בטעינת הפרופיל, נחזיר את המשתמש הבסיסי
+    if (profileError) {
+      console.warn('שגיאה בטעינת פרופיל משתמש:', profileError);
+      return { ...user, profile: null };
+    }
+    
+    return { ...user, profile };
+  } catch (err) {
+    console.warn('שגיאה בטעינת פרופיל משתמש:', err);
+    // אם יש שגיאה, נחזיר את המשתמש הבסיסי
+    return { ...user, profile: null };
+  }
 }
 
 // === פונקציות משימות ===
