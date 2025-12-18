@@ -1,6 +1,16 @@
 -- ==============================================
 -- תיקון: וידוא ש-time_spent מתעדכן נכון
 -- ==============================================
+-- קובץ זה מתקן את ה-RLS policy לעדכון משימות
+-- חשוב: יש להריץ את זה רק אחרי שה-migrations הקודמים כבר רצו!
+
+-- בדיקה שהטבלה קיימת
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tasks') THEN
+    RAISE EXCEPTION 'הטבלה tasks לא קיימת! יש להריץ קודם את ה-migrations הקודמים (001_initial_schema.sql)';
+  END IF;
+END $$;
 
 -- וידוא שהשדה time_spent קיים
 ALTER TABLE public.tasks 
@@ -21,16 +31,17 @@ CREATE POLICY "tasks_update_own" ON public.tasks
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- וידוא שהטריגר לעדכון updated_at עובד
-DROP TRIGGER IF EXISTS update_tasks_updated_at ON public.tasks;
-CREATE TRIGGER update_tasks_updated_at
-  BEFORE UPDATE ON public.tasks
-  FOR EACH ROW 
-  EXECUTE FUNCTION public.update_updated_at();
-
--- וידוא שהטריגר לעדכון סטטיסטיקות לא מונע עדכון של time_spent
--- הטריגר הזה צריך לרוץ רק כשמשימה הושלמה, לא בכל עדכון של time_spent
--- אבל הוא לא אמור למנוע עדכון של time_spent
+-- וידוא שהטריגר לעדכון updated_at עובד (אם הפונקציה קיימת)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at') THEN
+    DROP TRIGGER IF EXISTS update_tasks_updated_at ON public.tasks;
+    CREATE TRIGGER update_tasks_updated_at
+      BEFORE UPDATE ON public.tasks
+      FOR EACH ROW 
+      EXECUTE FUNCTION public.update_updated_at();
+  END IF;
+END $$;
 
 -- הודעת הצלחה
 DO $$
