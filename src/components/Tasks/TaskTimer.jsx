@@ -8,7 +8,7 @@ import Button from '../UI/Button';
  * טיימר למשימה - פרומדורו
  */
 function TaskTimer({ task, onUpdate, onComplete }) {
-  const { updateTaskTime } = useTasks();
+  const { updateTaskTime, tasks } = useTasks();
   
   if (!task || !task.id) {
     return (
@@ -20,16 +20,20 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     );
   }
   
+  // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop
+  const currentTask = tasks.find(t => t.id === task.id) || task;
+  
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [targetMinutes, setTargetMinutes] = useState(task.estimated_duration || 30); // זמן יעד
+  const [targetMinutes, setTargetMinutes] = useState(currentTask.estimated_duration || 30); // זמן יעד
   const [hasReachedTarget, setHasReachedTarget] = useState(false);
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   
-  const timeSpent = (task && task.time_spent) ? parseInt(task.time_spent) : 0;
-  const estimated = (task && task.estimated_duration) ? parseInt(task.estimated_duration) : 0;
+  // שימוש במשימה העדכנית מה-TaskContext
+  const timeSpent = (currentTask && currentTask.time_spent) ? parseInt(currentTask.time_spent) : 0;
+  const estimated = (currentTask && currentTask.estimated_duration) ? parseInt(currentTask.estimated_duration) : 0;
   const currentSessionMinutes = Math.floor(elapsedSeconds / 60);
   const totalSpent = timeSpent + currentSessionMinutes;
   
@@ -180,19 +184,28 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const saveProgress = async (reset = false, skipUpdate = false) => {
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
-      if (minutesToAdd > 0 && task && task.id) {
-        const newTimeSpent = timeSpent + minutesToAdd;
+      if (minutesToAdd > 0 && currentTask && currentTask.id) {
+        // שימוש במשימה העדכנית מה-TaskContext
+        const currentTimeSpent = (currentTask.time_spent) ? parseInt(currentTask.time_spent) : 0;
+        const newTimeSpent = currentTimeSpent + minutesToAdd;
         
-        console.log('💾 saveProgress:', { minutesToAdd, newTimeSpent, reset, skipUpdate });
+        console.log('💾 saveProgress:', { 
+          minutesToAdd, 
+          currentTimeSpent, 
+          newTimeSpent, 
+          reset, 
+          skipUpdate,
+          taskId: currentTask.id
+        });
         
         // עדכון המשימה דרך TaskContext - זה יעדכן גם את ה-DB וגם את ה-state
-        const updatedTask = await updateTaskTime(task.id, newTimeSpent);
+        const updatedTask = await updateTaskTime(currentTask.id, newTimeSpent);
         
         console.log('✅ משימה עודכנה:', updatedTask);
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
-        if (task.subtask_id) {
-          await updateSubtaskProgress(task.subtask_id, newTimeSpent);
+        if (currentTask.subtask_id) {
+          await updateSubtaskProgress(currentTask.subtask_id, newTimeSpent);
         }
         
         if (reset) {

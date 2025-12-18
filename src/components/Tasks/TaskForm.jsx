@@ -188,12 +188,13 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     
     try {
       if (isEditing) {
-        console.log('✏️ עורך משימה קיימת');
+        console.log('✏️ עורך משימה קיימת:', task.id);
         const result = await editTask(task.id, formData);
         console.log('✅ תוצאת עריכה:', result);
         toast.success('המשימה עודכנה');
       } else {
         console.log('➕ מוסיף משימה חדשה:', formData);
+        console.log('👤 User:', user?.id);
         const result = await addTask(formData);
         console.log('✅ תוצאת הוספה:', result);
         toast.success('✅ המשימה נוספה בהצלחה!');
@@ -201,25 +202,35 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
       
       console.log('✨ הכל עבר בהצלחה, סוגר טופס');
       
-      // סגירת הטופס תמיד צריכה לקרות
-      if (typeof onClose === 'function') {
-        setLoading(false); // וידוא שהספינר נעלם לפני סגירה
-        onClose();
-      } else {
-        console.error('⚠️ onClose is not a function!');
-        setLoading(false);
-      }
+      // סגירת הטופס תמיד צריכה לקרות - גם אם יש שגיאה
+      setLoading(false); // וידוא שהספינר נעלם לפני סגירה
+      
+      // המתנה קצרה כדי שהמשתמש יראה את ההודעה
+      setTimeout(() => {
+        if (typeof onClose === 'function') {
+          console.log('🔒 קורא ל-onClose');
+          onClose();
+        } else {
+          console.error('⚠️ onClose is not a function!', typeof onClose);
+        }
+      }, 100);
     } catch (err) {
       console.error('💥 שגיאה בשליחת טופס:', err);
       console.error('📋 פרטי שגיאה:', {
         message: err.message,
         stack: err.stack,
-        formData: formData
+        formData: formData,
+        user: user?.id
       });
-      toast.error(err.message || 'שגיאה בשמירת המשימה - בדקי את ה-Console', {
+      
+      const errorMessage = err.message || 'שגיאה בשמירת המשימה';
+      toast.error(errorMessage, {
         duration: 5000
       });
+      
       setLoading(false); // וידוא שהספינר נעלם גם בשגיאה
+      
+      // לא סוגרים את הטופס בשגיאה - נותנים למשתמש לתקן
     }
   };
 

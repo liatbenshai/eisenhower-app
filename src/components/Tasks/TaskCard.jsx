@@ -32,16 +32,19 @@ function TaskCard({
   onDragStart, 
   onDragEnd 
 }) {
-  const { toggleComplete, removeTask, loadTasks } = useTasks();
+  const { toggleComplete, removeTask, loadTasks, tasks } = useTasks();
   const [showActions, setShowActions] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  
+  // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop
+  const currentTask = tasks.find(t => t.id === task.id) || task;
 
   // סימון כהושלם
   const handleToggleComplete = async (e) => {
     e.stopPropagation();
     try {
-      await toggleComplete(task.id);
-      toast.success(task.is_completed ? 'המשימה סומנה כפעילה' : 'המשימה הושלמה!');
+      await toggleComplete(currentTask.id);
+      toast.success(currentTask.is_completed ? 'המשימה סומנה כפעילה' : 'המשימה הושלמה!');
     } catch (err) {
       toast.error('שגיאה בעדכון המשימה');
     }
@@ -52,7 +55,7 @@ function TaskCard({
     e.stopPropagation();
     setDeleting(true);
     try {
-      await removeTask(task.id);
+      await removeTask(currentTask.id);
       toast.success('המשימה נמחקה');
     } catch (err) {
       toast.error('שגיאה במחיקת המשימה');
@@ -60,16 +63,16 @@ function TaskCard({
     }
   };
 
-  // בדיקת סטטוס
-  const isOverdue = isTaskOverdue(task);
-  const isDueToday = isTaskDueToday(task);
-  const isProject = task.is_project;
-  const isSubtask = !!task.parent_task_id; // משימה שהיא שלב של פרויקט
-  const subtasks = task.subtasks || [];
+  // בדיקת סטטוס - שימוש במשימה העדכנית
+  const isOverdue = isTaskOverdue(currentTask);
+  const isDueToday = isTaskDueToday(currentTask);
+  const isProject = currentTask.is_project;
+  const isSubtask = !!currentTask.parent_task_id; // משימה שהיא שלב של פרויקט
+  const subtasks = currentTask.subtasks || [];
   const [showTimer, setShowTimer] = useState(false);
   
-  // זיהוי קטגוריה
-  const { category } = detectTaskCategory(task);
+  // זיהוי קטגוריה - שימוש במשימה העדכנית
+  const { category } = detectTaskCategory(currentTask);
   
   // חישוב התקדמות פרויקט - לפי שלבים שהושלמו
   const projectProgressByCompletion = isProject && subtasks.length > 0
@@ -91,8 +94,8 @@ function TaskCard({
     : null;
   
   // התקדמות למשימה רגילה
-  const regularTaskProgress = !isProject && !isSubtask && task.estimated_duration
-    ? Math.min(100, Math.round((((task.time_spent || 0) / task.estimated_duration) * 100)))
+  const regularTaskProgress = !isProject && !isSubtask && currentTask.estimated_duration
+    ? Math.min(100, Math.round((((currentTask.time_spent || 0) / currentTask.estimated_duration) * 100)))
     : null;
   
   // שלבים קרובים (היום או באיחור)
@@ -104,7 +107,7 @@ function TaskCard({
     <motion.div
       layout
       draggable
-      onDragStart={() => onDragStart(task)}
+      onDragStart={() => onDragStart(currentTask)}
       onDragEnd={onDragEnd}
       onClick={onEdit}
       onMouseEnter={() => setShowActions(true)}
@@ -116,7 +119,7 @@ function TaskCard({
         cursor-pointer
         transition-all duration-200
         hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600
-        ${task.is_completed ? 'opacity-60' : ''}
+        ${currentTask.is_completed ? 'opacity-60' : ''}
         ${deleting ? 'opacity-50 scale-95' : ''}
       `}
     >
@@ -127,13 +130,13 @@ function TaskCard({
           className={`
             flex-shrink-0 w-5 h-5 mt-0.5 rounded border-2 
             transition-all duration-200
-            ${task.is_completed 
+            ${currentTask.is_completed 
               ? 'bg-green-500 border-green-500 text-white' 
               : 'border-gray-300 dark:border-gray-600 hover:border-green-500'
             }
           `}
         >
-          {task.is_completed && (
+          {currentTask.is_completed && (
             <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
@@ -146,9 +149,9 @@ function TaskCard({
           <div className="flex items-center gap-2">
             <p className={`
               font-medium text-gray-900 dark:text-white text-sm
-              ${task.is_completed ? 'line-through text-gray-500' : ''}
+              ${currentTask.is_completed ? 'line-through text-gray-500' : ''}
             `}>
-              {task.title}
+              {currentTask.title}
             </p>
             {isProject && (
               <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
@@ -166,14 +169,14 @@ function TaskCard({
           </div>
 
           {/* תיאור */}
-          {task.description && (
+          {currentTask.description && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-              {task.description}
+              {currentTask.description}
             </p>
           )}
 
           {/* כפתור טיימר לכל משימה */}
-          {!task.is_completed && (
+          {!currentTask.is_completed && (
             <div className="mt-2">
               <button
                 onClick={(e) => {
@@ -184,16 +187,16 @@ function TaskCard({
               >
                 ⏱️ {showTimer ? 'הסתר טיימר' : 'טיימר'}
               </button>
-              {task.time_spent > 0 && (
+              {currentTask.time_spent > 0 && (
                 <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">
-                  • {task.time_spent} דקות
+                  • {currentTask.time_spent} דקות
                 </span>
               )}
             </div>
           )}
           
           {/* התקדמות למשימה רגילה */}
-          {!isProject && !isSubtask && task.estimated_duration && regularTaskProgress !== null && (
+          {!isProject && !isSubtask && currentTask.estimated_duration && regularTaskProgress !== null && (
             <div className="mt-2">
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
@@ -216,7 +219,7 @@ function TaskCard({
                 />
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {task.time_spent || 0} / {task.estimated_duration} דקות
+                {currentTask.time_spent || 0} / {currentTask.estimated_duration} דקות
               </div>
             </div>
           )}
@@ -293,7 +296,7 @@ function TaskCard({
           )}
 
           {/* תאריך יעד */}
-          {task.due_date && (
+          {currentTask.due_date && (
             <div className={`
               flex items-center gap-1 mt-2 text-xs
               ${isOverdue ? 'text-red-600 dark:text-red-400' : 
@@ -301,9 +304,9 @@ function TaskCard({
                 'text-gray-500 dark:text-gray-400'}
             `}>
               <span>📅</span>
-              <span>{getRelativeDate(task.due_date)}</span>
-              {task.due_time && (
-                <span>• {formatTime(task.due_time)}</span>
+              <span>{getRelativeDate(currentTask.due_date)}</span>
+              {currentTask.due_time && (
+                <span>• {formatTime(currentTask.due_time)}</span>
               )}
               {isOverdue && <span className="font-medium">(באיחור)</span>}
             </div>
@@ -340,13 +343,13 @@ function TaskCard({
       </div>
       
       {/* טיימר - לכל משימה */}
-      {showTimer && !task.is_completed && (
+      {showTimer && !currentTask.is_completed && (
         <div 
           onClick={(e) => e.stopPropagation()} 
           className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
         >
           <TaskTimer
-            task={task}
+            task={currentTask}
             onUpdate={async () => {
               // עדכון המשימה ברשימה בלי לפתוח את הטופס
               await loadTasks();
