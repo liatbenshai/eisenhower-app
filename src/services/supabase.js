@@ -212,22 +212,61 @@ export async function createTask(task) {
   
   try {
     console.log('📤 שולח insert ל-Supabase...');
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert([taskData])
-      .select()
-      .single();
+    console.log('📋 נתונים שנשלחים:', JSON.stringify(taskData, null, 2));
     
-    console.log('📥 תגובה מ-Supabase:', { hasData: !!data, hasError: !!error, error });
+    // בדיקת סשן לפני insert
+    const { data: { session: checkSession }, error: sessionCheckError } = await supabase.auth.getSession();
+    if (sessionCheckError) {
+      console.error('❌ שגיאה בבדיקת סשן לפני insert:', sessionCheckError);
+      throw new Error('❌ שגיאה באימות. אנא התחברי מחדש.');
+    }
+    if (!checkSession?.user) {
+      console.error('❌ אין סשן פעיל לפני insert!');
+      throw new Error('❌ אין משתמש מחובר. אנא התחברי מחדש.');
+    }
+    console.log('✅ סשן תקין לפני insert:', checkSession.user.id);
+    
+    const insertStartTime = Date.now();
+    let data, error;
+    
+    try {
+      const result = await supabase
+        .from('tasks')
+        .insert([taskData])
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+      
+      const insertDuration = Date.now() - insertStartTime;
+      console.log(`📥 תגובה מ-Supabase (לקח ${insertDuration}ms):`, { 
+        hasData: !!data, 
+        hasError: !!error,
+        error: error ? {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        } : null
+      });
+      
+      if (insertDuration > 5000) {
+        console.warn('⚠️ Insert לקח יותר מ-5 שניות!', insertDuration);
+      }
+    } catch (insertErr) {
+      console.error('💥 Exception במהלך insert:', insertErr);
+      error = insertErr;
+    }
     
     if (error) {
       console.error('❌ שגיאה מ-Supabase:', error);
-      console.error('📋 פרטי שגיאה:', {
+      console.error('📋 פרטי שגיאה מלאים:', {
         message: error.message,
         details: error.details,
         hint: error.hint,
         code: error.code,
-        taskData
+        taskData: JSON.stringify(taskData, null, 2)
       });
       
       // הודעות שגיאה ידידותיות
@@ -235,10 +274,13 @@ export async function createTask(task) {
         throw new Error('❌ שדה task_type לא קיים! האם הרצת את ה-migration 007?');
       }
       if (error.code === '42501') {
-        throw new Error('❌ אין הרשאות! בדוק את ה-RLS policies');
+        throw new Error('❌ אין הרשאות! בדוק את ה-RLS policies. האם המשתמש מחובר?');
       }
       if (error.code === '23505') {
         throw new Error('❌ המשימה כבר קיימת');
+      }
+      if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+        throw new Error('❌ סשן פג. אנא התחברי מחדש.');
       }
       
       throw error;
@@ -246,13 +288,14 @@ export async function createTask(task) {
     
     if (!data) {
       console.error('❌ לא הוחזר data מ-Supabase!', {
-        taskData,
+        taskData: JSON.stringify(taskData, null, 2),
         response: { data, error }
       });
       throw new Error('❌ המשימה לא נוצרה (אין data)');
     }
     
     console.log('✅ משימה נוצרה בהצלחה:', data);
+    console.log('🆔 ID של המשימה החדשה:', data.id);
     return data;
     
   } catch (err) {
