@@ -212,16 +212,29 @@ export function TaskProvider({ children }) {
       console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
       
       // עדכון ב-DB קודם - זה המקור האמת
-      // נוסיף timeout למניעת תקיעות
-      const updatePromise = updateTask(taskId, { time_spent: timeSpentInt });
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('עדכון לוקח יותר מדי זמן')), 25000)
-      );
+      // נוסיף timeout רק לדיווח, לא לדחייה
+      let timeoutId = setTimeout(() => {
+        console.warn('⚠️ עדכון לוקח יותר מ-30 שניות, אבל ממשיך לחכות...');
+      }, 30000);
       
-      const updatedTask = await Promise.race([updatePromise, timeoutPromise]);
-      
-      if (!updatedTask) {
-        throw new Error('המשימה לא עודכנה - אין data מהשרת');
+      let updatedTask;
+      try {
+        updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
+        
+        // ניקוי timeout אם העדכון הסתיים
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
+        if (!updatedTask) {
+          throw new Error('המשימה לא עודכנה - אין data מהשרת');
+        }
+      } catch (err) {
+        // ניקוי timeout גם בשגיאה
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        throw err;
       }
       
       console.log('✅ משימה עודכנה ב-DB:', updatedTask);

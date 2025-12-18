@@ -279,6 +279,7 @@ export async function updateTask(taskId, updates) {
   console.log('מעדכן משימה:', taskId, updateData);
   
   console.log('📤 שולח עדכון ל-Supabase:', { taskId, updateData });
+  const startTime = Date.now();
   
   const { data, error } = await supabase
     .from('tasks')
@@ -287,7 +288,20 @@ export async function updateTask(taskId, updates) {
     .select()
     .single();
   
-  console.log('📥 תגובה מ-Supabase:', { data, error });
+  const duration = Date.now() - startTime;
+  console.log(`📥 תגובה מ-Supabase (לקח ${duration}ms):`, { 
+    hasData: !!data, 
+    hasError: !!error, 
+    error: error ? {
+      message: error.message,
+      code: error.code,
+      details: error.details
+    } : null
+  });
+  
+  if (duration > 5000) {
+    console.warn('⚠️ עדכון לקח יותר מ-5 שניות!', duration);
+  }
   
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
