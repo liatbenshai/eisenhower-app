@@ -165,11 +165,23 @@ export async function getTasks(userId) {
 export async function createTask(task) {
   console.log('🔵 createTask נקרא עם:', task);
   
-  // וידוא שיש user_id
+  // בדיקת סשן אם אין user_id
   if (!task.user_id) {
-    const error = new Error('❌ חסר user_id!');
-    console.error(error);
-    throw error;
+    console.warn('⚠️ אין user_id, בודק סשן...');
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      const error = new Error('❌ שגיאה בבדיקת סשן: ' + sessionError.message);
+      console.error(error);
+      throw error;
+    }
+    if (session?.user?.id) {
+      task.user_id = session.user.id;
+      console.log('✅ נמצא user_id מהסשן:', task.user_id);
+    } else {
+      const error = new Error('❌ חסר user_id ואין סשן פעיל!');
+      console.error(error);
+      throw error;
+    }
   }
   
   // וידוא שיש כותרת
@@ -258,6 +270,16 @@ export async function createTask(task) {
  * עדכון משימה
  */
 export async function updateTask(taskId, updates) {
+  // בדיקת סשן לפני עדכון
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    console.error('❌ שגיאה בבדיקת סשן בעדכון:', sessionError);
+    throw new Error('❌ שגיאה באימות. אנא התחברי מחדש.');
+  }
+  if (!session?.user) {
+    throw new Error('❌ אין משתמש מחובר. אנא התחברי מחדש.');
+  }
+  
   // הכנת נתונים לעדכון - וידוא שכל השדות מעודכנים נכון
   const updateData = {
     ...updates,

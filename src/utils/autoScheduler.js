@@ -111,7 +111,7 @@ function scheduleTask(task, startTime, workHours, existingBlocks, workPatterns) 
   }
   
   // חישוב זמן סיום
-  const endTime = new Date(startTime);
+  let endTime = new Date(startTime);
   endTime.setMinutes(endTime.getMinutes() + duration);
   
   // בדיקה שהזמן לא חורג משעות העבודה

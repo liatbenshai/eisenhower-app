@@ -143,11 +143,35 @@ export function AuthProvider({ children }) {
           }
           
           // רק עבור SIGNED_OUT - מחק את המשתמש
-          if (event === 'SIGNED_OUT') {
+          if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
             if (mounted) {
               updateUser(null);
               setLoading(false);
             }
+            return;
+          }
+          
+          // אם אין סשן אבל יש אירוע אחר, נבדוק שוב
+          if (!session && event !== 'SIGNED_OUT') {
+            console.warn('⚠️ אין סשן באירוע:', event);
+            // ננסה לטעון סשן מחדש
+            const { data: { session: newSession } } = await supabase.auth.getSession();
+            if (newSession?.user) {
+              try {
+                const currentUser = await getCurrentUser();
+                if (mounted) {
+                  updateUser(currentUser);
+                }
+              } catch (err) {
+                console.error('שגיאה בטעינת משתמש אחרי אירוע:', err);
+                if (mounted) {
+                  updateUser(newSession.user);
+                }
+              }
+            } else if (mounted) {
+              updateUser(null);
+            }
+            return;
             return;
           }
           

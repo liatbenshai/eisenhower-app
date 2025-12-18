@@ -196,39 +196,26 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   };
   
   // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
-  const savingRef = useRef(false);
+  // נשתמש ב-Promise במקום boolean כדי שנוכל להמתין לעדכון קודם
+  const savingRef = useRef(null); // Promise של השמירה הנוכחית
   const savingTimeoutRef = useRef(null);
   
   const saveProgress = async (reset = false, skipUpdate = false) => {
-    // מניעת שמירות כפולות - אבל עם timeout אוטומטי למקרה של תקלה
+    // מניעת שמירות כפולות - נשתמש ב-Promise במקום דגל בוליאני
     if (savingRef.current) {
-      console.log('⏳ שמירה כבר בתהליך, ממתין קצת...');
-      // נחכה קצת ונבדוק שוב
-      await new Promise(resolve => setTimeout(resolve, 200));
-      if (savingRef.current) {
-        console.warn('⚠️ שמירה עדיין בתהליך אחרי המתנה, מנסה שוב...');
-        // אם עדיין בתהליך, נסיר את הדגל וננסה שוב (למקרה של תקלה)
-        savingRef.current = false;
+      console.log('⏳ שמירה כבר בתהליך, ממתין לעדכון קודם...');
+      try {
+        // נמתין לשמירה הקודמת להסתיים
+        await savingRef.current;
+        console.log('✅ שמירה קודמת הסתיימה, ממשיך...');
+      } catch (err) {
+        console.warn('⚠️ שמירה קודמת נכשלה, ממשיך עם שמירה חדשה:', err);
+        // אם השמירה הקודמת נכשלה, נמשיך עם שמירה חדשה
       }
     }
     
-    savingRef.current = true;
-    
-    // ניקוי timeout קודם אם קיים
-    if (savingTimeoutRef.current) {
-      clearTimeout(savingTimeoutRef.current);
-    }
-    
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
-    // (הארכתי ל-30 שניות כי לפעמים יש עיכובים ברשת)
-    savingTimeoutRef.current = setTimeout(() => {
-      if (savingRef.current) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
-        savingRef.current = false;
-      }
-    }, 30000);
-    
-    try {
+    // יצירת Promise חדש לשמירה
+    const savePromise = (async () => {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
       if (minutesToAdd > 0 && currentTask && currentTask.id) {
         // שימוש במשימה העדכנית מה-TaskContext - טעינה מחדש מה-context
@@ -279,12 +266,43 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         toast('עבדת פחות מדקה - לא נשמר', { icon: '⏱️' });
         return { success: false, reason: 'less_than_minute' };
       }
+      return { success: false, reason: 'no_time_to_save' };
+    })();
+    
+    // שמירת ה-Promise
+    savingRef.current = savePromise;
+    
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
+    savingTimeoutRef.current = setTimeout(() => {
+      if (savingRef.current === savePromise) {
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
+        savingRef.current = null;
+      }
+    }, 30000);
+    
+    try {
+      const result = await savePromise;
+      return result;
     } catch (err) {
       console.error('❌ שגיאה בשמירת התקדמות:', err);
-      toast.error(err.message || 'שגיאה בשמירת התקדמות');
+      
+      // הודעת שגיאה ידידותית יותר
+      let errorMessage = err.message || 'שגיאה בשמירת התקדמות';
+      if (err.message?.includes('JWT') || err.message?.includes('session')) {
+        errorMessage = '❌ סשן פג. אנא רענני את הדף והתחברי מחדש.';
+      } else if (err.message?.includes('42501') || err.message?.includes('permission')) {
+        errorMessage = '❌ אין הרשאות לשמירה. אנא התחברי מחדש.';
+      } else if (err.message?.includes('user_id') || err.message?.includes('משתמש')) {
+        errorMessage = '❌ בעיית התחברות. אנא רענני את הדף והתחברי מחדש.';
+      }
+      
+      toast.error(errorMessage, { duration: 5000 });
       return { success: false, error: err };
     } finally {
-      savingRef.current = false;
+      // ניקוי רק אם זה עדיין ה-Promise הנוכחי
+      if (savingRef.current === savePromise) {
+        savingRef.current = null;
+      }
       if (savingTimeoutRef.current) {
         clearTimeout(savingTimeoutRef.current);
         savingTimeoutRef.current = null;

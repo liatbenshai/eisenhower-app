@@ -6,7 +6,8 @@ import {
   updateTask, 
   deleteTask, 
   moveTask, 
-  toggleTaskComplete 
+  toggleTaskComplete,
+  supabase
 } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -27,7 +28,8 @@ export function TaskProvider({ children }) {
   const [sortBy, setSortBy] = useState('created_at'); // created_at, due_date, title
   
   // מניעת race conditions - שמירת עדכונים בתהליך
-  const updatingTasksRef = useRef(new Set());
+  // במקום Set פשוט, נשתמש ב-Map עם Promise לכל משימה
+  const updatingTasksRef = useRef(new Map()); // Map<taskId, Promise>
 
   // טעינת משימות
   const loadTasks = useCallback(async () => {
@@ -75,18 +77,35 @@ export function TaskProvider({ children }) {
   const addTask = async (taskData) => {
     console.log('🟢 TaskContext.addTask נקרא עם:', taskData);
     console.log('🔑 User ID:', user?.id);
+    console.log('🔑 Auth Loading:', authLoading);
     
-    if (!user?.id) {
-      const error = new Error('❌ אין משתמש מחובר!');
+    // בדיקה מפורטת יותר של משתמש
+    if (authLoading) {
+      const error = new Error('⏳ ממתין לאימות משתמש...');
       console.error(error);
       throw error;
     }
     
+    if (!user?.id) {
+      // ננסה לטעון את המשתמש מחדש לפני שנזרוק שגיאה
+      console.warn('⚠️ אין משתמש, מנסה לטעון מחדש...');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        console.log('✅ נמצא סשן, ממשיך...');
+        // נמשיך עם session.user.id במקום user.id
+        taskData.user_id = session.user.id;
+      } else {
+        const error = new Error('❌ אין משתמש מחובר! אנא התחברי מחדש.');
+        console.error(error);
+        throw error;
+      }
+    }
+    
     try {
       const taskToCreate = {
-        user_id: user.id,
-        title: taskData.title,
-        description: taskData.description || null,
+        user_id: user?.id || taskData.user_id,
+        title: taskData.title?.trim(),
+        description: taskData.description?.trim() || null,
         quadrant: taskData.quadrant || 1,
         due_date: taskData.dueDate || null,
         due_time: taskData.dueTime || null,
@@ -98,9 +117,22 @@ export function TaskProvider({ children }) {
         is_completed: false
       };
       
+      // בדיקה אחרונה לפני שליחה
+      if (!taskToCreate.user_id) {
+        throw new Error('❌ חסר user_id! לא ניתן לשמור משימה.');
+      }
+      
+      if (!taskToCreate.title || taskToCreate.title.length === 0) {
+        throw new Error('❌ חסרה כותרת משימה!');
+      }
+      
       console.log('📤 שולח ל-createTask:', taskToCreate);
       
       const newTask = await createTask(taskToCreate);
+      
+      if (!newTask || !newTask.id) {
+        throw new Error('❌ המשימה לא נוצרה - אין תגובה מהשרת');
+      }
       
       console.log('✅ משימה נוצרה:', newTask);
       
@@ -113,8 +145,25 @@ export function TaskProvider({ children }) {
       
     } catch (err) {
       console.error('❌ שגיאה בהוספת משימה:', err);
-      console.error('📋 פרטי שגיאה מלאים:', err);
-      throw new Error(err.message || 'שגיאה בהוספת משימה');
+      console.error('📋 פרטי שגיאה מלאים:', {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        hint: err.hint,
+        taskData
+      });
+      
+      // הודעת שגיאה ידידותית יותר
+      let errorMessage = err.message || 'שגיאה בהוספת משימה';
+      if (err.code === '42501') {
+        errorMessage = '❌ אין הרשאות לשמירה. אנא התחברי מחדש.';
+      } else if (err.code === 'PGRST301' || err.message?.includes('JWT')) {
+        errorMessage = '❌ סשן פג. אנא התחברי מחדש.';
+      } else if (err.message?.includes('user_id')) {
+        errorMessage = '❌ בעיית התחברות. אנא רענני את הדף והתחברי מחדש.';
+      }
+      
+      throw new Error(errorMessage);
     }
   };
 
@@ -189,122 +238,109 @@ export function TaskProvider({ children }) {
 
   // עדכון זמן שבוצע למשימה (מ-TaskTimer) - עם מניעת race conditions
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
-    // מניעת עדכונים כפולים במקביל - עם timeout אוטומטי למניעת תקיעות
-    if (updatingTasksRef.current.has(taskId)) {
-      console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין...');
-      // נחכה קצת וננסה שוב
-      await new Promise(resolve => setTimeout(resolve, 300));
-      if (updatingTasksRef.current.has(taskId)) {
-        console.warn('⚠️ עדכון עדיין בתהליך, מנסה שוב...');
-        // נחכה עוד קצת
-        await new Promise(resolve => setTimeout(resolve, 700));
-        if (updatingTasksRef.current.has(taskId)) {
-          console.error('❌ עדכון תקוע יותר מ-1 שנייה, מסיר דגל ומנסה שוב');
-          // מסירים את הדגל למניעת תקיעות
-          updatingTasksRef.current.delete(taskId);
-        }
+    // אם יש עדכון בתהליך, נמתין לו במקום להתחיל חדש
+    const existingUpdate = updatingTasksRef.current.get(taskId);
+    if (existingUpdate) {
+      console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין לעדכון קודם...');
+      try {
+        // נמתין לעדכון הקודם להסתיים
+        await existingUpdate;
+        console.log('✅ עדכון קודם הסתיים, ממשיך...');
+      } catch (err) {
+        console.warn('⚠️ עדכון קודם נכשל, ממשיך עם עדכון חדש:', err);
+        // אם העדכון הקודם נכשל, נמשיך עם עדכון חדש
       }
     }
     
-    updatingTasksRef.current.add(taskId);
-    
-    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 60 שניות, נסיר את הדגל
-    const stuckTimeout = setTimeout(() => {
-      if (updatingTasksRef.current.has(taskId)) {
-        console.error('❌ עדכון תקוע יותר מ-60 שניות, מסיר דגל');
-        updatingTasksRef.current.delete(taskId);
-      }
-    }, 60000);
-    
-    try {
+    // יצירת Promise חדש לעדכון
+    const updatePromise = (async () => {
       const timeSpentInt = parseInt(timeSpent) || 0;
       console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
       
-      // עדכון ב-DB קודם - זה המקור האמת
-      // נוסיף timeout רק לדיווח, לא לדחייה
-      let timeoutId = setTimeout(() => {
-        console.warn('⚠️ עדכון לוקח יותר מ-30 שניות, אבל ממשיך לחכות...');
-      }, 30000);
-      
-      let updatedTask;
       try {
-        updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
-        
-        // ניקוי timeout אם העדכון הסתיים
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
+        // עדכון ב-DB
+        const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
         
         if (!updatedTask) {
           throw new Error('המשימה לא עודכנה - אין data מהשרת');
         }
+        
+        console.log('✅ משימה עודכנה ב-DB:', updatedTask);
+        console.log('📊 time_spent מהשרת:', updatedTask.time_spent);
+        
+        // עדכון ב-state עם הנתונים מהשרת
+        setTasks(prev => {
+          const taskExists = prev.find(t => t.id === taskId);
+          if (!taskExists) {
+            console.warn('⚠️ משימה לא נמצאה ב-state, טוען מחדש...');
+            loadTasks();
+            return prev;
+          }
+          
+          const updated = prev.map(t => {
+            if (t.id === taskId) {
+              // עדכון עם כל הנתונים מהשרת - וידוא ש-time_spent הוא מספר
+              const newTask = {
+                ...t,
+                ...updatedTask,
+                time_spent: parseInt(updatedTask.time_spent) || timeSpentInt
+              };
+              console.log('🔄 מעדכן משימה ב-state:', {
+                id: newTask.id,
+                time_spent_old: t.time_spent,
+                time_spent_new: newTask.time_spent
+              });
+              return newTask;
+            }
+            return t;
+          });
+          
+          // וידוא שהעדכון קרה
+          const updatedTaskInState = updated.find(t => t.id === taskId);
+          if (updatedTaskInState && updatedTaskInState.time_spent !== timeSpentInt) {
+            console.warn('⚠️ time_spent לא עודכן נכון ב-state!', {
+              expected: timeSpentInt,
+              actual: updatedTaskInState.time_spent
+            });
+          }
+          
+          return updated;
+        });
+        
+        console.log('✅ TaskContext: משימה עודכנה ב-state ו-DB:', updatedTask);
+        return updatedTask;
       } catch (err) {
-        // ניקוי timeout גם בשגיאה
-        if (timeoutId) {
-          clearTimeout(timeoutId);
+        console.error('❌ שגיאה בעדכון זמן משימה:', err);
+        // במקרה של שגיאה, ננסה לטעון מחדש את המשימות
+        try {
+          await loadTasks();
+        } catch (loadErr) {
+          console.error('❌ שגיאה בטעינת משימות אחרי שגיאה:', loadErr);
         }
         throw err;
       }
-      
-      console.log('✅ משימה עודכנה ב-DB:', updatedTask);
-      console.log('📊 time_spent מהשרת:', updatedTask.time_spent);
-      
-      // עדכון ב-state עם הנתונים מהשרת
-      setTasks(prev => {
-        const taskExists = prev.find(t => t.id === taskId);
-        if (!taskExists) {
-          console.warn('⚠️ משימה לא נמצאה ב-state, טוען מחדש...');
-          loadTasks();
-          return prev;
-        }
-        
-        const updated = prev.map(t => {
-          if (t.id === taskId) {
-            // עדכון עם כל הנתונים מהשרת - וידוא ש-time_spent הוא מספר
-            const newTask = {
-              ...t,
-              ...updatedTask,
-              time_spent: parseInt(updatedTask.time_spent) || timeSpentInt
-            };
-            console.log('🔄 מעדכן משימה ב-state:', {
-              id: newTask.id,
-              time_spent_old: t.time_spent,
-              time_spent_new: newTask.time_spent
-            });
-            return newTask;
-          }
-          return t;
-        });
-        
-        // וידוא שהעדכון קרה
-        const updatedTaskInState = updated.find(t => t.id === taskId);
-        if (updatedTaskInState && updatedTaskInState.time_spent !== timeSpentInt) {
-          console.warn('⚠️ time_spent לא עודכן נכון ב-state!', {
-            expected: timeSpentInt,
-            actual: updatedTaskInState.time_spent
-          });
-        }
-        
-        return updated;
-      });
-      
-      console.log('✅ TaskContext: משימה עודכנה ב-state ו-DB:', updatedTask);
-      return updatedTask;
-    } catch (err) {
-      console.error('❌ שגיאה בעדכון זמן משימה:', err);
-      // במקרה של שגיאה, ננסה לטעון מחדש את המשימות
-      try {
-        await loadTasks();
-      } catch (loadErr) {
-        console.error('❌ שגיאה בטעינת משימות אחרי שגיאה:', loadErr);
+    })();
+    
+    // שמירת ה-Promise ב-Map
+    updatingTasksRef.current.set(taskId, updatePromise);
+    
+    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 30 שניות, נסיר אותו
+    const stuckTimeout = setTimeout(() => {
+      if (updatingTasksRef.current.get(taskId) === updatePromise) {
+        console.error('❌ עדכון תקוע יותר מ-30 שניות, מסיר מהרשימה');
+        updatingTasksRef.current.delete(taskId);
       }
-      throw err;
+    }, 30000);
+    
+    try {
+      const result = await updatePromise;
+      return result;
     } finally {
-      // תמיד נסיר את הדגל, גם אם יש שגיאה
-      updatingTasksRef.current.delete(taskId);
-      if (stuckTimeout) {
-        clearTimeout(stuckTimeout);
+      // ניקוי רק אם זה עדיין ה-Promise הנוכחי
+      if (updatingTasksRef.current.get(taskId) === updatePromise) {
+        updatingTasksRef.current.delete(taskId);
       }
+      clearTimeout(stuckTimeout);
     }
   }, [loadTasks]);
 
