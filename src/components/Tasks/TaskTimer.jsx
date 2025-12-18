@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { updateTask, updateSubtaskProgress } from '../../services/supabase';
+import { updateSubtaskProgress } from '../../services/supabase';
+import { useTasks } from '../../hooks/useTasks';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
 
@@ -7,6 +8,8 @@ import Button from '../UI/Button';
  * טיימר למשימה - פרומדורו
  */
 function TaskTimer({ task, onUpdate, onComplete }) {
+  const { updateTaskTime } = useTasks();
+  
   if (!task || !task.id) {
     return (
       <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -182,8 +185,10 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         
         console.log('💾 saveProgress:', { minutesToAdd, newTimeSpent, reset, skipUpdate });
         
-        // עדכון המשימה
-        await updateTask(task.id, { time_spent: newTimeSpent });
+        // עדכון המשימה דרך TaskContext - זה יעדכן גם את ה-DB וגם את ה-state
+        const updatedTask = await updateTaskTime(task.id, newTimeSpent);
+        
+        console.log('✅ משימה עודכנה:', updatedTask);
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
         if (task.subtask_id) {
@@ -194,13 +199,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           setElapsedSeconds(0);
         }
         
-        // עדכון רק אם לא ביקשו לדלג (למניעת סגירת הכרטיס באמצע פעולה)
+        // עדכון TaskContext כבר קרה ב-updateTaskTime, אבל אם יש onUpdate callback, נקרא לו
         if (onUpdate && !skipUpdate) {
           console.log('🔄 קורא ל-onUpdate');
-          onUpdate();
+          await onUpdate();
         }
         
-        return { success: true, minutesToAdd, newTimeSpent };
+        return { success: true, minutesToAdd, newTimeSpent, updatedTask };
       } else if (minutesToAdd === 0) {
         toast('עבדת פחות מדקה - לא נשמר', { icon: '⏱️' });
         return { success: false, reason: 'less_than_minute' };

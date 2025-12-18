@@ -32,7 +32,7 @@ function TaskCard({
   onDragStart, 
   onDragEnd 
 }) {
-  const { toggleComplete, removeTask } = useTasks();
+  const { toggleComplete, removeTask, loadTasks } = useTasks();
   const [showActions, setShowActions] = useState(false);
   const [deleting, setDeleting] = useState(false);
 

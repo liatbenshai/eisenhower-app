@@ -259,6 +259,10 @@ export async function updateTask(taskId, updates) {
   if (updates.estimated_duration !== undefined) {
     updateData.estimated_duration = updates.estimated_duration ? parseInt(updates.estimated_duration) : null;
   }
+  // וידוא ש-time_spent הוא מספר
+  if (updates.time_spent !== undefined) {
+    updateData.time_spent = parseInt(updates.time_spent) || 0;
+  }
   
   console.log('מעדכן משימה:', taskId, updateData);
   
@@ -273,6 +277,8 @@ export async function updateTask(taskId, updates) {
     console.error('שגיאה בעדכון משימה:', error);
     throw error;
   }
+  
+  console.log('✅ משימה עודכנה בהצלחה:', data);
   return data;
 }
 

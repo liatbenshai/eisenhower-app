@@ -184,6 +184,28 @@ export function TaskProvider({ children }) {
     }
   };
 
+  // עדכון זמן שבוצע למשימה (מ-TaskTimer)
+  const updateTaskTime = async (taskId, timeSpent) => {
+    try {
+      console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpent);
+      const updatedTask = await updateTask(taskId, { time_spent: timeSpent });
+      
+      // עדכון מיידי ב-state
+      setTasks(prev => prev.map(t => {
+        if (t.id === taskId) {
+          return { ...t, time_spent: parseInt(timeSpent) || 0 };
+        }
+        return t;
+      }));
+      
+      console.log('✅ TaskContext: משימה עודכנה ב-state:', updatedTask);
+      return updatedTask;
+    } catch (err) {
+      console.error('❌ שגיאה בעדכון זמן משימה:', err);
+      throw err;
+    }
+  };
+
   // סימון כהושלם/לא הושלם
   const toggleComplete = async (taskId) => {
     const task = tasks.find(t => t.id === taskId);
@@ -284,6 +306,7 @@ export function TaskProvider({ children }) {
     editTask,
     removeTask,
     changeQuadrant,
+    updateTaskTime,
     toggleComplete,
     getTasksByQuadrant,
     getCompletedTasks,
