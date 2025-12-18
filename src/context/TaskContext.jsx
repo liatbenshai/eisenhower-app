@@ -189,23 +189,32 @@ export function TaskProvider({ children }) {
 
   // עדכון זמן שבוצע למשימה (מ-TaskTimer) - עם מניעת race conditions
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
-    // מניעת עדכונים כפולים במקביל
+    // מניעת עדכונים כפולים במקביל - עם timeout אוטומטי למניעת תקיעות
     if (updatingTasksRef.current.has(taskId)) {
       console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין...');
       // נחכה קצת וננסה שוב
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       if (updatingTasksRef.current.has(taskId)) {
         console.warn('⚠️ עדכון עדיין בתהליך, מנסה שוב...');
-        // במקום לדלג, ננסה שוב (למקרה שהעדכון הקודם הסתיים)
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // נחכה עוד קצת
+        await new Promise(resolve => setTimeout(resolve, 700));
         if (updatingTasksRef.current.has(taskId)) {
-          console.error('❌ עדכון תקוע, מדלג');
-          return null;
+          console.error('❌ עדכון תקוע יותר מ-1 שנייה, מסיר דגל ומנסה שוב');
+          // מסירים את הדגל למניעת תקיעות
+          updatingTasksRef.current.delete(taskId);
         }
       }
     }
     
     updatingTasksRef.current.add(taskId);
+    
+    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 60 שניות, נסיר את הדגל
+    const stuckTimeout = setTimeout(() => {
+      if (updatingTasksRef.current.has(taskId)) {
+        console.error('❌ עדכון תקוע יותר מ-60 שניות, מסיר דגל');
+        updatingTasksRef.current.delete(taskId);
+      }
+    }, 60000);
     
     try {
       const timeSpentInt = parseInt(timeSpent) || 0;
@@ -291,7 +300,11 @@ export function TaskProvider({ children }) {
       }
       throw err;
     } finally {
+      // תמיד נסיר את הדגל, גם אם יש שגיאה
       updatingTasksRef.current.delete(taskId);
+      if (stuckTimeout) {
+        clearTimeout(stuckTimeout);
+      }
     }
   }, [loadTasks]);
 
