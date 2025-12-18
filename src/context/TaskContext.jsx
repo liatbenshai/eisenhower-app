@@ -187,21 +187,40 @@ export function TaskProvider({ children }) {
   // עדכון זמן שבוצע למשימה (מ-TaskTimer)
   const updateTaskTime = async (taskId, timeSpent) => {
     try {
-      console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpent);
-      const updatedTask = await updateTask(taskId, { time_spent: timeSpent });
+      const timeSpentInt = parseInt(timeSpent) || 0;
+      console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
       
-      // עדכון מיידי ב-state
+      // עדכון מיידי ב-state לפני שמירה ב-DB (optimistic update)
       setTasks(prev => prev.map(t => {
         if (t.id === taskId) {
-          return { ...t, time_spent: parseInt(timeSpent) || 0 };
+          return { ...t, time_spent: timeSpentInt };
         }
         return t;
       }));
       
-      console.log('✅ TaskContext: משימה עודכנה ב-state:', updatedTask);
+      // עדכון ב-DB
+      const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
+      
+      // עדכון נוסף עם הנתונים מהשרת (למקרה שיש שינויים נוספים)
+      if (updatedTask) {
+        setTasks(prev => prev.map(t => {
+          if (t.id === taskId) {
+            return { ...t, ...updatedTask, time_spent: updatedTask.time_spent || timeSpentInt };
+          }
+          return t;
+        }));
+      }
+      
+      console.log('✅ TaskContext: משימה עודכנה ב-state ו-DB:', updatedTask);
       return updatedTask;
     } catch (err) {
       console.error('❌ שגיאה בעדכון זמן משימה:', err);
+      // במקרה של שגיאה, ננסה לטעון מחדש את המשימות
+      try {
+        await loadTasks();
+      } catch (loadErr) {
+        console.error('❌ שגיאה בטעינת משימות אחרי שגיאה:', loadErr);
+      }
       throw err;
     }
   };

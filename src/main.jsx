@@ -7,18 +7,26 @@ import { TaskProvider } from './context/TaskContext';
 import { NotificationProvider } from './context/NotificationContext';
 import './styles/globals.css';
 
+// בדיקה שהסשן נשמר ב-localStorage לפני טעינת האפליקציה
+if (typeof window !== 'undefined') {
+  const supabaseSession = localStorage.getItem('sb-' + (import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] || 'default') + '-auth-token');
+  if (supabaseSession) {
+    console.log('✅ נמצא סשן שמור ב-localStorage');
+  } else {
+    console.log('ℹ️ אין סשן שמור ב-localStorage');
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <TaskProvider>
-          <NotificationProvider>
-            <App />
-          </NotificationProvider>
-        </TaskProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+  <BrowserRouter>
+    <AuthProvider>
+      <TaskProvider>
+        <NotificationProvider>
+          <App />
+        </NotificationProvider>
+      </TaskProvider>
+    </AuthProvider>
+  </BrowserRouter>
 );
 
 // ניקוי אגרסיבי של Service Worker ומטמונים - מונע בעיות רענון

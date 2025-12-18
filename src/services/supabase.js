@@ -274,8 +274,19 @@ export async function updateTask(taskId, updates) {
     .single();
   
   if (error) {
-    console.error('שגיאה בעדכון משימה:', error);
+    console.error('❌ שגיאה בעדכון משימה:', error);
+    console.error('פרטי שגיאה:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
     throw error;
+  }
+  
+  if (!data) {
+    console.error('❌ לא הוחזר data מ-Supabase בעדכון משימה!');
+    throw new Error('המשימה לא עודכנה - אין data');
   }
   
   console.log('✅ משימה עודכנה בהצלחה:', data);

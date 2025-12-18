@@ -73,27 +73,95 @@ export function AuthProvider({ children }) {
 
           console.log('אירוע אותנטיקציה:', event, session ? 'יש סשן' : 'אין סשן');
           
+          // התעלם מאירועים לא חשובים שלא צריכים לעדכן את המשתמש
+          if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+            // רק עדכן את המשתמש אם יש סשן
+            if (session?.user) {
+              try {
+                const currentUser = await getCurrentUser();
+                if (mounted) {
+                  setUser(currentUser);
+                }
+              } catch (err) {
+                console.error('שגיאה בטעינת משתמש:', err);
+                // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
+                if (mounted) {
+                  setUser(session.user);
+                }
+              }
+            }
+            return;
+          }
+          
+          // רק עבור SIGNED_OUT - מחק את המשתמש
+          if (event === 'SIGNED_OUT') {
+            if (mounted) {
+              setUser(null);
+              setLoading(false);
+            }
+            return;
+          }
+          
+          // עבור USER_UPDATED - עדכן את המשתמש
+          if (event === 'USER_UPDATED' && session?.user) {
+            try {
+              const currentUser = await getCurrentUser();
+              if (mounted) {
+                setUser(currentUser);
+                setLoading(false);
+              }
+            } catch (err) {
+              console.error('שגיאה בעדכון משתמש:', err);
+              if (mounted) {
+                setUser(session.user);
+                setLoading(false);
+              }
+            }
+            return;
+          }
+          
+          // עבור INITIAL_SESSION - טיפול מיוחד
+          // INITIAL_SESSION נקרא אחרי initializeAuth, אז אם יש סשן כבר טיפלנו בו
+          // אם אין סשן, המשתמש לא מחובר
+          if (event === 'INITIAL_SESSION') {
+            if (!session && mounted) {
+              // אין סשן - המשתמש לא מחובר
+              setUser(null);
+              setLoading(false);
+            } else if (session?.user && mounted) {
+              // יש סשן - עדכן את המשתמש (למקרה ש-initializeAuth לא הצליח)
+              try {
+                const currentUser = await getCurrentUser();
+                if (mounted) {
+                  setUser(currentUser);
+                  setLoading(false);
+                }
+              } catch (err) {
+                console.error('שגיאה בטעינת משתמש ב-INITIAL_SESSION:', err);
+                if (mounted) {
+                  setUser(session.user);
+                  setLoading(false);
+                }
+              }
+            }
+            return;
+          }
+          
+          // לכל אירוע אחר עם סשן - עדכן את המשתמש
           if (session?.user) {
             try {
               const currentUser = await getCurrentUser();
               if (mounted) {
                 setUser(currentUser);
+                setLoading(false);
               }
             } catch (err) {
               console.error('שגיאה בטעינת משתמש:', err);
-              // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
               if (mounted) {
                 setUser(session.user);
+                setLoading(false);
               }
             }
-          } else {
-            if (mounted) {
-              setUser(null);
-            }
-          }
-          
-          if (mounted) {
-            setLoading(false);
           }
         }
       );
