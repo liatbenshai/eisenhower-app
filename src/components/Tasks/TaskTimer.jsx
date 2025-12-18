@@ -195,17 +195,37 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setStartTime(null);
   };
   
-  // מניעת שמירות כפולות במקביל
+  // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
   const savingRef = useRef(false);
+  const savingTimeoutRef = useRef(null);
   
   const saveProgress = async (reset = false, skipUpdate = false) => {
-    // מניעת שמירות כפולות
+    // מניעת שמירות כפולות - אבל עם timeout אוטומטי למקרה של תקלה
     if (savingRef.current) {
-      console.log('⏳ שמירה כבר בתהליך, ממתין...');
-      return { success: false, reason: 'already_saving' };
+      console.log('⏳ שמירה כבר בתהליך, ממתין קצת...');
+      // נחכה קצת ונבדוק שוב
+      await new Promise(resolve => setTimeout(resolve, 200));
+      if (savingRef.current) {
+        console.warn('⚠️ שמירה עדיין בתהליך אחרי המתנה, מנסה שוב...');
+        // אם עדיין בתהליך, נסיר את הדגל וננסה שוב (למקרה של תקלה)
+        savingRef.current = false;
+      }
     }
     
     savingRef.current = true;
+    
+    // ניקוי timeout קודם אם קיים
+    if (savingTimeoutRef.current) {
+      clearTimeout(savingTimeoutRef.current);
+    }
+    
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-10 שניות, נסיר את הדגל
+    savingTimeoutRef.current = setTimeout(() => {
+      if (savingRef.current) {
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן, מסיר דגל...');
+        savingRef.current = false;
+      }
+    }, 10000);
     
     try {
       const minutesToAdd = Math.floor(elapsedSeconds / 60);
@@ -264,6 +284,10 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       return { success: false, error: err };
     } finally {
       savingRef.current = false;
+      if (savingTimeoutRef.current) {
+        clearTimeout(savingTimeoutRef.current);
+        savingTimeoutRef.current = null;
+      }
     }
   };
   
