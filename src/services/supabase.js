@@ -580,25 +580,66 @@ export async function updateTask(taskId, updates) {
     } else {
       // אם העדכון הצליח, נטען את המשימה בנפרד - גם עם timeout
       console.log('✅ UPDATE הצליח, טוען משימה מחדש...');
-      const selectPromise = supabase
-        .from('tasks')
-        .select('*')
-        .eq('id', taskId)
-        .single();
       
-      const selectTimeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('⏱️ טעינת משימה לקחה יותר מ-20 שניות - timeout'));
-        }, 20000);
-      });
+      // ננסה SELECT עם retry - לפעמים ה-SELECT נכשל אחרי UPDATE
+      let selectAttempts = 0;
+      const maxSelectAttempts = 3;
+      let taskData = null;
+      let selectError = null;
       
-      const selectResult = await Promise.race([selectPromise, selectTimeoutPromise]);
-      const { data: taskData, error: selectError } = selectResult;
+      while (selectAttempts < maxSelectAttempts && !taskData) {
+        selectAttempts++;
+        console.log(`🔄 ניסיון SELECT ${selectAttempts}/${maxSelectAttempts}...`);
+        
+        const selectPromise = supabase
+          .from('tasks')
+          .select('*')
+          .eq('id', taskId)
+          .single();
+        
+        const selectTimeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('⏱️ טעינת משימה לקחה יותר מ-20 שניות - timeout'));
+          }, 20000);
+        });
+        
+        try {
+          const selectResult = await Promise.race([selectPromise, selectTimeoutPromise]);
+          console.log('📥 תגובה מ-SELECT:', { 
+            hasData: !!selectResult.data, 
+            hasError: !!selectResult.error,
+            time_spent: selectResult.data?.time_spent
+          });
+          
+          if (selectResult.error) {
+            selectError = selectResult.error;
+            console.error(`❌ שגיאה ב-SELECT (ניסיון ${selectAttempts}):`, selectError);
+            if (selectAttempts < maxSelectAttempts) {
+              // נמתין קצת לפני ניסיון נוסף
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } else {
+            taskData = selectResult.data;
+            console.log('✅ SELECT הצליח, time_spent:', taskData?.time_spent);
+            break;
+          }
+        } catch (selectErr) {
+          selectError = selectErr;
+          console.error(`❌ שגיאה ב-SELECT (ניסיון ${selectAttempts}):`, selectErr);
+          if (selectAttempts < maxSelectAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
       
-      if (selectError) {
+      if (selectError && !taskData) {
+        console.error('❌ כל ניסיונות ה-SELECT נכשלו, אבל ה-UPDATE הצליח');
+        // אם ה-UPDATE הצליח אבל ה-SELECT נכשל, נשתמש בנתונים שיש לנו
         error = selectError;
-      } else {
+        console.warn('⚠️ ממשיך עם נתונים חלקיים - ה-UPDATE הצליח');
+      } else if (taskData) {
         data = taskData;
+        console.log('✅ SELECT הצליח, time_spent:', data?.time_spent);
       }
     }
   } catch (err) {
