@@ -390,16 +390,23 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     // שמירת ה-Promise
     savingRef.current = savePromise;
     
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-15 שניות, נסיר את הדגל
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
     savingTimeoutRef.current = setTimeout(() => {
       if (savingRef.current === savePromise) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (15 שניות), מסיר דגל...');
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
         savingRef.current = null;
       }
-    }, 15000); // הקטנתי ל-15 שניות
+    }, 30000); // הגדלתי ל-30 שניות
     
     try {
-      const result = await savePromise;
+      // הוספת timeout ל-Promise עצמו
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('⏱️ שמירה לוקחת יותר מדי זמן - בדוק את החיבור לאינטרנט'));
+        }, 35000); // 35 שניות timeout
+      });
+      
+      const result = await Promise.race([savePromise, timeoutPromise]);
       return result;
     } catch (err) {
       console.error('❌ שגיאה בשמירת התקדמות:', err);
