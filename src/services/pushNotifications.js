@@ -119,6 +119,15 @@ export async function subscribeToPush() {
   if (!isNotificationSupported()) return null;
 
   try {
+    // בדיקה שאין Service Workers - אם יש, לא נמשיך
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      if (registrations.length === 0) {
+        console.warn('⚠️ אין Service Worker - Push Notifications לא זמינים');
+        return null;
+      }
+    }
+    
     const registration = await navigator.serviceWorker.ready;
     
     // בדיקה אם כבר רשום
@@ -151,6 +160,14 @@ export async function subscribeToPush() {
  */
 export async function unsubscribeFromPush() {
   try {
+    // בדיקה שאין Service Workers
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      if (registrations.length === 0) {
+        return;
+      }
+    }
+    
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     
