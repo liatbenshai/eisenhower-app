@@ -1,6 +1,30 @@
 {
   "rewrites": [
     {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/icon.svg",
+      "destination": "/icon.svg"
+    },
+    {
+      "source": "/icon-192.png",
+      "destination": "/icon-192.png"
+    },
+    {
+      "source": "/icon-512.png",
+      "destination": "/icon-512.png"
+    },
+    {
+      "source": "/favicon.svg",
+      "destination": "/favicon.svg"
+    },
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
