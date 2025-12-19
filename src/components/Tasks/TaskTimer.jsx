@@ -45,6 +45,9 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   
+  // מפתח ב-localStorage לשמירת זמן התחלה
+  const timerStorageKey = `timer_${currentTask.id}_startTime`;
+  
   // שימוש במשימה העדכנית מה-TaskContext
   const timeSpent = (currentTask && currentTask.time_spent) ? parseInt(currentTask.time_spent) : 0;
   const estimated = (currentTask && currentTask.estimated_duration) ? parseInt(currentTask.estimated_duration) : 0;
@@ -59,11 +62,50 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
     : 0;
   
+  // טעינת זמן התחלה מ-localStorage כשהטיימר נטען
+  useEffect(() => {
+    if (currentTask?.id) {
+      const savedStartTime = localStorage.getItem(timerStorageKey);
+      if (savedStartTime) {
+        const start = new Date(savedStartTime);
+        const now = new Date();
+        const elapsed = Math.floor((now - start) / 1000); // שניות שחלפו
+        
+        if (elapsed > 0) {
+          console.log('⏰ נמצא טיימר פעיל ב-localStorage:', {
+            startTime: start.toISOString(),
+            elapsedSeconds: elapsed,
+            elapsedMinutes: Math.floor(elapsed / 60)
+          });
+          
+          setStartTime(start);
+          setElapsedSeconds(elapsed);
+          setIsRunning(true); // מפעיל את הטיימר אוטומטית
+          
+          toast.success(`⏰ טיימר חודש! עברו ${Math.floor(elapsed / 60)} דקות`, {
+            duration: 3000
+          });
+        } else {
+          // זמן שלילי - מנקים את הנתונים הישנים
+          localStorage.removeItem(timerStorageKey);
+        }
+      }
+    }
+  }, [currentTask?.id, timerStorageKey]);
+  
   // עדכון זמן כל שנייה
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
+        setElapsedSeconds(prev => {
+          // חישוב זמן מדויק לפי startTime אם קיים
+          if (startTime) {
+            const now = new Date();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            return elapsed;
+          }
+          return prev + 1;
+        });
       }, 1000);
     } else {
       if (intervalRef.current) {
@@ -77,7 +119,41 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning]);
+  }, [isRunning, startTime]);
+  
+  // טיפול ב-visibility change - כשהדפדפן חוזר להיות פעיל
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isRunning && startTime) {
+        // חישוב מחדש של הזמן שחלף
+        const now = new Date();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        
+        if (elapsed > elapsedSeconds) {
+          const diffMinutes = Math.floor((elapsed - elapsedSeconds) / 60);
+          console.log('👁️ דפדפן חזר להיות פעיל - עדכון זמן:', {
+            elapsedSeconds,
+            newElapsed: elapsed,
+            diffMinutes
+          });
+          
+          setElapsedSeconds(elapsed);
+          
+          if (diffMinutes > 0) {
+            toast.info(`⏰ עודכנו ${diffMinutes} דקות נוספות`, {
+              duration: 2000
+            });
+          }
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isRunning, startTime, elapsedSeconds]);
   
   // שמירה אוטומטית כל 5 דקות (בלי onUpdate למניעת לולאה)
   useEffect(() => {
@@ -163,7 +239,15 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       setElapsedSeconds(0);
       setHasReachedTarget(false);
     }
-    setStartTime(new Date());
+    const now = new Date();
+    setStartTime(now);
+    
+    // שמירת זמן התחלה ב-localStorage
+    if (currentTask?.id) {
+      localStorage.setItem(timerStorageKey, now.toISOString());
+      console.log('💾 זמן התחלה נשמר ב-localStorage:', now.toISOString());
+    }
+    
     setIsRunning(true);
     toast.success('טיימר הופעל');
   };
@@ -175,7 +259,16 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   
   const stopTimer = async () => {
     setIsRunning(false);
-    if (elapsedSeconds > 0) {
+    
+    // חישוב זמן מדויק לפי startTime
+    let finalElapsedSeconds = elapsedSeconds;
+    if (startTime) {
+      const now = new Date();
+      finalElapsedSeconds = Math.floor((now - startTime) / 1000);
+      setElapsedSeconds(finalElapsedSeconds);
+    }
+    
+    if (finalElapsedSeconds > 0) {
       const result = await saveProgress(true, true); // שמירה עם איפוס, בלי onUpdate
       if (result && result.success) {
         toast.success(`🎯 נשמר! ${result.minutesToAdd} דקות נוספו. סה"כ: ${result.newTimeSpent} דקות`, {
@@ -184,6 +277,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         });
       }
     }
+    
+    // ניקוי מ-localStorage
+    if (currentTask?.id) {
+      localStorage.removeItem(timerStorageKey);
+      console.log('🗑️ זמן התחלה נמחק מ-localStorage');
+    }
+    
     setElapsedSeconds(0);
     setStartTime(null);
   };
@@ -193,6 +293,12 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setElapsedSeconds(0);
     setHasReachedTarget(false);
     setStartTime(null);
+    
+    // ניקוי מ-localStorage
+    if (currentTask?.id) {
+      localStorage.removeItem(timerStorageKey);
+      console.log('🗑️ זמן התחלה נמחק מ-localStorage (reset)');
+    }
   };
   
   // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
@@ -216,7 +322,18 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     
     // יצירת Promise חדש לשמירה
     const savePromise = (async () => {
-      const minutesToAdd = Math.floor(elapsedSeconds / 30); // TEST: 30 sec instead of 60
+      // חישוב זמן מדויק לפי startTime אם קיים
+      let actualElapsedSeconds = elapsedSeconds;
+      if (startTime) {
+        const now = new Date();
+        actualElapsedSeconds = Math.floor((now - startTime) / 1000);
+        // עדכון ה-state עם הזמן המדויק
+        if (actualElapsedSeconds !== elapsedSeconds) {
+          setElapsedSeconds(actualElapsedSeconds);
+        }
+      }
+      
+      const minutesToAdd = Math.floor(actualElapsedSeconds / 60);
       if (minutesToAdd > 0 && currentTask && currentTask.id) {
         // שימוש במשימה העדכנית מה-TaskContext - טעינה מחדש מה-context
         const latestTask = tasks.find(t => t.id === currentTask.id) || currentTask;
@@ -225,12 +342,15 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         
         console.log('💾 saveProgress:', { 
           minutesToAdd, 
+          actualElapsedSeconds,
+          elapsedSeconds,
           currentTimeSpent, 
           newTimeSpent, 
           reset, 
           skipUpdate,
           taskId: latestTask.id,
-          taskFromContext: latestTask.time_spent
+          taskFromContext: latestTask.time_spent,
+          startTime: startTime?.toISOString()
         });
         
         // עדכון המשימה דרך TaskContext - זה יעדכן גם את ה-DB וגם את ה-state
