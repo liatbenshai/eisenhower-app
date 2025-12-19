@@ -46,47 +46,44 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </BrowserRouter>
 );
 
-// ניקוי אגרסיבי של Service Worker ומטמונים - מונע בעיות רענון
-// קוד זה ירוץ בכל טעינה ויסיר את כל השאריות
-(async () => {
-  try {
-    // מחיקת כל ה-Service Workers
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      if (registrations.length > 0) {
-        console.log('🧹 מוחק', registrations.length, 'Service Workers...');
-        await Promise.all(registrations.map(reg => {
-          return reg.unregister().then(success => {
-            if (success) {
-              console.log('✅ Service Worker הוסר:', reg.scope);
-            }
-            return success;
-          });
-        }));
+// רישום Service Worker מינימלי ל-PWA (בלי caching)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      // מחיקת Service Workers ישנים (אם יש)
+      const oldRegistrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of oldRegistrations) {
+        // אם זה לא ה-SW שלנו, נמחק אותו
+        if (!registration.active?.scriptURL.includes('/sw.js')) {
+          await registration.unregister();
+          console.log('🗑️ Service Worker ישן הוסר:', registration.scope);
+        }
       }
-    }
 
-    // מחיקת כל המטמונים
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      if (cacheNames.length > 0) {
-        console.log('🧹 מוחק', cacheNames.length, 'מטמונים...');
-        await Promise.all(cacheNames.map(name => {
-          return caches.delete(name).then(success => {
-            if (success) {
-              console.log('✅ מטמון הוסר:', name);
+      // רישום Service Worker חדש (מינימלי, בלי caching)
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/'
+      });
+
+      console.log('✅ Service Worker נרשם ל-PWA:', registration.scope);
+
+      // עדכון אוטומטי
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('🔄 Service Worker עודכן - רענני את הדף');
             }
-            return success;
           });
-        }));
-      }
+        }
+      });
+    } catch (error) {
+      console.warn('⚠️ לא ניתן לרשום Service Worker:', error);
+      // זה לא קריטי - האפליקציה תעבוד גם בלי
     }
-
-    console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
-  } catch (error) {
-    console.error('שגיאה בניקוי Service Workers ומטמונים:', error);
-  }
-})();
+  });
+}
 
 // מניעת תקיעות - בדיקת תקינות כל כמה דקות
 if (typeof window !== 'undefined') {

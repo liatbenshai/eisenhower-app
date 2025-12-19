@@ -14,6 +14,7 @@ import TaskInsights from './pages/TaskInsights';
 // רכיבים
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Header from './components/Layout/Header';
+import InstallPrompt from './components/PWA/InstallPrompt';
 
 function App() {
   const { user, loading } = useAuth();
@@ -40,6 +41,9 @@ function App() {
           }
         }}
       />
+
+      {/* הודעת התקנת PWA */}
+      <InstallPrompt />
 
       {/* כותרת עליונה */}
       {user && <Header />}
