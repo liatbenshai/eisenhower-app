@@ -51,17 +51,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 console.log('🚀 Render called');
 
-// מחיקת כל ה-Service Workers - מונע בעיות רענון
+// מחיקת כל ה-Service Workers ומטמונים - מונע בעיות רענון
 // PWA עדיין תעבוד בלי Service Worker (רק בלי offline support)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
+if (typeof window !== 'undefined') {
+  // מחיקה מיידית - לא ממתין ל-load
+  (async () => {
     try {
-      // מחיקת כל ה-Service Workers
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      if (registrations.length > 0) {
-        console.log('🗑️ מוחק', registrations.length, 'Service Workers...');
-        await Promise.all(registrations.map(reg => reg.unregister()));
-        console.log('✅ כל ה-Service Workers נמחקו - רענון חופשי!');
+      if ('serviceWorker' in navigator) {
+        // מחיקת כל ה-Service Workers
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        if (registrations.length > 0) {
+          console.log('🗑️ מוחק', registrations.length, 'Service Workers...');
+          await Promise.all(registrations.map(reg => reg.unregister()));
+          console.log('✅ כל ה-Service Workers נמחקו');
+        }
       }
       
       // מחיקת כל המטמונים
@@ -78,7 +81,7 @@ if ('serviceWorker' in navigator) {
     } catch (error) {
       console.warn('⚠️ שגיאה במחיקת Service Workers:', error);
     }
-  });
+  })();
 }
 
 // מניעת תקיעות - בדיקת תקינות כל כמה דקות
