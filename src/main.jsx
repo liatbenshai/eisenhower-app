@@ -1,3 +1,39 @@
+// מחיקת Service Workers ומטמונים לפני טעינת React - זה קריטי!
+if (typeof window !== 'undefined') {
+  // מחיקה מיידית - לפני כל דבר אחר
+  (async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        // מחיקת כל ה-Service Workers
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        if (registrations.length > 0) {
+          console.log('🗑️ מוחק', registrations.length, 'Service Workers...');
+          await Promise.all(registrations.map(reg => reg.unregister()));
+          console.log('✅ כל ה-Service Workers נמחקו');
+        } else {
+          console.log('✅ אין Service Workers לניקוי');
+        }
+      }
+      
+      // מחיקת כל המטמונים
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        if (cacheNames.length > 0) {
+          console.log('🗑️ מוחק', cacheNames.length, 'מטמונים...');
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+          console.log('✅ כל המטמונים נמחקו');
+        } else {
+          console.log('✅ אין מטמונים לניקוי');
+        }
+      }
+      
+      console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
+    } catch (error) {
+      console.warn('⚠️ שגיאה במחיקת Service Workers:', error);
+    }
+  })();
+}
+
 console.log('⚡ main.jsx loading...');
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -50,39 +86,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 console.log('🚀 Render called');
-
-// מחיקת כל ה-Service Workers ומטמונים - מונע בעיות רענון
-// PWA עדיין תעבוד בלי Service Worker (רק בלי offline support)
-if (typeof window !== 'undefined') {
-  // מחיקה מיידית - לא ממתין ל-load
-  (async () => {
-    try {
-      if ('serviceWorker' in navigator) {
-        // מחיקת כל ה-Service Workers
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        if (registrations.length > 0) {
-          console.log('🗑️ מוחק', registrations.length, 'Service Workers...');
-          await Promise.all(registrations.map(reg => reg.unregister()));
-          console.log('✅ כל ה-Service Workers נמחקו');
-        }
-      }
-      
-      // מחיקת כל המטמונים
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        if (cacheNames.length > 0) {
-          console.log('🗑️ מוחק', cacheNames.length, 'מטמונים...');
-          await Promise.all(cacheNames.map(name => caches.delete(name)));
-          console.log('✅ כל המטמונים נמחקו');
-        }
-      }
-      
-      console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
-    } catch (error) {
-      console.warn('⚠️ שגיאה במחיקת Service Workers:', error);
-    }
-  })();
-}
 
 // מניעת תקיעות - בדיקת תקינות כל כמה דקות
 if (typeof window !== 'undefined') {
