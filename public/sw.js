@@ -1,37 +1,61 @@
 // Service Worker מינימלי ל-PWA
 // לא עושה caching - רק מאפשר התקנה כאפליקציה
+// לא חוסם רענון - תמיד מהרשת
 
-const CACHE_NAME = 'eisenhower-app-v1';
-const urlsToCache = [];
-
-// התקנה
+// מחיקת כל המטמונים בהתקנה
 self.addEventListener('install', (event) => {
   console.log('🔧 Service Worker: Installing...');
-  // לא נשמור מטמון - רק נוודא שה-SW מותקן
   self.skipWaiting();
-});
-
-// הפעלה
-self.addEventListener('activate', (event) => {
-  console.log('✅ Service Worker: Activated');
+  
+  // מחיקת כל המטמונים
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ Service Worker: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+          console.log('🗑️ Service Worker: Deleting cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
     })
   );
-  return self.clients.claim();
 });
 
-// Fetch - תמיד מהרשת, בלי caching
+// הפעלה - מחיקת מטמונים ישנים
+self.addEventListener('activate', (event) => {
+  console.log('✅ Service Worker: Activated');
+  event.waitUntil(
+    Promise.all([
+      // מחיקת כל המטמונים
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            console.log('🗑️ Service Worker: Deleting cache:', cacheName);
+            return caches.delete(cacheName);
+          })
+        );
+      }),
+      // הפעלה מיידית
+      self.clients.claim()
+    ])
+  );
+});
+
+// Fetch - תמיד מהרשת, בלי caching, בלי חסימה
 self.addEventListener('fetch', (event) => {
-  // לא נשמור מטמון - תמיד מהרשת
-  event.respondWith(fetch(event.request));
+  // רק בקשות HTML - נבדוק אם יש עדכון
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // אם אין אינטרנט, נחזיר תגובה ריקה
+        return new Response('אין חיבור לאינטרנט', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      })
+    );
+  } else {
+    // כל שאר הבקשות - תמיד מהרשת
+    event.respondWith(fetch(event.request));
+  }
 });
 

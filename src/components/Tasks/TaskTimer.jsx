@@ -9,19 +9,11 @@ import Button from '../UI/Button';
  */
 function TaskTimer({ task, onUpdate, onComplete }) {
   const { updateTaskTime, tasks } = useTasks();
-  
-  if (!task || !task.id) {
-    return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-          אין משימה זמינה
-        </p>
-      </div>
-    );
-  }
-  
+
   // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop - עם useMemo לעדכון אוטומטי
+  // חשוב: כל ה-hooks חייבים להיקרא לפני ה-early return!
   const currentTask = useMemo(() => {
+    if (!task || !task.id) return null;
     const found = tasks.find(t => t.id === task.id);
     if (found) {
       // אם time_spent השתנה, נדווח
@@ -35,70 +27,124 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       return found;
     }
     return task;
-  }, [tasks, task.id]);
-  
+  }, [tasks, task?.id, task?.time_spent]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [targetMinutes, setTargetMinutes] = useState(currentTask.estimated_duration || 30); // זמן יעד
+  const [targetMinutes, setTargetMinutes] = useState(30); // זמן יעד - נעדכן ב-useEffect
   const [hasReachedTarget, setHasReachedTarget] = useState(false);
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
-  
+  // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
+  const savingRef = useRef(null); // Promise של השמירה הנוכחית
+  const savingTimeoutRef = useRef(null);
+
   // מפתח ב-localStorage לשמירת זמן התחלה
-  const timerStorageKey = `timer_${currentTask.id}_startTime`;
-  
-  // שימוש במשימה העדכנית מה-TaskContext
-  const timeSpent = (currentTask && currentTask.time_spent) ? parseInt(currentTask.time_spent) : 0;
-  const estimated = (currentTask && currentTask.estimated_duration) ? parseInt(currentTask.estimated_duration) : 0;
+  const timerStorageKey = currentTask ? `timer_${currentTask.id}_startTime` : null;
+
+  // חישובים - יכולים להיות גם כשאין משימה (יחזירו 0)
+  const timeSpent = currentTask?.time_spent ? parseInt(currentTask.time_spent) : 0;
+  const estimated = currentTask?.estimated_duration ? parseInt(currentTask.estimated_duration) : 0;
   const currentSessionMinutes = Math.floor(elapsedSeconds / 60);
   const totalSpent = timeSpent + currentSessionMinutes;
-  
-  // חישוב זמן נותר
   const remainingMinutes = targetMinutes - currentSessionMinutes;
   const isTargetReached = currentSessionMinutes >= targetMinutes;
-  
-  const progress = targetMinutes > 0 
+  const progress = targetMinutes > 0
     ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
     : 0;
-  
+
+  // פונקציית saveProgress מוגדרת כאן כדי שתהיה זמינה ל-useEffect
+  const saveProgressRef = useRef(null);
+
+  // צפצוף/התראה
+  const playAlarm = () => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 1);
+
+      setTimeout(() => {
+        const oscillator2 = audioContext.createOscillator();
+        const gainNode2 = audioContext.createGain();
+        oscillator2.connect(gainNode2);
+        gainNode2.connect(audioContext.destination);
+        oscillator2.frequency.value = 800;
+        oscillator2.type = 'sine';
+        gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+        oscillator2.start(audioContext.currentTime);
+        oscillator2.stop(audioContext.currentTime + 1);
+      }, 500);
+
+      setTimeout(() => {
+        const oscillator3 = audioContext.createOscillator();
+        const gainNode3 = audioContext.createGain();
+        oscillator3.connect(gainNode3);
+        gainNode3.connect(audioContext.destination);
+        oscillator3.frequency.value = 800;
+        oscillator3.type = 'sine';
+        gainNode3.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+        oscillator3.start(audioContext.currentTime);
+        oscillator3.stop(audioContext.currentTime + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('שגיאה בהשמעת צפצוף:', err);
+    }
+  };
+
+  // עדכון targetMinutes כשהמשימה משתנה
+  useEffect(() => {
+    if (currentTask?.estimated_duration) {
+      setTargetMinutes(currentTask.estimated_duration);
+    }
+  }, [currentTask?.estimated_duration]);
+
   // טעינת זמן התחלה מ-localStorage כשהטיימר נטען
   useEffect(() => {
-    if (currentTask?.id) {
+    if (currentTask?.id && timerStorageKey) {
       const savedStartTime = localStorage.getItem(timerStorageKey);
       if (savedStartTime) {
         const start = new Date(savedStartTime);
         const now = new Date();
-        const elapsed = Math.floor((now - start) / 1000); // שניות שחלפו
-        
+        const elapsed = Math.floor((now - start) / 1000);
+
         if (elapsed > 0) {
           console.log('⏰ נמצא טיימר פעיל ב-localStorage:', {
             startTime: start.toISOString(),
             elapsedSeconds: elapsed,
             elapsedMinutes: Math.floor(elapsed / 60)
           });
-          
+
           setStartTime(start);
           setElapsedSeconds(elapsed);
-          setIsRunning(true); // מפעיל את הטיימר אוטומטית
-          
+          setIsRunning(true);
+
           toast.success(`⏰ טיימר חודש! עברו ${Math.floor(elapsed / 60)} דקות`, {
             duration: 3000
           });
         } else {
-          // זמן שלילי - מנקים את הנתונים הישנים
           localStorage.removeItem(timerStorageKey);
         }
       }
     }
   }, [currentTask?.id, timerStorageKey]);
-  
+
   // עדכון זמן כל שנייה
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
         setElapsedSeconds(prev => {
-          // חישוב זמן מדויק לפי startTime אם קיים
           if (startTime) {
             const now = new Date();
             const elapsed = Math.floor((now - startTime) / 1000);
@@ -113,22 +159,21 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         intervalRef.current = null;
       }
     }
-    
+
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
   }, [isRunning, startTime]);
-  
-  // טיפול ב-visibility change - כשהדפדפן חוזר להיות פעיל
+
+  // טיפול ב-visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isRunning && startTime) {
-        // חישוב מחדש של הזמן שחלף
         const now = new Date();
         const elapsed = Math.floor((now - startTime) / 1000);
-        
+
         if (elapsed > elapsedSeconds) {
           const diffMinutes = Math.floor((elapsed - elapsedSeconds) / 60);
           console.log('👁️ דפדפן חזר להיות פעיל - עדכון זמן:', {
@@ -136,9 +181,9 @@ function TaskTimer({ task, onUpdate, onComplete }) {
             newElapsed: elapsed,
             diffMinutes
           });
-          
+
           setElapsedSeconds(elapsed);
-          
+
           if (diffMinutes > 0) {
             toast.info(`⏰ עודכנו ${diffMinutes} דקות נוספות`, {
               duration: 2000
@@ -147,22 +192,20 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         }
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isRunning, startTime, elapsedSeconds]);
-  
-  // שמירה אוטומטית כל 5 דקות (בלי onUpdate למניעת לולאה)
+
+  // שמירה אוטומטית כל 5 דקות
   useEffect(() => {
-    if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0) {
-      saveProgress(false, true); // שמירה אוטומטית בלי איפוס ובלי onUpdate
+    if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0 && saveProgressRef.current) {
+      saveProgressRef.current(false, true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, isRunning]);
-  
+
   // בדיקת הגעה ליעד זמן
   useEffect(() => {
     if (isRunning && targetMinutes > 0 && !hasReachedTarget) {
@@ -175,15 +218,23 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           duration: 5000,
           icon: '🎉'
         });
-        // שמירה אוטומטית בלי onUpdate למניעת לולאה
-        saveProgress(false, true);
+        if (saveProgressRef.current) {
+          saveProgressRef.current(false, true);
+        }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget]);
-  
-  // צפצוף/התראה
-  const playAlarm = () => {
+
+  // Early return AFTER all hooks are called
+  if (!task || !task.id || !currentTask) {
+    return (
+      <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+          אין משימה זמינה
+        </p>
+      </div>
+    );
+  }
     try {
       // יצירת צליל צפצוף
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -300,12 +351,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       console.log('🗑️ זמן התחלה נמחק מ-localStorage (reset)');
     }
   };
-  
-  // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
-  // נשתמש ב-Promise במקום boolean כדי שנוכל להמתין לעדכון קודם
-  const savingRef = useRef(null); // Promise של השמירה הנוכחית
-  const savingTimeoutRef = useRef(null);
-  
+
   const saveProgress = async (reset = false, skipUpdate = false) => {
     // מניעת שמירות כפולות - נשתמש ב-Promise במקום דגל בוליאני
     if (savingRef.current) {
