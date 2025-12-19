@@ -222,19 +222,50 @@ export async function createTask(task) {
     }
     if (!checkSession?.user) {
       console.error('❌ אין סשן פעיל לפני insert!');
+      console.error('📋 פרטי סשן:', { 
+        hasSession: !!checkSession, 
+        hasUser: !!checkSession?.user,
+        sessionData: checkSession 
+      });
       throw new Error('❌ אין משתמש מחובר. אנא התחברי מחדש.');
     }
-    console.log('✅ סשן תקין לפני insert:', checkSession.user.id);
+    console.log('✅ סשן תקין לפני insert:', {
+      userId: checkSession.user.id,
+      email: checkSession.user.email,
+      expiresAt: checkSession.expires_at
+    });
+    
+    // וידוא שה-user_id תואם לסשן
+    if (taskData.user_id !== checkSession.user.id) {
+      console.warn('⚠️ user_id לא תואם לסשן!', {
+        taskUserId: taskData.user_id,
+        sessionUserId: checkSession.user.id
+      });
+      taskData.user_id = checkSession.user.id; // תיקון אוטומטי
+      console.log('✅ תוקן user_id:', taskData.user_id);
+    }
     
     const insertStartTime = Date.now();
     let data, error;
     
     try {
-      const result = await supabase
+      console.log('⏳ ממתין לתגובה מ-Supabase...');
+      
+      // יצירת Promise עם timeout למניעת תקיעות
+      const insertPromise = supabase
         .from('tasks')
         .insert([taskData])
         .select()
         .single();
+      
+      // Timeout של 30 שניות
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('⏱️ Insert לקח יותר מ-30 שניות - timeout'));
+        }, 30000);
+      });
+      
+      const result = await Promise.race([insertPromise, timeoutPromise]);
       
       data = result.data;
       error = result.error;
@@ -243,6 +274,7 @@ export async function createTask(task) {
       console.log(`📥 תגובה מ-Supabase (לקח ${insertDuration}ms):`, { 
         hasData: !!data, 
         hasError: !!error,
+        dataId: data?.id,
         error: error ? {
           message: error.message,
           code: error.code,
@@ -256,6 +288,11 @@ export async function createTask(task) {
       }
     } catch (insertErr) {
       console.error('💥 Exception במהלך insert:', insertErr);
+      console.error('📋 פרטי Exception:', {
+        message: insertErr.message,
+        stack: insertErr.stack,
+        name: insertErr.name
+      });
       error = insertErr;
     }
     
