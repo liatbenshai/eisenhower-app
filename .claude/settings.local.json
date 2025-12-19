@@ -6,7 +6,8 @@
       "Bash(ls:*)",
       "Bash(npm run dev:*)",
       "Bash(npm install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
