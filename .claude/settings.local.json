@@ -7,7 +7,11 @@
       "Bash(npm run dev:*)",
       "Bash(npm install:*)",
       "Bash(curl:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix: React hooks order violation in TaskTimer - move all hooks before early return\n\nThe app was crashing on refresh because hooks were being called after an\nearly return statement, violating React''s Rules of Hooks.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(grep:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && grep -n \"\"if.*return\\\\|useState\\\\|useEffect\\\\|useMemo\"\" {} | head -15')"
     ]
   }
 }
