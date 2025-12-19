@@ -264,11 +264,19 @@ export function TaskProvider({ children }) {
       
       try {
         // עדכון ב-DB
+        console.log('📤 TaskContext: קורא ל-updateTask עם:', { taskId, time_spent: timeSpentInt });
         const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
         
         if (!updatedTask) {
+          console.error('❌ TaskContext: updateTask החזיר null/undefined');
           throw new Error('המשימה לא עודכנה - אין data מהשרת');
         }
+        
+        console.log('✅ TaskContext: updateTask החזיר:', {
+          id: updatedTask.id,
+          time_spent: updatedTask.time_spent,
+          expected: timeSpentInt
+        });
         
         console.log('✅ משימה עודכנה ב-DB:', updatedTask);
         console.log('📊 time_spent מהשרת:', updatedTask.time_spent);
@@ -334,8 +342,12 @@ export function TaskProvider({ children }) {
       if (updatingTasksRef.current.get(taskId) === updatePromise) {
         console.warn('⚠️ עדכון לוקח יותר מ-30 שניות, מסיר מהרשימה');
         updatingTasksRef.current.delete(taskId);
+        // הודעה למשתמש
+        if (typeof window !== 'undefined' && window.toast) {
+          window.toast?.error('⏱️ העדכון לוקח זמן - בדוק את החיבור לאינטרנט', { duration: 5000 });
+        }
       }
-    }, 30000); // הגדלתי ל-30 שניות
+    }, 30000); // 30 שניות
     
     try {
       // הוספת timeout ל-Promise עצמו - עם retry
@@ -346,6 +358,12 @@ export function TaskProvider({ children }) {
       });
       
       const result = await Promise.race([updatePromise, timeoutPromise]);
+      
+      // אם העדכון הצליח, נבדוק שהנתונים נכונים
+      if (result && result.time_spent !== undefined) {
+        console.log('✅ עדכון הצליח:', result.time_spent);
+      }
+      
       return result;
     } catch (err) {
       console.error('❌ שגיאה ב-updateTaskTime:', err);

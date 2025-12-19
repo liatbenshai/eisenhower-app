@@ -47,6 +47,19 @@ export const supabase = createClient(
       detectSessionInUrl: true,
       storage: getStorage(),
       storageKey: 'eisenhower-auth'
+    },
+    // הגדרות נוספות לשיפור ביצועים
+    db: {
+      schema: 'public'
+    },
+    global: {
+      headers: {
+        'x-client-info': 'eisenhower-app'
+      }
+    },
+    // timeout מוגדל ל-60 שניות
+    realtime: {
+      timeout: 60000
     }
   }
 );
@@ -522,7 +535,16 @@ export async function updateTask(taskId, updates) {
   let data, error;
   
   try {
+    // בדיקת סשן לפני עדכון
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.error('❌ אין סשן פעיל!', sessionError);
+      throw new Error('❌ אין סשן פעיל - אנא התחברי מחדש');
+    }
+    console.log('✅ סשן פעיל:', session.user.id);
+    
     // עדכון בלי SELECT - עם timeout
+    console.log('📤 שולח UPDATE ל-Supabase:', { taskId, updateData });
     const updatePromise = supabase
       .from('tasks')
       .update(updateData)
@@ -536,13 +558,28 @@ export async function updateTask(taskId, updates) {
     });
     
     const updateResult = await Promise.race([updatePromise, timeoutPromise]);
-    const { error: updateError } = updateResult;
+    console.log('📥 תגובה מ-UPDATE:', { 
+      hasData: !!updateResult.data, 
+      hasError: !!updateResult.error,
+      error: updateResult.error 
+    });
+    const { error: updateError, data: updateDataResult } = updateResult;
     
     if (updateError) {
+      console.error('❌ שגיאה ב-UPDATE:', updateError);
       error = updateError;
+      
+      // הודעות שגיאה מפורטות יותר
+      if (updateError.code === '42501') {
+        error = new Error('❌ אין הרשאות לעדכן משימה - בדוק את ה-RLS policies');
+      } else if (updateError.code === 'PGRST301' || updateError.message?.includes('JWT')) {
+        error = new Error('❌ סשן פג - אנא התחברי מחדש');
+      } else if (updateError.message?.includes('foreign key')) {
+        error = new Error('❌ בעיית משתמש - אנא התחברי מחדש');
+      }
     } else {
       // אם העדכון הצליח, נטען את המשימה בנפרד - גם עם timeout
-      console.log('✅ עדכון הצליח, טוען משימה מחדש...');
+      console.log('✅ UPDATE הצליח, טוען משימה מחדש...');
       const selectPromise = supabase
         .from('tasks')
         .select('*')

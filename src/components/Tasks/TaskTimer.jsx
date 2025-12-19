@@ -199,10 +199,16 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     };
   }, [isRunning, startTime, elapsedSeconds]);
 
-  // שמירה אוטומטית כל 5 דקות
+  // שמירה אוטומטית כל 10 דקות (פחות תכופה כדי למנוע timeout)
   useEffect(() => {
-    if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 300 === 0 && saveProgressRef.current) {
-      saveProgressRef.current(false, true);
+    if (isRunning && elapsedSeconds > 0 && elapsedSeconds % 600 === 0 && saveProgressRef.current) {
+      // שמירה אוטומטית רק אם אין שמירה בתהליך
+      if (!savingRef.current) {
+        saveProgressRef.current(false, true).catch(err => {
+          console.warn('⚠️ שמירה אוטומטית נכשלה:', err);
+          // לא מציגים toast לשגיאות שמירה אוטומטית כדי לא להפריע
+        });
+      }
     }
   }, [elapsedSeconds, isRunning]);
 
