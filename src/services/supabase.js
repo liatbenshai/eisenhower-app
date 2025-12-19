@@ -392,11 +392,11 @@ export async function createTask(task) {
         .select()
         .single();
       
-      // Timeout של 15 שניות (הקטנתי)
+      // Timeout של 30 שניות
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('⏱️ Insert לקח יותר מ-15 שניות - timeout. בדוק את החיבור לאינטרנט.'));
-        }, 15000);
+          reject(new Error('⏱️ Insert לקח יותר מ-30 שניות - timeout. בדוק את החיבור לאינטרנט.'));
+        }, 30000);
       });
       
       const result = await Promise.race([insertPromise, timeoutPromise]);
@@ -528,11 +528,11 @@ export async function updateTask(taskId, updates) {
       .update(updateData)
       .eq('id', taskId);
     
-    // Timeout של 15 שניות
+    // Timeout של 30 שניות
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
-        reject(new Error('⏱️ עדכון לקח יותר מ-15 שניות - timeout. בדוק את החיבור לאינטרנט.'));
-      }, 15000);
+        reject(new Error('⏱️ עדכון לקח יותר מ-30 שניות - timeout. בדוק את החיבור לאינטרנט.'));
+      }, 30000);
     });
     
     const updateResult = await Promise.race([updatePromise, timeoutPromise]);
@@ -551,8 +551,8 @@ export async function updateTask(taskId, updates) {
       
       const selectTimeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('⏱️ טעינת משימה לקחה יותר מ-10 שניות - timeout'));
-        }, 10000);
+          reject(new Error('⏱️ טעינת משימה לקחה יותר מ-20 שניות - timeout'));
+        }, 20000);
       });
       
       const selectResult = await Promise.race([selectPromise, selectTimeoutPromise]);

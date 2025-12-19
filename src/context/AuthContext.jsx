@@ -8,6 +8,7 @@ export const AuthContext = createContext(null);
  * ספק אותנטיקציה
  */
 export function AuthProvider({ children }) {
+  console.log('🔐 AuthProvider rendering...');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

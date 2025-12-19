@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
  * ספק התראות
  */
 export function NotificationProvider({ children }) {
+  console.log('🔔 NotificationProvider rendering...');
   const { user } = useAuth();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [permission, setPermission] = useState('default');

@@ -18,6 +18,7 @@ export const TaskContext = createContext(null);
  * ספק משימות
  */
 export function TaskProvider({ children }) {
+  console.log('📋 TaskProvider rendering...');
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -328,22 +329,20 @@ export function TaskProvider({ children }) {
     // שמירת ה-Promise ב-Map
     updatingTasksRef.current.set(taskId, updatePromise);
     
-    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 10 שניות, נסיר אותו
+    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 30 שניות, נסיר אותו
     const stuckTimeout = setTimeout(() => {
       if (updatingTasksRef.current.get(taskId) === updatePromise) {
-        console.error('❌ עדכון תקוע יותר מ-10 שניות, מסיר מהרשימה ומזרוק שגיאה');
+        console.warn('⚠️ עדכון לוקח יותר מ-30 שניות, מסיר מהרשימה');
         updatingTasksRef.current.delete(taskId);
-        // נזרוק שגיאה כדי שה-Promise ייפתר
-        updatePromise.catch(() => {}); // נמנע unhandled rejection
       }
-    }, 10000); // הקטנתי ל-10 שניות
+    }, 30000); // הגדלתי ל-30 שניות
     
     try {
-      // הוספת timeout ל-Promise עצמו
+      // הוספת timeout ל-Promise עצמו - עם retry
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - timeout'));
-        }, 15000); // 15 שניות timeout
+          reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - בדוק את החיבור לאינטרנט'));
+        }, 30000); // 30 שניות timeout
       });
       
       const result = await Promise.race([updatePromise, timeoutPromise]);

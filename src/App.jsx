@@ -19,6 +19,8 @@ import InstallPrompt from './components/PWA/InstallPrompt';
 function App() {
   const { user, loading } = useAuth();
 
+  console.log('🔍 App render:', { user: !!user, loading });
+
   // מסך טעינה
   if (loading) {
     return (
