@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- רקע כחול -->
+  <rect width="512" height="512" fill="#3b82f6" rx="80"/>
+  
+  <!-- מטריצה 2x2 -->
+  <!-- רביע 1 - דחוף וחשוב (אדום) -->
+  <rect x="20" y="20" width="230" height="230" fill="#ef4444" rx="15"/>
+  <text x="135" y="145" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">1</text>
+  
+  <!-- רביע 2 - חשוב לא דחוף (כחול) -->
+  <rect x="262" y="20" width="230" height="230" fill="#3b82f6" rx="15"/>
+  <text x="377" y="145" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">2</text>
+  
+  <!-- רביע 3 - דחוף לא חשוב (צהוב) -->
+  <rect x="20" y="262" width="230" height="230" fill="#f59e0b" rx="15"/>
+  <text x="135" y="387" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">3</text>
+  
+  <!-- רביע 4 - לא דחוף ולא חשוב (אפור) -->
+  <rect x="262" y="262" width="230" height="230" fill="#6b7280" rx="15"/>
+  <text x="377" y="387" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">4</text>
+</svg>
+
