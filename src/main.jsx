@@ -1,5 +1,14 @@
 // מחיקת Service Workers ומטמונים לפני טעינת React - זה קריטי!
 if (typeof window !== 'undefined') {
+  // מניעת רישום Service Workers - override של register
+  if ('serviceWorker' in navigator) {
+    const originalRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = function(...args) {
+      console.warn('🚫 נחסם ניסיון לרישום Service Worker:', args[0]);
+      return Promise.reject(new Error('Service Worker registration is disabled'));
+    };
+  }
+  
   // מחיקה מיידית - לפני כל דבר אחר
   (async () => {
     try {
@@ -13,6 +22,16 @@ if (typeof window !== 'undefined') {
         } else {
           console.log('✅ אין Service Workers לניקוי');
         }
+        
+        // listener למניעת רישום חדש
+        navigator.serviceWorker.addEventListener('controllerchange', async () => {
+          console.warn('⚠️ Service Worker controller changed - מוחק שוב...');
+          const newRegistrations = await navigator.serviceWorker.getRegistrations();
+          if (newRegistrations.length > 0) {
+            await Promise.all(newRegistrations.map(reg => reg.unregister()));
+            console.log('✅ Service Workers נמחקו שוב');
+          }
+        });
       }
       
       // מחיקת כל המטמונים
