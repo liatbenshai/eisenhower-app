@@ -392,13 +392,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     // שמירת ה-Promise
     savingRef.current = savePromise;
     
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-15 שניות, נסיר את הדגל
     savingTimeoutRef.current = setTimeout(() => {
       if (savingRef.current === savePromise) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (15 שניות), מסיר דגל...');
         savingRef.current = null;
       }
-    }, 30000);
+    }, 15000); // הקטנתי ל-15 שניות
     
     try {
       const result = await savePromise;

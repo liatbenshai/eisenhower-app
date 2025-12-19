@@ -328,17 +328,33 @@ export function TaskProvider({ children }) {
     // שמירת ה-Promise ב-Map
     updatingTasksRef.current.set(taskId, updatePromise);
     
-    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 30 שניות, נסיר אותו
+    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 10 שניות, נסיר אותו
     const stuckTimeout = setTimeout(() => {
       if (updatingTasksRef.current.get(taskId) === updatePromise) {
-        console.error('❌ עדכון תקוע יותר מ-30 שניות, מסיר מהרשימה');
+        console.error('❌ עדכון תקוע יותר מ-10 שניות, מסיר מהרשימה ומזרוק שגיאה');
         updatingTasksRef.current.delete(taskId);
+        // נזרוק שגיאה כדי שה-Promise ייפתר
+        updatePromise.catch(() => {}); // נמנע unhandled rejection
       }
-    }, 30000);
+    }, 10000); // הקטנתי ל-10 שניות
     
     try {
-      const result = await updatePromise;
+      // הוספת timeout ל-Promise עצמו
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - timeout'));
+        }, 15000); // 15 שניות timeout
+      });
+      
+      const result = await Promise.race([updatePromise, timeoutPromise]);
       return result;
+    } catch (err) {
+      console.error('❌ שגיאה ב-updateTaskTime:', err);
+      // ניקוי מהרשימה גם בשגיאה
+      if (updatingTasksRef.current.get(taskId) === updatePromise) {
+        updatingTasksRef.current.delete(taskId);
+      }
+      throw err;
     } finally {
       // ניקוי רק אם זה עדיין ה-Promise הנוכחי
       if (updatingTasksRef.current.get(taskId) === updatePromise) {
