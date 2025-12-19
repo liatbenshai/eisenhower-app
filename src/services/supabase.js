@@ -199,6 +199,95 @@ export async function getTasks(userId) {
 /**
  * יצירת משימה חדשה
  */
+/**
+ * וידוא שמשתמש קיים בטבלת users - אם לא, יוצר אותו
+ */
+async function ensureUserExists(userId, email = null) {
+  try {
+    // בדיקה אם המשתמש קיים - עם טיפול בשגיאות RLS
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle(); // משתמש ב-maybeSingle במקום single כדי לא לזרוק שגיאה אם לא נמצא
+    
+    // אם יש שגיאה אבל זה לא "לא נמצא", נזרוק שגיאה
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('❌ שגיאה בבדיקת משתמש:', checkError);
+      // אם זה RLS error, ננסה ליצור את המשתמש בכל זאת
+      if (checkError.code === '42501') {
+        console.warn('⚠️ RLS error - ננסה ליצור משתמש בכל זאת');
+      } else {
+        throw checkError;
+      }
+    }
+    
+    if (existingUser) {
+      console.log('✅ משתמש קיים בטבלת users:', userId);
+      return true;
+    }
+    
+    // אם המשתמש לא קיים, ננסה ליצור אותו
+    console.warn('⚠️ משתמש לא קיים בטבלת users, יוצר אותו...', userId);
+    
+    // קבלת פרטי משתמש מ-auth.users
+    let authUser = null;
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(userId);
+      if (authError) {
+        console.error('❌ שגיאה בקבלת פרטי משתמש:', authError);
+        // אם לא הצלחנו לקבל פרטים, נשתמש ב-email שסופק
+        if (!email) {
+          throw new Error('❌ לא ניתן לקבל פרטי משתמש ואין email');
+        }
+      } else {
+        authUser = user;
+      }
+    } catch (authErr) {
+      console.warn('⚠️ לא הצלחתי לקבל פרטי משתמש מ-auth, ממשיך עם email שסופק:', authErr);
+    }
+    
+    // יצירת משתמש בטבלת users
+    const userData = {
+      id: userId,
+      email: email || authUser?.email || '',
+      full_name: authUser?.user_metadata?.full_name || authUser?.user_metadata?.full_name || '',
+      role: 'user',
+      is_active: true
+    };
+    
+    console.log('📤 יוצר משתמש בטבלת users:', userData);
+    
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert([userData]);
+    
+    if (insertError) {
+      console.error('❌ שגיאה ביצירת משתמש:', insertError);
+      
+      // אם זה foreign key error, זה אומר שהמשתמש לא קיים ב-auth.users
+      if (insertError.code === '23503' || insertError.message?.includes('foreign key')) {
+        throw new Error('❌ המשתמש לא קיים במערכת האימות. אנא התחברי מחדש.');
+      }
+      
+      // אם זה unique constraint error, המשתמש כבר קיים (race condition)
+      if (insertError.code === '23505' || insertError.message?.includes('unique')) {
+        console.log('✅ משתמש כבר קיים (race condition)');
+        return true;
+      }
+      
+      // שגיאות אחרות
+      throw insertError;
+    }
+    
+    console.log('✅ משתמש נוצר בהצלחה בטבלת users:', userId);
+    return true;
+  } catch (err) {
+    console.error('❌ שגיאה ב-ensureUserExists:', err);
+    throw err;
+  }
+}
+
 export async function createTask(task) {
   console.log('🔵 createTask נקרא עם:', task);
   
@@ -219,6 +308,14 @@ export async function createTask(task) {
       console.error(error);
       throw error;
     }
+  }
+  
+  // וידוא שהמשתמש קיים בטבלת users לפני יצירת משימה
+  try {
+    await ensureUserExists(task.user_id, task.user_email);
+  } catch (err) {
+    console.error('❌ שגיאה ב-ensureUserExists:', err);
+    throw new Error('❌ לא ניתן ליצור משימה - המשתמש לא קיים במערכת. אנא התחברי מחדש.');
   }
   
   // וידוא שיש כותרת
