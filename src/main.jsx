@@ -9,11 +9,28 @@ import './styles/globals.css';
 
 // בדיקה שהסשן נשמר ב-localStorage לפני טעינת האפליקציה
 if (typeof window !== 'undefined') {
-  const supabaseSession = localStorage.getItem('sb-' + (import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] || 'default') + '-auth-token');
-  if (supabaseSession) {
-    console.log('✅ נמצא סשן שמור ב-localStorage');
+  // בדיקה עם המפתח החדש
+  const newKey = 'eisenhower-auth';
+  const oldKeyPattern = 'sb-';
+  
+  // בדיקת מפתח חדש
+  const newSession = localStorage.getItem(newKey);
+  if (newSession) {
+    console.log('✅ נמצא סשן שמור ב-localStorage (מפתח חדש)');
   } else {
-    console.log('ℹ️ אין סשן שמור ב-localStorage');
+    // בדיקת מפתחות ישנים
+    let foundOldKey = false;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(oldKeyPattern)) {
+        foundOldKey = true;
+        console.log('✅ נמצא סשן שמור ב-localStorage (מפתח ישן):', key);
+        break;
+      }
+    }
+    if (!foundOldKey) {
+      console.log('ℹ️ אין סשן שמור ב-localStorage');
+    }
   }
 }
 

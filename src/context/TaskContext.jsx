@@ -35,16 +35,20 @@ export function TaskProvider({ children }) {
   const loadTasks = useCallback(async () => {
     // אם האותנטיקציה עדיין נטענת, נחכה
     if (authLoading) {
+      console.log('⏳ ממתין לאימות משתמש...');
       return;
     }
 
-    // אם אין משתמש, ננקה את המשימות
+    // אם אין משתמש אחרי שהאותנטיקציה נטענה, ננקה את המשימות
     if (!user?.id) {
+      console.log('ℹ️ אין משתמש מחובר - מנקה משימות');
       setTasks([]);
       setLoading(false);
       setError(null);
       return;
     }
+    
+    console.log('📥 טוען משימות עבור משתמש:', user.id);
 
     setLoading(true);
     setError(null);

@@ -31,7 +31,9 @@ export function AuthProvider({ children }) {
       try {
         // קבלת סשן קיים
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
+        console.log('🔐 initializeAuth:', { hasSession: !!session, error: sessionError });
+
         if (sessionError) {
           console.error('שגיאה בקבלת סשן:', sessionError);
           if (mounted) {
@@ -42,19 +44,57 @@ export function AuthProvider({ children }) {
         }
 
         if (session?.user) {
-          try {
-            const currentUser = await getCurrentUser();
-            if (mounted) {
-            updateUser(currentUser);
+          console.log('✅ נמצא משתמש בסשן:', {
+            email: session.user.email,
+            id: session.user.id,
+            expiresAt: session.expires_at
+          });
+          
+          // בדיקה אם הסשן עדיין תקף
+          if (session.expires_at) {
+            const expiresAt = new Date(session.expires_at * 1000);
+            const now = new Date();
+            if (expiresAt < now) {
+              console.warn('⚠️ סשן פג תוקף! מנסה לרענן...');
+              // ננסה לרענן את הטוקן
+              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+              if (refreshError || !refreshData?.session) {
+                console.error('❌ לא הצלחתי לרענן סשן:', refreshError);
+                if (mounted) {
+                  updateUser(null);
+                  setLoading(false);
+                }
+                return;
+              }
+              // עדכון עם הסשן המחודש
+              if (mounted) {
+                updateUser({ ...refreshData.session.user, profile: null });
+              }
+            } else {
+              // סשן תקף - השתמש ישירות במשתמש מהסשן
+              if (mounted) {
+                updateUser({ ...session.user, profile: null });
+              }
             }
-          } catch (err) {
-            console.error('שגיאה בטעינת פרטי משתמש:', err);
-            // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
+          } else {
+            // אין תאריך תפוגה - נשתמש במשתמש מהסשן
             if (mounted) {
-              updateUser(session.user);
+              updateUser({ ...session.user, profile: null });
             }
           }
+          
+          // נסה לטעון פרופיל ברקע (לא חוסם)
+          getCurrentUser().then(fullUser => {
+            if (mounted && fullUser) {
+              console.log('✅ פרופיל נטען:', fullUser.email);
+              updateUser(fullUser);
+            }
+          }).catch(err => {
+            console.warn('⚠️ לא הצלחתי לטעון פרופיל (לא קריטי):', err);
+            // זה לא קריטי - נמשיך עם המשתמש מהסשן
+          });
         } else {
+          console.log('❌ אין סשן - המשתמש לא מחובר');
           if (mounted) {
             updateUser(null);
           }
@@ -171,7 +211,6 @@ export function AuthProvider({ children }) {
             } else if (mounted) {
               updateUser(null);
             }
-            return;
             return;
           }
           

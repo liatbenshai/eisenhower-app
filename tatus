@@ -1,0 +1,18 @@
+[33m4139ba0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m תיקון: שינוי updateTask לעדכון נפרד וטעינה נפרדת - למניעת בעיות עם SELECT אחרי UPDATE
+[33mcc25354[m תיקון קריטי: מניעת תקיעות ב-updateTaskTime - הוספת timeout אוטומטי למניעת תקיעות, הסרת דגל אם עדכון תקוע יותר מ-1 שנייה
+[33mc0f5932[m תיקון: הסרת Promise.race עם timeout שגורם לשגיאות, הוספת timeout רק לדיווח, הוספת מדידת זמן לעדכונים
+[33m60c5170[m תיקון: מניעת תקיעות אחרי כמה דקות - הוספת בדיקת סשן תקופתית, טיפול ב-visibility change, שימוש ב-useRef למניעת stale closures
+[33mf06ab5e[m הוספת לוגים מפורטים ל-createTask - לזיהוי בעיות ביצירת משימות
+[33m45afc61[m תיקון: שיפור טיפול בשמירת התקדמות - הארכת timeout ל-30 שניות, שיפור retry logic, הוספת לוגים מפורטים לניפוי בעיות
+[33m7c2389e[m תיקון קריטי: פתרון infinite recursion ב-RLS policies - יצירת פונקציה is_admin() עם SECURITY DEFINER, החלפת כל ה-policies שמשתמשים ב-SELECT מ-users
+[33me03a0df[m תיקון מקיף של migrations: שינוי מספור 007_fix_policies ל-010, תיקון min_time ל-NULL, הוספת SECURITY DEFINER לפונקציות, הוספת policy למחיקת notification_settings, יצירת אינדקסים משולבים
+[33m194dec3[m תיקון: פתרון בעיית already_saving - הוספת timeout אוטומטי וטיפול טוב יותר בשמירות כפולות
+[33mfee789e[m הוספת קובץ בדיקה: וידוא ש-time_spent עובד נכון - בודק שהטבלה, השדה, ה-policy וה-RLS תקינים
+[33m504164b[m תיקון migration: הוספת בדיקה שהטבלה tasks קיימת לפני עדכון
+[33mde772cb[m תיקון Supabase: וידוא ש-time_spent מתעדכן נכון - יצירת migration חדש שמתקן את ה-RLS policy לעדכון משימות, וידוא שהשדה והאינדקס קיימים
+[33m7e32a72[m תיקון קריטי: מניעת race conditions ושמירת התקדמות - הוספת מניעת עדכונים כפולים, שיפור עדכון state אחרי שמירה ב-DB, שיפור TaskTimer עם useMemo, בדיקת time_spent נשמר נכון
+[33mcaa2a21[m תיקון קריטי: שמירת התקדמות משימות - שימוש במשימה עדכנית מה-TaskContext ב-TaskTimer ו-TaskCard, שיפור TaskForm עם לוגים מפורטים וסגירה בטוחה
+[33m608a5a2[m תיקון מקיף: פתרון בעיות התנתקות, רענון דף ושמירת מידע - שיפור AuthContext לטיפול נכון ב-INITIAL_SESSION ו-SIGNED_OUT, שיפור TaskContext עם optimistic update, הסרת StrictMode, שיפור טיפול בשגיאות
+[33m07933cd[m תיקון קריטי: שמירת התקדמות משימות - הוספת updateTaskTime ב-TaskContext לעדכון מיידי של state ו-DB, שיפור TaskTimer להשתמש ב-TaskContext במקום קריאה ישירה, וידוא time_spent נשמר כמספר
+[33mc539ddf[m תיקון קריטי: הסרת VitePWA plugin וניקוי אגרסיבי של Service Workers - פותר בעיות רענון דף ונתקעות
+[33mcf376c0[m תיקון: שיפור טעינת משתמש ומשימות אחרי רענון דף - תיקון AuthContext להשתמש ב-getSession, שיפור TaskContext לחכות לטעינת אותנטיקציה, שיפור getCurrentUser לטיפול בשגיאות

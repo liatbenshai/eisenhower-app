@@ -216,7 +216,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     
     // יצירת Promise חדש לשמירה
     const savePromise = (async () => {
-      const minutesToAdd = Math.floor(elapsedSeconds / 60);
+      const minutesToAdd = Math.floor(elapsedSeconds / 30); // TEST: 30 sec instead of 60
       if (minutesToAdd > 0 && currentTask && currentTask.id) {
         // שימוש במשימה העדכנית מה-TaskContext - טעינה מחדש מה-context
         const latestTask = tasks.find(t => t.id === currentTask.id) || currentTask;

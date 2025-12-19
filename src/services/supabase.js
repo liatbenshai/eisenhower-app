@@ -20,10 +20,23 @@ export const supabase = createClient(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      storageKey: 'eisenhower-auth'
     }
   }
 );
+
+// Debug: check session on load
+if (typeof window !== 'undefined') {
+  supabase.auth.getSession().then(({ data, error }) => {
+    console.log('🔑 Session on load:', {
+      hasSession: !!data?.session,
+      email: data?.session?.user?.email,
+      error: error?.message
+    });
+  });
+}
 
 // === פונקציות אותנטיקציה ===
 
