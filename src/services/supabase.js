@@ -13,6 +13,30 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'YOUR_SUPABASE_URL' || s
 }
 
 // יצירת לקוח Supabase (אפילו עם ערכים ריקים כדי למנוע קריסה)
+// טיפול מיוחד בנייד - בדיקה אם localStorage זמין
+const getStorage = () => {
+  if (typeof window === 'undefined') return undefined;
+  
+  try {
+    // בדיקה אם localStorage זמין (iOS Safari לפעמים חוסם)
+    const test = '__localStorage_test__';
+    localStorage.setItem(test, '1');
+    localStorage.removeItem(test);
+    return window.localStorage;
+  } catch (e) {
+    console.warn('⚠️ localStorage לא זמין, משתמש ב-memory storage:', e);
+    // Fallback ל-memory storage אם localStorage לא זמין
+    const memoryStorage = {
+      getItem: (key) => memoryStorage._data[key] || null,
+      setItem: (key, value) => { memoryStorage._data[key] = value; },
+      removeItem: (key) => { delete memoryStorage._data[key]; },
+      clear: () => { memoryStorage._data = {}; },
+      _data: {}
+    };
+    return memoryStorage;
+  }
+};
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -21,7 +45,7 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      storage: getStorage(),
       storageKey: 'eisenhower-auth'
     }
   }

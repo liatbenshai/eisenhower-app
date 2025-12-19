@@ -12,6 +12,22 @@
   body {
     @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     @apply transition-colors duration-300;
+    /* שיפורים לנייד */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  
+  /* אפשר בחירת טקסט בשדות קלט */
+  input, textarea, [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
   }
 
   /* כותרות */
