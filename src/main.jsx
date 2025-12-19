@@ -1,3 +1,4 @@
+console.log('⚡ main.jsx loading...');
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -34,6 +35,8 @@ if (typeof window !== 'undefined') {
   }
 }
 
+console.log('🚀 Starting app render...');
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <AuthProvider>
@@ -45,6 +48,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </AuthProvider>
   </BrowserRouter>
 );
+
+console.log('🚀 Render called');
 
 // מחיקת כל ה-Service Workers - מונע בעיות רענון
 // PWA עדיין תעבוד בלי Service Worker (רק בלי offline support)
