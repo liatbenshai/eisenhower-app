@@ -100,10 +100,34 @@ if (typeof window !== 'undefined') {
       }
       
       console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
+      
+      // בדיקה נוספת אחרי 2 שניות - למקרה ש-Service Worker נרשם מאוחר יותר
+      setTimeout(async () => {
+        if ('serviceWorker' in navigator) {
+          const lateRegistrations = await navigator.serviceWorker.getRegistrations();
+          if (lateRegistrations.length > 0) {
+            console.warn('⚠️ נמצא Service Worker שנרשם מאוחר - מוחק...');
+            await Promise.all(lateRegistrations.map(reg => reg.unregister()));
+            console.log('✅ Service Workers מאוחרים נמחקו');
+          }
+        }
+      }, 2000);
     } catch (error) {
       console.warn('⚠️ שגיאה במחיקת Service Workers:', error);
     }
   })();
+  
+  // מניעת תקיעות - אם הדף לא נטען תוך 10 שניות, נציג הודעה
+  setTimeout(() => {
+    if (document.readyState !== 'complete') {
+      console.warn('⚠️ הדף לוקח יותר מדי זמן לטעון - ייתכן שיש Service Worker חוסם');
+      // נציג הודעה למשתמש
+      const warning = document.createElement('div');
+      warning.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;text-align:center;z-index:99999;';
+      warning.textContent = '⚠️ הדף נתקע! אנא מחקי Service Workers: F12 → Application → Service Workers → Unregister';
+      document.body.appendChild(warning);
+    }
+  }, 10000);
 }
 
 console.log('⚡ main.jsx loading...');
