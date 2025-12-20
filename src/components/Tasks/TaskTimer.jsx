@@ -358,17 +358,34 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         });
         
         // עדכון המשימה דרך TaskContext - זה יעדכן גם את ה-DB וגם את ה-state
+        console.log('📤 שולח עדכון ל-Supabase:', {
+          taskId: latestTask.id,
+          currentTimeSpent,
+          minutesToAdd,
+          newTimeSpent
+        });
+        
         const updatedTask = await updateTaskTime(latestTask.id, newTimeSpent);
         
         if (!updatedTask) {
+          console.error('❌ updateTaskTime החזיר null/undefined');
           throw new Error('המשימה לא עודכנה - אין data');
         }
         
-        console.log('✅ משימה עודכנה:', {
+        console.log('✅ משימה עודכנה ב-Supabase:', {
           id: updatedTask.id,
-          time_spent: updatedTask.time_spent,
-          expected: newTimeSpent
+          time_spent_from_server: updatedTask.time_spent,
+          expected: newTimeSpent,
+          match: updatedTask.time_spent === newTimeSpent
         });
+        
+        // וידוא שהשמירה הצליחה
+        if (parseInt(updatedTask.time_spent) !== newTimeSpent) {
+          console.warn('⚠️ time_spent לא תואם!', {
+            expected: newTimeSpent,
+            actual: updatedTask.time_spent
+          });
+        }
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
         if (latestTask.subtask_id) {
