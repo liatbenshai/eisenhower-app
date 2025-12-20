@@ -54,7 +54,15 @@ export function TaskProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await getTasks(user.id);
+      // timeout למניעת תקיעות
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('טעינת משימות לקחה יותר מדי זמן')), 15000);
+      });
+      
+      const data = await Promise.race([
+        getTasks(user.id),
+        timeoutPromise
+      ]);
       // וידוא שכל המשימות יש להן את השדות הנדרשים
       const safeData = (data || []).map(task => ({
         ...task,

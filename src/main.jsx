@@ -2,47 +2,100 @@
 if (typeof window !== 'undefined') {
   // מניעת רישום Service Workers - override של register
   if ('serviceWorker' in navigator) {
-    const originalRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    // שמירת הפונקציה המקורית (אם יש)
+    const originalRegister = navigator.serviceWorker.register;
+    
+    // override מלא - מחזיר Promise שנדחה תמיד
     navigator.serviceWorker.register = function(...args) {
       console.warn('🚫 נחסם ניסיון לרישום Service Worker:', args[0]);
-      return Promise.reject(new Error('Service Worker registration is disabled'));
+      // מחזיר Promise שנדחה מיד
+      return Promise.reject(new Error('Service Worker registration is disabled for refresh compatibility'));
     };
+    
+    // גם override של ready - מחזיר Promise שנדחה
+    if (navigator.serviceWorker.ready) {
+      const originalReady = navigator.serviceWorker.ready;
+      Object.defineProperty(navigator.serviceWorker, 'ready', {
+        get: function() {
+          console.warn('🚫 נחסם גישה ל-serviceWorker.ready');
+          return Promise.reject(new Error('Service Worker is disabled'));
+        },
+        configurable: true
+      });
+    }
   }
   
   // מחיקה מיידית - לפני כל דבר אחר
   (async () => {
     try {
       if ('serviceWorker' in navigator) {
-        // מחיקת כל ה-Service Workers
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        if (registrations.length > 0) {
-          console.log('🗑️ מוחק', registrations.length, 'Service Workers...');
-          await Promise.all(registrations.map(reg => reg.unregister()));
-          console.log('✅ כל ה-Service Workers נמחקו');
-        } else {
-          console.log('✅ אין Service Workers לניקוי');
+        // מחיקת כל ה-Service Workers - עם retry
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          try {
+            const registrations = await Promise.race([
+              navigator.serviceWorker.getRegistrations(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+            ]);
+            
+            if (registrations.length > 0) {
+              console.log(`🗑️ מוחק ${registrations.length} Service Workers (ניסיון ${attempts})...`);
+              await Promise.all(registrations.map(reg => reg.unregister()));
+              console.log('✅ כל ה-Service Workers נמחקו');
+              break;
+            } else {
+              console.log('✅ אין Service Workers לניקוי');
+              break;
+            }
+          } catch (err) {
+            console.warn(`⚠️ שגיאה בניסיון ${attempts}:`, err);
+            if (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
         }
         
-        // listener למניעת רישום חדש
+        // listener למניעת רישום חדש - עם debounce
+        let controllerChangeTimeout = null;
         navigator.serviceWorker.addEventListener('controllerchange', async () => {
-          console.warn('⚠️ Service Worker controller changed - מוחק שוב...');
-          const newRegistrations = await navigator.serviceWorker.getRegistrations();
-          if (newRegistrations.length > 0) {
-            await Promise.all(newRegistrations.map(reg => reg.unregister()));
-            console.log('✅ Service Workers נמחקו שוב');
+          if (controllerChangeTimeout) {
+            clearTimeout(controllerChangeTimeout);
           }
+          controllerChangeTimeout = setTimeout(async () => {
+            console.warn('⚠️ Service Worker controller changed - מוחק שוב...');
+            try {
+              const newRegistrations = await navigator.serviceWorker.getRegistrations();
+              if (newRegistrations.length > 0) {
+                await Promise.all(newRegistrations.map(reg => reg.unregister()));
+                console.log('✅ Service Workers נמחקו שוב');
+              }
+            } catch (err) {
+              console.warn('⚠️ שגיאה במחיקת Service Workers:', err);
+            }
+          }, 100);
         });
       }
       
       // מחיקת כל המטמונים
       if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        if (cacheNames.length > 0) {
-          console.log('🗑️ מוחק', cacheNames.length, 'מטמונים...');
-          await Promise.all(cacheNames.map(name => caches.delete(name)));
-          console.log('✅ כל המטמונים נמחקו');
-        } else {
-          console.log('✅ אין מטמונים לניקוי');
+        try {
+          const cacheNames = await Promise.race([
+            caches.keys(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+          ]);
+          
+          if (cacheNames.length > 0) {
+            console.log('🗑️ מוחק', cacheNames.length, 'מטמונים...');
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+            console.log('✅ כל המטמונים נמחקו');
+          } else {
+            console.log('✅ אין מטמונים לניקוי');
+          }
+        } catch (err) {
+          console.warn('⚠️ שגיאה במחיקת מטמונים:', err);
         }
       }
       
