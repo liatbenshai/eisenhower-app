@@ -2,9 +2,16 @@
 -- תיקון Triggers - לא ינסו לגשת ל-time_spent אם הוא לא קיים
 -- ==============================================
 
--- ביטול ה-triggers הישנים
+-- ביטול כל ה-triggers הישנים שמנסים לגשת ל-time_spent
+DROP TRIGGER IF EXISTS update_task_type_stats_trigger ON public.tasks;
+DROP TRIGGER IF EXISTS auto_update_correction_trigger ON public.tasks;
 DROP TRIGGER IF EXISTS update_task_learning_stats ON public.tasks;
 DROP TRIGGER IF EXISTS auto_update_correction_multiplier ON public.tasks;
+DROP TRIGGER IF EXISTS update_task_learning_stats_safe ON public.tasks;
+
+-- ביטול הפונקציות הישנות שמנסות לגשת ל-time_spent
+DROP FUNCTION IF EXISTS public.update_task_type_stats() CASCADE;
+DROP FUNCTION IF EXISTS public.auto_update_correction_multiplier() CASCADE;
 
 -- יצירת trigger חדש לעדכון סטטיסטיקות - בלי time_spent
 CREATE OR REPLACE FUNCTION public.update_task_learning_stats_safe()
