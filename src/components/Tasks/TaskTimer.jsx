@@ -332,19 +332,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
 
   const saveProgress = async (reset = false, skipUpdate = false) => {
     // מניעת שמירות כפולות - נשתמש ב-Promise במקום דגל בוליאני
-    if (savingRef.current) {
-      console.log('⏳ שמירה כבר בתהליך, ממתין לעדכון קודם...');
-      try {
-        // נמתין לשמירה הקודמת להסתיים
-        await savingRef.current;
-        console.log('✅ שמירה קודמת הסתיימה, ממשיך...');
-      } catch (err) {
-        console.warn('⚠️ שמירה קודמת נכשלה, ממשיך עם שמירה חדשה:', err);
-        // אם השמירה הקודמת נכשלה, נמשיך עם שמירה חדשה
-      }
-    }
-    
-    // יצירת Promise חדש לשמירה
+    // שמירה פשוטה - בלי race conditions
     const savePromise = (async () => {
       // חישוב זמן מדויק לפי startTime אם קיים
       let actualElapsedSeconds = elapsedSeconds;
@@ -385,27 +373,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           newTimeSpent
         });
         
-        const updatedTask = await updateTaskTime(latestTask.id, newTimeSpent);
-        
-        if (!updatedTask) {
-          console.error('❌ updateTaskTime החזיר null/undefined');
-          throw new Error('המשימה לא עודכנה - אין data');
-        }
-        
-        console.log('✅ משימה עודכנה ב-Supabase:', {
-          id: updatedTask.id,
-          time_spent_from_server: updatedTask.time_spent,
-          expected: newTimeSpent,
-          match: updatedTask.time_spent === newTimeSpent
-        });
-        
-        // וידוא שהשמירה הצליחה
-        if (parseInt(updatedTask.time_spent) !== newTimeSpent) {
-          console.warn('⚠️ time_spent לא תואם!', {
-            expected: newTimeSpent,
-            actual: updatedTask.time_spent
-          });
-        }
+        // עדכון פשוט - רק state, לא DB
+        await updateTaskTime(latestTask.id, newTimeSpent);
         
         // אם יש subtask_id, עדכן גם את ה-subtask table
         if (latestTask.subtask_id) {
@@ -416,13 +385,12 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           setElapsedSeconds(0);
         }
         
-        // עדכון TaskContext כבר קרה ב-updateTaskTime, אבל אם יש onUpdate callback, נקרא לו
+        // אם יש onUpdate callback, נקרא לו
         if (onUpdate && !skipUpdate) {
-          console.log('🔄 קורא ל-onUpdate');
           await onUpdate();
         }
         
-        return { success: true, minutesToAdd, newTimeSpent, updatedTask };
+        return { success: true, minutesToAdd, newTimeSpent };
       } else if (minutesToAdd === 0) {
         toast('עבדת פחות מדקה - לא נשמר', { icon: '⏱️' });
         return { success: false, reason: 'less_than_minute' };
@@ -430,52 +398,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       return { success: false, reason: 'no_time_to_save' };
     })();
     
-    // שמירת ה-Promise
-    savingRef.current = savePromise;
-    
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-60 שניות, נסיר את הדגל
-    savingTimeoutRef.current = setTimeout(() => {
-      if (savingRef.current === savePromise) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (60 שניות), מסיר דגל...');
-        savingRef.current = null;
-      }
-    }, 60000); // 60 שניות
-    
-    try {
-      // הוספת timeout ל-Promise עצמו
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('⏱️ שמירה לוקחת יותר מדי זמן - בדוק את החיבור לאינטרנט'));
-        }, 65000); // 65 שניות timeout (הוגדל מ-35)
-      });
-      
-      const result = await Promise.race([savePromise, timeoutPromise]);
-      return result;
-    } catch (err) {
-      console.error('❌ שגיאה בשמירת התקדמות:', err);
-      
-      // הודעת שגיאה ידידותית יותר
-      let errorMessage = err.message || 'שגיאה בשמירת התקדמות';
-      if (err.message?.includes('JWT') || err.message?.includes('session')) {
-        errorMessage = '❌ סשן פג. אנא רענני את הדף והתחברי מחדש.';
-      } else if (err.message?.includes('42501') || err.message?.includes('permission')) {
-        errorMessage = '❌ אין הרשאות לשמירה. אנא התחברי מחדש.';
-      } else if (err.message?.includes('user_id') || err.message?.includes('משתמש')) {
-        errorMessage = '❌ בעיית התחברות. אנא רענני את הדף והתחברי מחדש.';
-      }
-      
-      toast.error(errorMessage, { duration: 5000 });
-      return { success: false, error: err };
-    } finally {
-      // ניקוי רק אם זה עדיין ה-Promise הנוכחי
-      if (savingRef.current === savePromise) {
-        savingRef.current = null;
-      }
-      if (savingTimeoutRef.current) {
-        clearTimeout(savingTimeoutRef.current);
-        savingTimeoutRef.current = null;
-      }
-    }
+    // הרצה פשוטה - בלי timeouts
+    return await savePromise;
   };
 
   // שמירת הפונקציה ב-ref כדי שה-useEffect יוכל לקרוא לה
