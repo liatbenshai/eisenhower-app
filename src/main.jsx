@@ -110,24 +110,35 @@ if (typeof window !== 'undefined') {
     };
   }
   
-  // הוספת version ל-URL כדי למנוע cache ישן - חזק יותר
+  // הוספת version ל-URL כדי למנוע cache ישן - אבל לא לבקשות Supabase
   const originalFetch = window.fetch;
   window.fetch = function(...args) {
     const url = args[0];
     if (typeof url === 'string') {
-      // הוספת timestamp לכל בקשה
-      const separator = url.includes('?') ? '&' : '?';
-      args[0] = url + separator + '_v=' + Date.now() + '&_r=' + Math.random();
+      // לא נוסיף query parameters לבקשות Supabase או API אחרות
+      const isSupabaseRequest = url.includes('supabase.co') || url.includes('/rest/v1/') || url.includes('/auth/v1/');
+      const isApiRequest = url.startsWith('http') && (url.includes('/api/') || url.includes('/rest/') || url.includes('/auth/'));
+      
+      if (!isSupabaseRequest && !isApiRequest) {
+        // הוספת timestamp רק לבקשות מקומיות
+        const separator = url.includes('?') ? '&' : '?';
+        args[0] = url + separator + '_v=' + Date.now() + '&_r=' + Math.random();
+      }
     }
     return originalFetch.apply(this, args);
   };
   
-  // מניעת cache גם ב-XMLHttpRequest
+  // מניעת cache גם ב-XMLHttpRequest - אבל לא לבקשות Supabase
   const originalXHROpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     if (typeof url === 'string') {
-      const separator = url.includes('?') ? '&' : '?';
-      url = url + separator + '_v=' + Date.now();
+      const isSupabaseRequest = url.includes('supabase.co') || url.includes('/rest/v1/') || url.includes('/auth/v1/');
+      const isApiRequest = url.startsWith('http') && (url.includes('/api/') || url.includes('/rest/') || url.includes('/auth/'));
+      
+      if (!isSupabaseRequest && !isApiRequest) {
+        const separator = url.includes('?') ? '&' : '?';
+        url = url + separator + '_v=' + Date.now();
+      }
     }
     return originalXHROpen.call(this, method, url, ...rest);
   };
