@@ -351,7 +351,7 @@ export async function createTask(task) {
     task_type: task.task_type || 'other', // תמיד יש ערך
     is_project: task.is_project || false,
     parent_task_id: task.parent_task_id || null,
-    time_spent: task.time_spent || 0,
+    // לא נוסיף time_spent - העמודה לא קיימת בטבלה
     is_completed: task.is_completed || false
   };
   
@@ -709,7 +709,7 @@ export async function createProjectTask(projectData) {
     is_project: true,
     parent_task_id: null,
     estimated_duration: taskData.totalDuration ? parseInt(taskData.totalDuration) : null,
-    time_spent: 0,
+    // לא נוסיף time_spent - העמודה לא קיימת בטבלה
     is_completed: false
   };
   
@@ -783,7 +783,7 @@ export async function createProjectTask(projectData) {
         is_project: false,
         parent_task_id: projectTask.id,
         estimated_duration: st.estimatedDuration ? parseInt(st.estimatedDuration) : null,
-        time_spent: 0,
+        // לא נוסיף time_spent - העמודה לא קיימת בטבלה
         is_completed: false
       };
       
@@ -813,7 +813,7 @@ export async function createProjectTask(projectData) {
           due_date: st.dueDate || null,
           due_time: st.dueTime || null,
           estimated_duration: st.estimatedDuration || null,
-          time_spent: 0,
+          // לא נוסיף time_spent - העמודה לא קיימת בטבלה
           is_completed: false
         }]);
       
