@@ -34,9 +34,17 @@ export function TaskProvider({ children }) {
 
   // מניעת טעינות כפולות
   const loadingRef = useRef(false);
+  const lastLoadTimeRef = useRef(0);
+  const MIN_LOAD_INTERVAL = 3000; // מינימום 3 שניות בין טעינות
   
   // טעינת משימות
   const loadTasks = useCallback(async () => {
+    // מניעת טעינות תכופות מדי
+    const now = Date.now();
+    if (now - lastLoadTimeRef.current < MIN_LOAD_INTERVAL) {
+      console.log('⏳ טעינה אחרונה הייתה לפני פחות מ-3 שניות, מדלג...');
+      return;
+    }
     // אם האותנטיקציה עדיין נטענת, נחכה
     if (authLoading) {
       console.log('⏳ ממתין לאימות משתמש...');
@@ -110,6 +118,7 @@ export function TaskProvider({ children }) {
           estimated_duration: task.estimated_duration || null
         }));
         setTasks(safeData);
+        lastLoadTimeRef.current = Date.now();
         console.log(`✅ טעינת משימות הצליחה - ${safeData.length} משימות`);
       } else {
         // אם כל הניסיונות נכשלו
@@ -131,31 +140,42 @@ export function TaskProvider({ children }) {
   }, [user?.id, authLoading]);
 
   // טעינה ראשונית - רק אחרי שהאותנטיקציה נטענה
+  // חשוב: לא נכלול את loadTasks ב-dependencies כדי למנוע לולאה אינסופית
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && user?.id && !loadingRef.current) {
       loadTasks();
     }
-  }, [loadTasks, authLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]); // רק user?.id ו-authLoading - לא loadTasks!
   
   // טעינה מחדש כשהדף חוזר להיות פעיל (אחרי רענון) - רק אם לא טוען כבר
+  // חשוב: הסרנו את loadTasks מה-dependencies כדי למנוע לולאה אינסופית
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && user?.id) {
       let visibilityTimeout = null;
       let focusTimeout = null;
+      let lastLoadTime = 0;
+      const MIN_LOAD_INTERVAL = 5000; // מינימום 5 שניות בין טעינות
       
       const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && !authLoading && user?.id && !loadingRef.current) {
+        const now = Date.now();
+        if (document.visibilityState === 'visible' && 
+            !authLoading && 
+            user?.id && 
+            !loadingRef.current &&
+            (now - lastLoadTime) > MIN_LOAD_INTERVAL) {
           console.log('👁️ דף חזר להיות פעיל - טוען משימות מחדש...');
           // ביטול timeout קודם אם יש
           if (visibilityTimeout) {
             clearTimeout(visibilityTimeout);
           }
-          // טעינה מחדש אחרי 1 שנייה כדי לוודא שהכל מוכן
+          // טעינה מחדש אחרי 2 שניות כדי לוודא שהכל מוכן
           visibilityTimeout = setTimeout(() => {
-            if (!loadingRef.current) {
+            if (!loadingRef.current && (Date.now() - lastLoadTime) > MIN_LOAD_INTERVAL) {
+              lastLoadTime = Date.now();
               loadTasks();
             }
-          }, 1000);
+          }, 2000);
         }
       };
       
@@ -163,17 +183,22 @@ export function TaskProvider({ children }) {
       
       // טעינה מחדש גם כשהחלון מקבל focus - רק אם לא טוען כבר
       const handleFocus = () => {
-        if (!authLoading && user?.id && !loadingRef.current) {
+        const now = Date.now();
+        if (!authLoading && 
+            user?.id && 
+            !loadingRef.current &&
+            (now - lastLoadTime) > MIN_LOAD_INTERVAL) {
           console.log('🎯 חלון קיבל focus - טוען משימות מחדש...');
           // ביטול timeout קודם אם יש
           if (focusTimeout) {
             clearTimeout(focusTimeout);
           }
           focusTimeout = setTimeout(() => {
-            if (!loadingRef.current) {
+            if (!loadingRef.current && (Date.now() - lastLoadTime) > MIN_LOAD_INTERVAL) {
+              lastLoadTime = Date.now();
               loadTasks();
             }
-          }, 1000);
+          }, 2000);
         }
       };
       
@@ -186,7 +211,8 @@ export function TaskProvider({ children }) {
         if (focusTimeout) clearTimeout(focusTimeout);
       };
     }
-  }, [loadTasks, authLoading, user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]); // רק user?.id ו-authLoading - לא loadTasks!
 
   // הוספת משימה
   // חשוב: אין הגבלה על הוספת משימות - ניתן להוסיף משימות חדשות תמיד,
