@@ -520,31 +520,13 @@ export async function updateTask(taskId, updates) {
     updateData.time_spent = parseInt(updates.time_spent) || 0;
   }
   
-  // הסרת time_spent מ-updateData אם הוא לא קיים בטבלה
-  // (אם יש שגיאה, נסיר אותו וננסה שוב)
-  let finalUpdateData = { ...updateData };
-  let selectFields = 'id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id';
-  
-  // ננסה עדכון רגיל
-  let { data, error } = await supabase
+  // עדכון פשוט עם SELECT - כולל time_spent (אחרי migration 012 העמודה קיימת)
+  const { data, error } = await supabase
     .from('tasks')
-    .update(finalUpdateData)
+    .update(updateData)
     .eq('id', taskId)
-    .select(selectFields)
+    .select('*')
     .single();
-  
-  // אם יש שגיאה על time_spent, נסיר אותו וננסה שוב
-  if (error && error.code === '42703' && error.message?.includes('time_spent')) {
-    delete finalUpdateData.time_spent;
-    const result = await supabase
-      .from('tasks')
-      .update(finalUpdateData)
-      .eq('id', taskId)
-      .select(selectFields)
-      .single();
-    data = result.data;
-    error = result.error;
-  }
   
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
