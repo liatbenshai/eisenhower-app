@@ -525,7 +525,7 @@ export async function updateTask(taskId, updates) {
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .select()
+    .select('*')
     .single();
   
   if (error) {
