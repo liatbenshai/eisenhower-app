@@ -120,15 +120,37 @@ export async function subscribeToPush() {
 
   try {
     // בדיקה שאין Service Workers - אם יש, לא נמשיך
+    // נשתמש בפונקציה המקורית אם יש, אחרת נבדוק ישירות
     if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
+      let registrations = [];
+      try {
+        // ננסה להשתמש בפונקציה המקורית אם יש
+        if (window._originalGetRegistrations) {
+          registrations = await window._originalGetRegistrations.call(navigator.serviceWorker);
+        } else {
+          // אם אין, ננסה דרך אחרת
+          registrations = await navigator.serviceWorker.getRegistrations();
+        }
+      } catch (e) {
+        // אם יש שגיאה, אין Service Workers
+        console.log('ℹ️ אין Service Worker - Push Notifications לא זמינים');
+        return null;
+      }
+      
       if (registrations.length === 0) {
-        console.warn('⚠️ אין Service Worker - Push Notifications לא זמינים');
+        console.log('ℹ️ אין Service Worker - Push Notifications לא זמינים');
         return null;
       }
     }
     
-    const registration = await navigator.serviceWorker.ready;
+    // ננסה לגשת ל-ready - אם זה נחסם, נחזיר null
+    let registration;
+    try {
+      registration = await navigator.serviceWorker.ready;
+    } catch (e) {
+      console.log('ℹ️ Service Worker לא זמין - Push Notifications לא זמינים');
+      return null;
+    }
     
     // בדיקה אם כבר רשום
     let subscription = await registration.pushManager.getSubscription();
@@ -162,13 +184,31 @@ export async function unsubscribeFromPush() {
   try {
     // בדיקה שאין Service Workers
     if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
+      let registrations = [];
+      try {
+        // ננסה להשתמש בפונקציה המקורית אם יש
+        if (window._originalGetRegistrations) {
+          registrations = await window._originalGetRegistrations.call(navigator.serviceWorker);
+        } else {
+          registrations = await navigator.serviceWorker.getRegistrations();
+        }
+      } catch (e) {
+        // אם יש שגיאה, אין Service Workers
+        return false;
+      }
+      
       if (registrations.length === 0) {
-        return;
+        return false;
       }
     }
     
-    const registration = await navigator.serviceWorker.ready;
+    // ננסה לגשת ל-ready - אם זה נחסם, נחזיר false
+    let registration;
+    try {
+      registration = await navigator.serviceWorker.ready;
+    } catch (e) {
+      return false;
+    }
     const subscription = await registration.pushManager.getSubscription();
     
     if (subscription) {

@@ -84,10 +84,19 @@ if (typeof window !== 'undefined') {
     const originalGetRegistrations = navigator.serviceWorker.getRegistrations;
     
     // override של getRegistrations - מחזיר רשימה ריקה תמיד (למניעת גישה)
+    // אבל לא נדפיס הודעה אם זה קורא פנימי (stack trace יראה את זה)
     navigator.serviceWorker.getRegistrations = async function(...args) {
-      // נשתמש בפונקציה המקורית רק לבדיקות פנימיות
-      // אבל נחזיר רשימה ריקה לכל קריאה חיצונית
-      console.warn('🚫 נחסם ניסיון לקבל Service Worker registrations');
+      // נבדוק אם זה קריאה פנימית שלנו (מהקוד שלנו) או חיצונית
+      const stack = new Error().stack || '';
+      const isInternalCall = stack.includes('checkAndClean') || 
+                            stack.includes('cleanServiceWorkers') ||
+                            stack.includes('forceRefresh') ||
+                            stack.includes('main.jsx');
+      
+      if (!isInternalCall) {
+        // רק נדפיס הודעה אם זה לא קריאה פנימית
+        // console.warn('🚫 נחסם ניסיון לקבל Service Worker registrations');
+      }
       return [];
     };
     
