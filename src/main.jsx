@@ -1,11 +1,26 @@
-// פשוט - מחיקת Service Workers פעם אחת בלבד
+// מחיקת Service Workers ו-cache - חזק יותר
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  // מחיקת כל ה-Service Workers
   navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(reg => reg.unregister());
+    registrations.forEach(reg => {
+      reg.unregister();
+      console.log('✅ Service Worker נמחק');
+    });
   });
+  
+  // מחיקת כל ה-cache
+  if ('caches' in window) {
+    caches.keys().then(cacheNames => {
+      cacheNames.forEach(cacheName => {
+        caches.delete(cacheName);
+        console.log('✅ Cache נמחק:', cacheName);
+      });
+    });
+  }
   
   // מניעת יצירת Service Workers חדשים
   navigator.serviceWorker.register = () => Promise.reject(new Error('Service Workers disabled'));
+  navigator.serviceWorker.ready = Promise.reject(new Error('Service Workers disabled'));
 }
 
 console.log('⚡ main.jsx loading...');
