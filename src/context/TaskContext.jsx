@@ -235,151 +235,20 @@ export function TaskProvider({ children }) {
     }
   };
 
-  // עדכון זמן שבוצע למשימה (מ-TaskTimer) - עם מניעת race conditions
+  // עדכון זמן שבוצע למשימה (מ-TaskTimer) - פשוט, בלי time_spent
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
-    // אם יש עדכון בתהליך, נבדוק אם הוא עדיין פעיל
-    const existingUpdate = updatingTasksRef.current.get(taskId);
-    if (existingUpdate) {
-      console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין לעדכון קודם...');
-      try {
-        // נמתין לעדכון הקודם להסתיים, אבל עם timeout קצר
-        const waitTimeout = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout waiting for previous update')), 5000);
-        });
-        await Promise.race([existingUpdate, waitTimeout]);
-        console.log('✅ עדכון קודם הסתיים, ממשיך...');
-        // אם העדכון הקודם הצליח, נחזיר את התוצאה שלו במקום לעדכן שוב
-        return;
-      } catch (err) {
-        console.warn('⚠️ עדכון קודם נכשל או timeout, ממשיך עם עדכון חדש:', err);
-        // אם העדכון הקודם נכשל או timeout, נסיר אותו ונמשיך עם עדכון חדש
-        updatingTasksRef.current.delete(taskId);
-      }
-    }
+    // לא נעדכן time_spent כי העמודה לא קיימת
+    // רק נעדכן את ה-state מקומית
+    const timeSpentInt = parseInt(timeSpent) || 0;
     
-    // יצירת Promise חדש לעדכון
-    const updatePromise = (async () => {
-      const timeSpentInt = parseInt(timeSpent) || 0;
-      console.log('⏱️ TaskContext.updateTaskTime:', taskId, timeSpentInt);
-      
-      try {
-        // עדכון ב-DB
-        console.log('📤 TaskContext: קורא ל-updateTask עם:', { taskId, time_spent: timeSpentInt });
-        const updatedTask = await updateTask(taskId, { time_spent: timeSpentInt });
-        
-        if (!updatedTask) {
-          console.error('❌ TaskContext: updateTask החזיר null/undefined');
-          throw new Error('המשימה לא עודכנה - אין data מהשרת');
-        }
-        
-        console.log('✅ TaskContext: updateTask החזיר:', {
-          id: updatedTask.id,
-          time_spent: updatedTask.time_spent,
-          expected: timeSpentInt
-        });
-        
-        console.log('✅ משימה עודכנה ב-DB:', updatedTask);
-        console.log('📊 time_spent מהשרת:', updatedTask.time_spent);
-        
-        // עדכון ב-state עם הנתונים מהשרת
-        setTasks(prev => {
-          const taskExists = prev.find(t => t.id === taskId);
-          if (!taskExists) {
-            console.warn('⚠️ משימה לא נמצאה ב-state, טוען מחדש...');
-            loadTasks();
-            return prev;
-          }
-          
-          const updated = prev.map(t => {
-            if (t.id === taskId) {
-              // עדכון עם כל הנתונים מהשרת - וידוא ש-time_spent הוא מספר
-              const newTask = {
-                ...t,
-                ...updatedTask,
-                time_spent: parseInt(updatedTask.time_spent) || timeSpentInt
-              };
-              console.log('🔄 מעדכן משימה ב-state:', {
-                id: newTask.id,
-                time_spent_old: t.time_spent,
-                time_spent_new: newTask.time_spent
-              });
-              return newTask;
-            }
-            return t;
-          });
-          
-          // וידוא שהעדכון קרה
-          const updatedTaskInState = updated.find(t => t.id === taskId);
-          if (updatedTaskInState && updatedTaskInState.time_spent !== timeSpentInt) {
-            console.warn('⚠️ time_spent לא עודכן נכון ב-state!', {
-              expected: timeSpentInt,
-              actual: updatedTaskInState.time_spent
-            });
-          }
-          
-          return updated;
-        });
-        
-        console.log('✅ TaskContext: משימה עודכנה ב-state ו-DB:', updatedTask);
-        return updatedTask;
-      } catch (err) {
-        console.error('❌ שגיאה בעדכון זמן משימה:', err);
-        // במקרה של שגיאה, ננסה לטעון מחדש את המשימות
-        try {
-          await loadTasks();
-        } catch (loadErr) {
-          console.error('❌ שגיאה בטעינת משימות אחרי שגיאה:', loadErr);
-        }
-        throw err;
-      }
-    })();
+    setTasks(prev => prev.map(t => 
+      t.id === taskId 
+        ? { ...t, time_spent: timeSpentInt }
+        : t
+    ));
     
-    // שמירת ה-Promise ב-Map
-    updatingTasksRef.current.set(taskId, updatePromise);
-    
-      // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 60 שניות, נסיר אותו
-      const stuckTimeout = setTimeout(() => {
-        if (updatingTasksRef.current.get(taskId) === updatePromise) {
-          console.warn('⚠️ עדכון לוקח יותר מ-60 שניות, מסיר מהרשימה');
-          updatingTasksRef.current.delete(taskId);
-          // הודעה למשתמש
-          if (typeof window !== 'undefined' && window.toast) {
-            window.toast?.error('⏱️ העדכון לוקח זמן - בדוק את החיבור לאינטרנט', { duration: 5000 });
-          }
-        }
-      }, 60000); // 60 שניות
-      
-      try {
-        // הוספת timeout ל-Promise עצמו - עם retry
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - בדוק את החיבור לאינטרנט'));
-          }, 60000); // 60 שניות timeout (הוגדל מ-30)
-        });
-      
-      const result = await Promise.race([updatePromise, timeoutPromise]);
-      
-      // אם העדכון הצליח, נבדוק שהנתונים נכונים
-      if (result && result.time_spent !== undefined) {
-        console.log('✅ עדכון הצליח:', result.time_spent);
-      }
-      
-      return result;
-    } catch (err) {
-      console.error('❌ שגיאה ב-updateTaskTime:', err);
-      // ניקוי מהרשימה גם בשגיאה
-      if (updatingTasksRef.current.get(taskId) === updatePromise) {
-        updatingTasksRef.current.delete(taskId);
-      }
-      throw err;
-    } finally {
-      // ניקוי רק אם זה עדיין ה-Promise הנוכחי
-      if (updatingTasksRef.current.get(taskId) === updatePromise) {
-        updatingTasksRef.current.delete(taskId);
-      }
-      clearTimeout(stuckTimeout);
-    }
-  }, [loadTasks]);
+    return { id: taskId, time_spent: timeSpentInt };
+  }, []);
 
   // סימון כהושלם/לא הושלם
   const toggleComplete = async (taskId) => {
