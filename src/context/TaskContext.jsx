@@ -32,6 +32,9 @@ export function TaskProvider({ children }) {
   // במקום Set פשוט, נשתמש ב-Map עם Promise לכל משימה
   const updatingTasksRef = useRef(new Map()); // Map<taskId, Promise>
 
+  // מניעת טעינות כפולות
+  const loadingRef = useRef(false);
+  
   // טעינת משימות
   const loadTasks = useCallback(async () => {
     // אם האותנטיקציה עדיין נטענת, נחכה
@@ -46,36 +49,84 @@ export function TaskProvider({ children }) {
       setTasks([]);
       setLoading(false);
       setError(null);
+      loadingRef.current = false;
+      return;
+    }
+    
+    // מניעת טעינות כפולות
+    if (loadingRef.current) {
+      console.log('⏳ טעינה כבר בתהליך, מדלג...');
       return;
     }
     
     console.log('📥 טוען משימות עבור משתמש:', user.id);
 
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
+    
     try {
-      // timeout למניעת תקיעות
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('טעינת משימות לקחה יותר מדי זמן')), 15000);
-      });
+      // retry logic - 3 ניסיונות
+      let lastError = null;
+      let attempts = 0;
+      const maxAttempts = 3;
+      let data = null;
       
-      const data = await Promise.race([
-        getTasks(user.id),
-        timeoutPromise
-      ]);
-      // וידוא שכל המשימות יש להן את השדות הנדרשים
-      const safeData = (data || []).map(task => ({
-        ...task,
-        time_spent: task.time_spent || 0,
-        estimated_duration: task.estimated_duration || null
-      }));
-      setTasks(safeData);
+      while (attempts < maxAttempts && !data) {
+        attempts++;
+        console.log(`🔄 ניסיון טעינה ${attempts}/${maxAttempts}...`);
+        
+        try {
+          // timeout מוגדל ל-60 שניות
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('טעינת משימות לקחה יותר מדי זמן - נסי לרענן את הדף')), 60000);
+          });
+          
+          data = await Promise.race([
+            getTasks(user.id),
+            timeoutPromise
+          ]);
+          
+          // אם הצלחנו, נצא מהלולאה
+          if (data) {
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn(`⚠️ ניסיון ${attempts} נכשל:`, err.message);
+          
+          // אם זה לא הניסיון האחרון, נמתין קצת לפני ניסיון נוסף
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
+      
+      if (data) {
+        // וידוא שכל המשימות יש להן את השדות הנדרשים
+        const safeData = (data || []).map(task => ({
+          ...task,
+          time_spent: task.time_spent || 0,
+          estimated_duration: task.estimated_duration || null
+        }));
+        setTasks(safeData);
+        console.log(`✅ טעינת משימות הצליחה - ${safeData.length} משימות`);
+      } else {
+        // אם כל הניסיונות נכשלו
+        throw lastError || new Error('טעינת משימות נכשלה אחרי כל הניסיונות');
+      }
     } catch (err) {
       console.error('שגיאה בטעינת משימות:', err);
-      setError(err.message || 'שגיאה בטעינת משימות');
-      setTasks([]);
+      // לא נציג שגיאה אם זה רק timeout - נציג הודעה ידידותית יותר
+      const errorMessage = err.message?.includes('יותר מדי זמן') 
+        ? 'טעינת משימות לוקחת זמן - נסי לרענן את הדף או לבדוק את החיבור לאינטרנט'
+        : (err.message || 'שגיאה בטעינת משימות');
+      setError(errorMessage);
+      // לא ננקה את המשימות הקיימות - נשאיר אותן
+      // setTasks([]);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [user?.id, authLoading]);
 
@@ -86,28 +137,43 @@ export function TaskProvider({ children }) {
     }
   }, [loadTasks, authLoading]);
   
-  // טעינה מחדש כשהדף חוזר להיות פעיל (אחרי רענון)
+  // טעינה מחדש כשהדף חוזר להיות פעיל (אחרי רענון) - רק אם לא טוען כבר
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      let visibilityTimeout = null;
+      let focusTimeout = null;
+      
       const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && !authLoading && user?.id) {
+        if (document.visibilityState === 'visible' && !authLoading && user?.id && !loadingRef.current) {
           console.log('👁️ דף חזר להיות פעיל - טוען משימות מחדש...');
-          // טעינה מחדש אחרי 500ms כדי לוודא שהכל מוכן
-          setTimeout(() => {
-            loadTasks();
-          }, 500);
+          // ביטול timeout קודם אם יש
+          if (visibilityTimeout) {
+            clearTimeout(visibilityTimeout);
+          }
+          // טעינה מחדש אחרי 1 שנייה כדי לוודא שהכל מוכן
+          visibilityTimeout = setTimeout(() => {
+            if (!loadingRef.current) {
+              loadTasks();
+            }
+          }, 1000);
         }
       };
       
       document.addEventListener('visibilitychange', handleVisibilityChange);
       
-      // טעינה מחדש גם כשהחלון מקבל focus
+      // טעינה מחדש גם כשהחלון מקבל focus - רק אם לא טוען כבר
       const handleFocus = () => {
-        if (!authLoading && user?.id) {
+        if (!authLoading && user?.id && !loadingRef.current) {
           console.log('🎯 חלון קיבל focus - טוען משימות מחדש...');
-          setTimeout(() => {
-            loadTasks();
-          }, 500);
+          // ביטול timeout קודם אם יש
+          if (focusTimeout) {
+            clearTimeout(focusTimeout);
+          }
+          focusTimeout = setTimeout(() => {
+            if (!loadingRef.current) {
+              loadTasks();
+            }
+          }, 1000);
         }
       };
       
@@ -116,6 +182,8 @@ export function TaskProvider({ children }) {
       return () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('focus', handleFocus);
+        if (visibilityTimeout) clearTimeout(visibilityTimeout);
+        if (focusTimeout) clearTimeout(focusTimeout);
       };
     }
   }, [loadTasks, authLoading, user?.id]);
