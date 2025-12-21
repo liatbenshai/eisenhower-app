@@ -198,29 +198,15 @@ export function AuthProvider({ children }) {
             return;
           }
           
-          // עבור INITIAL_SESSION - טיפול מיוחד
-          // INITIAL_SESSION נקרא אחרי initializeAuth, אז אם יש סשן כבר טיפלנו בו
-          // אם אין סשן, המשתמש לא מחובר
+          // עבור INITIAL_SESSION - פשוט עדכן loading
           if (event === 'INITIAL_SESSION') {
-            if (!session && mounted) {
-              // אין סשן - המשתמש לא מחובר
-              updateUser(null);
-              setLoading(false);
-            } else if (session?.user && mounted) {
-              // יש סשן - עדכן את המשתמש (למקרה ש-initializeAuth לא הצליח)
-              try {
-                const currentUser = await getCurrentUser();
-                if (mounted) {
-                  setUser(currentUser);
-                  setLoading(false);
-                }
-              } catch (err) {
-                console.error('שגיאה בטעינת משתמש ב-INITIAL_SESSION:', err);
-                if (mounted) {
-                  setUser(session.user);
-                  setLoading(false);
-                }
+            if (mounted) {
+              if (session?.user) {
+                updateUser({ ...session.user, profile: null });
+              } else {
+                updateUser(null);
               }
+              setLoading(false);
             }
             return;
           }
