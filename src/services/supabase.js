@@ -499,15 +499,11 @@ export async function createTask(task) {
 export async function updateTask(taskId, updates) {
   // בדיקת סשן לפני עדכון
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) {
-    console.error('❌ שגיאה בבדיקת סשן בעדכון:', sessionError);
-    throw new Error('❌ שגיאה באימות. אנא התחברי מחדש.');
-  }
-  if (!session?.user) {
+  if (sessionError || !session?.user) {
     throw new Error('❌ אין משתמש מחובר. אנא התחברי מחדש.');
   }
   
-  // הכנת נתונים לעדכון - וידוא שכל השדות מעודכנים נכון
+  // הכנת נתונים לעדכון
   const updateData = {
     ...updates,
     updated_at: new Date().toISOString()
@@ -520,185 +516,27 @@ export async function updateTask(taskId, updates) {
   if (updates.estimated_duration !== undefined) {
     updateData.estimated_duration = updates.estimated_duration ? parseInt(updates.estimated_duration) : null;
   }
-  // וידוא ש-time_spent הוא מספר
   if (updates.time_spent !== undefined) {
     updateData.time_spent = parseInt(updates.time_spent) || 0;
   }
   
-  console.log('מעדכן משימה:', taskId, updateData);
-  
-  console.log('📤 שולח עדכון ל-Supabase:', { taskId, updateData });
-  const startTime = Date.now();
-  
-  // ננסה לעדכן בלי SELECT קודם, ואז נטען את המשימה בנפרד
-  // זה יכול לעזור אם יש בעיה עם ה-SELECT אחרי ה-UPDATE
-  let data, error;
-  
-  try {
-    // בדיקת סשן לפני עדכון
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      console.error('❌ אין סשן פעיל!', sessionError);
-      throw new Error('❌ אין סשן פעיל - אנא התחברי מחדש');
-    }
-    console.log('✅ סשן פעיל:', session.user.id);
-    
-    // עדכון בלי SELECT - עם timeout
-    console.log('📤 שולח UPDATE ל-Supabase:', { taskId, updateData });
-    const updatePromise = supabase
-      .from('tasks')
-      .update(updateData)
-      .eq('id', taskId);
-    
-    // Timeout של 30 שניות
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('⏱️ עדכון לקח יותר מ-30 שניות - timeout. בדוק את החיבור לאינטרנט.'));
-      }, 30000);
-    });
-    
-    const updateResult = await Promise.race([updatePromise, timeoutPromise]);
-    console.log('📥 תגובה מ-UPDATE:', { 
-      hasData: !!updateResult.data, 
-      hasError: !!updateResult.error,
-      error: updateResult.error 
-    });
-    const { error: updateError, data: updateDataResult } = updateResult;
-    
-    if (updateError) {
-      console.error('❌ שגיאה ב-UPDATE:', updateError);
-      error = updateError;
-      
-      // הודעות שגיאה מפורטות יותר
-      if (updateError.code === '42501') {
-        error = new Error('❌ אין הרשאות לעדכן משימה - בדוק את ה-RLS policies');
-      } else if (updateError.code === 'PGRST301' || updateError.message?.includes('JWT')) {
-        error = new Error('❌ סשן פג - אנא התחברי מחדש');
-      } else if (updateError.message?.includes('foreign key')) {
-        error = new Error('❌ בעיית משתמש - אנא התחברי מחדש');
-      }
-    } else {
-      // אם העדכון הצליח, נטען את המשימה בנפרד - גם עם timeout
-      console.log('✅ UPDATE הצליח, טוען משימה מחדש...');
-      
-      // ננסה SELECT עם retry - לפעמים ה-SELECT נכשל אחרי UPDATE
-      let selectAttempts = 0;
-      const maxSelectAttempts = 3;
-      let taskData = null;
-      let selectError = null;
-      
-      while (selectAttempts < maxSelectAttempts && !taskData) {
-        selectAttempts++;
-        console.log(`🔄 ניסיון SELECT ${selectAttempts}/${maxSelectAttempts}...`);
-        
-        const selectPromise = supabase
-          .from('tasks')
-          .select('*')
-          .eq('id', taskId)
-          .single();
-        
-        const selectTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('⏱️ טעינת משימה לקחה יותר מ-20 שניות - timeout'));
-          }, 20000);
-        });
-        
-        try {
-          const selectResult = await Promise.race([selectPromise, selectTimeoutPromise]);
-          console.log('📥 תגובה מ-SELECT:', { 
-            hasData: !!selectResult.data, 
-            hasError: !!selectResult.error,
-            time_spent: selectResult.data?.time_spent
-          });
-          
-          if (selectResult.error) {
-            selectError = selectResult.error;
-            console.error(`❌ שגיאה ב-SELECT (ניסיון ${selectAttempts}):`, selectError);
-            if (selectAttempts < maxSelectAttempts) {
-              // נמתין קצת לפני ניסיון נוסף
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          } else {
-            taskData = selectResult.data;
-            console.log('✅ SELECT הצליח, time_spent:', taskData?.time_spent);
-            break;
-          }
-        } catch (selectErr) {
-          selectError = selectErr;
-          console.error(`❌ שגיאה ב-SELECT (ניסיון ${selectAttempts}):`, selectErr);
-          if (selectAttempts < maxSelectAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        }
-      }
-      
-      if (selectError && !taskData) {
-        console.error('❌ כל ניסיונות ה-SELECT נכשלו, אבל ה-UPDATE הצליח');
-        // אם ה-UPDATE הצליח אבל ה-SELECT נכשל, נשתמש בנתונים שיש לנו
-        error = selectError;
-        console.warn('⚠️ ממשיך עם נתונים חלקיים - ה-UPDATE הצליח');
-      } else if (taskData) {
-        data = taskData;
-        console.log('✅ SELECT הצליח, time_spent:', data?.time_spent);
-      }
-    }
-  } catch (err) {
-    error = err;
-  }
-  
-  const duration = Date.now() - startTime;
-  console.log(`📥 תגובה מ-Supabase (לקח ${duration}ms):`, { 
-    hasData: !!data, 
-    hasError: !!error, 
-    error: error ? {
-      message: error.message,
-      code: error.code,
-      details: error.details
-    } : null
-  });
-  
-  if (duration > 5000) {
-    console.warn('⚠️ עדכון לקח יותר מ-5 שניות!', duration);
-  }
+  // עדכון פשוט עם SELECT
+  const { data, error } = await supabase
+    .from('tasks')
+    .update(updateData)
+    .eq('id', taskId)
+    .select()
+    .single();
   
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
-    console.error('פרטי שגיאה:', {
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
-      taskId,
-      updateData
-    });
     throw error;
   }
   
   if (!data) {
-    console.error('❌ לא הוחזר data מ-Supabase בעדכון משימה!', {
-      taskId,
-      updateData,
-      response: { data, error }
-    });
     throw new Error('המשימה לא עודכנה - אין data');
   }
   
-  // וידוא שהנתונים נשמרו נכון
-  if (updateData.time_spent !== undefined) {
-    const savedTimeSpent = parseInt(data.time_spent) || 0;
-    const expectedTimeSpent = parseInt(updateData.time_spent) || 0;
-    if (savedTimeSpent !== expectedTimeSpent) {
-      console.error('⚠️ time_spent לא נשמר נכון!', {
-        expected: expectedTimeSpent,
-        saved: savedTimeSpent,
-        data: data
-      });
-    } else {
-      console.log('✅ time_spent נשמר נכון:', savedTimeSpent);
-    }
-  }
-  
-  console.log('✅ משימה עודכנה בהצלחה:', data);
   return data;
 }
 
