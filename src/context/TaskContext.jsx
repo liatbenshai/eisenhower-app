@@ -140,79 +140,11 @@ export function TaskProvider({ children }) {
   }, [user?.id, authLoading]);
 
   // טעינה ראשונית - רק אחרי שהאותנטיקציה נטענה
-  // חשוב: לא נכלול את loadTasks ב-dependencies כדי למנוע לולאה אינסופית
   useEffect(() => {
-    if (!authLoading && user?.id && !loadingRef.current) {
+    if (!authLoading && user?.id) {
       loadTasks();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, authLoading]); // רק user?.id ו-authLoading - לא loadTasks!
-  
-  // טעינה מחדש כשהדף חוזר להיות פעיל (אחרי רענון) - רק אם לא טוען כבר
-  // חשוב: הסרנו את loadTasks מה-dependencies כדי למנוע לולאה אינסופית
-  useEffect(() => {
-    if (typeof window !== 'undefined' && user?.id) {
-      let visibilityTimeout = null;
-      let focusTimeout = null;
-      let lastLoadTime = 0;
-      const MIN_LOAD_INTERVAL = 5000; // מינימום 5 שניות בין טעינות
-      
-      const handleVisibilityChange = () => {
-        const now = Date.now();
-        if (document.visibilityState === 'visible' && 
-            !authLoading && 
-            user?.id && 
-            !loadingRef.current &&
-            (now - lastLoadTime) > MIN_LOAD_INTERVAL) {
-          console.log('👁️ דף חזר להיות פעיל - טוען משימות מחדש...');
-          // ביטול timeout קודם אם יש
-          if (visibilityTimeout) {
-            clearTimeout(visibilityTimeout);
-          }
-          // טעינה מחדש אחרי 2 שניות כדי לוודא שהכל מוכן
-          visibilityTimeout = setTimeout(() => {
-            if (!loadingRef.current && (Date.now() - lastLoadTime) > MIN_LOAD_INTERVAL) {
-              lastLoadTime = Date.now();
-              loadTasks();
-            }
-          }, 2000);
-        }
-      };
-      
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      // טעינה מחדש גם כשהחלון מקבל focus - רק אם לא טוען כבר
-      const handleFocus = () => {
-        const now = Date.now();
-        if (!authLoading && 
-            user?.id && 
-            !loadingRef.current &&
-            (now - lastLoadTime) > MIN_LOAD_INTERVAL) {
-          console.log('🎯 חלון קיבל focus - טוען משימות מחדש...');
-          // ביטול timeout קודם אם יש
-          if (focusTimeout) {
-            clearTimeout(focusTimeout);
-          }
-          focusTimeout = setTimeout(() => {
-            if (!loadingRef.current && (Date.now() - lastLoadTime) > MIN_LOAD_INTERVAL) {
-              lastLoadTime = Date.now();
-              loadTasks();
-            }
-          }, 2000);
-        }
-      };
-      
-      window.addEventListener('focus', handleFocus);
-      
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', handleFocus);
-        if (visibilityTimeout) clearTimeout(visibilityTimeout);
-        if (focusTimeout) clearTimeout(focusTimeout);
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, authLoading]); // רק user?.id ו-authLoading - לא loadTasks!
+  }, [user?.id, authLoading, loadTasks]);
 
   // הוספת משימה
   // חשוב: אין הגבלה על הוספת משימות - ניתן להוסיף משימות חדשות תמיד,
