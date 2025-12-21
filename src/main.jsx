@@ -1,6 +1,7 @@
 // מחיקת Service Workers ומטמונים לפני טעינת React - זה קריטי!
+// חשוב: הקוד הזה מונע לחלוטין יצירת Service Workers כדי לאפשר רענון תקין
 if (typeof window !== 'undefined') {
-  // מניעת רישום Service Workers - override של register
+  // מניעת רישום Service Workers - override של register - מוקדם ככל האפשר
   if ('serviceWorker' in navigator) {
     // שמירת הפונקציה המקורית (אם יש)
     const originalRegister = navigator.serviceWorker.register;
@@ -8,20 +9,29 @@ if (typeof window !== 'undefined') {
     // override מלא - מחזיר Promise שנדחה תמיד
     navigator.serviceWorker.register = function(...args) {
       console.warn('🚫 נחסם ניסיון לרישום Service Worker:', args[0]);
-      // מחזיר Promise שנדחה מיד
+      // מחזיר Promise שנדחה מיד - זה מונע יצירת Service Worker
       return Promise.reject(new Error('Service Worker registration is disabled for refresh compatibility'));
     };
     
     // גם override של ready - מחזיר Promise שנדחה
-    if (navigator.serviceWorker.ready) {
-      const originalReady = navigator.serviceWorker.ready;
+    try {
       Object.defineProperty(navigator.serviceWorker, 'ready', {
         get: function() {
           console.warn('🚫 נחסם גישה ל-serviceWorker.ready');
           return Promise.reject(new Error('Service Worker is disabled'));
         },
-        configurable: true
+        configurable: true,
+        enumerable: false
       });
+    } catch (e) {
+      // אם לא הצלחנו, ננסה דרך אחרת
+      console.warn('⚠️ לא הצלחנו לערוך serviceWorker.ready:', e);
+    }
+    
+    // מניעת יצירת Service Worker דרך controller
+    if (navigator.serviceWorker.controller) {
+      console.warn('⚠️ נמצא Service Worker controller פעיל - מנסה למחוק...');
+      navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
     }
   }
   
@@ -100,18 +110,63 @@ if (typeof window !== 'undefined') {
       }
       
       console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
+      console.log('💡 אם עדיין יש בעיות רענון, פתחי DevTools (F12) → Application → Service Workers → לחצי Unregister על כל אחד');
       
-      // בדיקה נוספת אחרי 2 שניות - למקרה ש-Service Worker נרשם מאוחר יותר
-      setTimeout(async () => {
+      // בדיקות תקופתיות - למקרה ש-Service Worker נרשם מאוחר יותר
+      const checkAndClean = async () => {
         if ('serviceWorker' in navigator) {
-          const lateRegistrations = await navigator.serviceWorker.getRegistrations();
-          if (lateRegistrations.length > 0) {
-            console.warn('⚠️ נמצא Service Worker שנרשם מאוחר - מוחק...');
-            await Promise.all(lateRegistrations.map(reg => reg.unregister()));
-            console.log('✅ Service Workers מאוחרים נמחקו');
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            if (registrations.length > 0) {
+              console.warn('⚠️ נמצא Service Worker שנרשם מאוחר - מוחק...');
+              await Promise.all(registrations.map(reg => {
+                // ניסיון למחוק גם את ה-controller
+                if (reg.active) {
+                  reg.active.postMessage({ type: 'SKIP_WAITING' });
+                }
+                return reg.unregister();
+              }));
+              console.log('✅ Service Workers מאוחרים נמחקו');
+              
+              // ניקוי מטמונים שוב אחרי מחיקת Service Worker
+              if ('caches' in window) {
+                try {
+                  const cacheNames = await caches.keys();
+                  await Promise.all(cacheNames.map(name => caches.delete(name)));
+                } catch (e) {
+                  console.warn('⚠️ שגיאה בניקוי מטמונים:', e);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('⚠️ שגיאה בבדיקת Service Workers:', err);
           }
         }
-      }, 2000);
+      };
+      
+      // בדיקה מיידית
+      checkAndClean();
+      
+      // בדיקה אחרי 1 שנייה
+      setTimeout(checkAndClean, 1000);
+      
+      // בדיקה אחרי 2 שניות
+      setTimeout(checkAndClean, 2000);
+      
+      // בדיקה תקופתית כל 3 שניות - למקרה ש-Service Worker נרשם שוב
+      setInterval(checkAndClean, 3000);
+      
+      // בדיקה נוספת כשהדף חוזר להיות פעיל
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          checkAndClean();
+        }
+      });
+      
+      // בדיקה לפני שהדף נסגר
+      window.addEventListener('beforeunload', () => {
+        checkAndClean();
+      });
     } catch (error) {
       console.warn('⚠️ שגיאה במחיקת Service Workers:', error);
     }
@@ -124,10 +179,76 @@ if (typeof window !== 'undefined') {
       // נציג הודעה למשתמש
       const warning = document.createElement('div');
       warning.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;text-align:center;z-index:99999;';
-      warning.textContent = '⚠️ הדף נתקע! אנא מחקי Service Workers: F12 → Application → Service Workers → Unregister';
+      warning.innerHTML = '⚠️ הדף נתקע! אנא מחקי Service Workers: F12 → Application → Service Workers → Unregister<br/>או לחצי <button onclick="window.location.reload(true)" style="background:white;color:red;border:none;padding:5px 10px;margin:5px;cursor:pointer;border-radius:3px;">רענון כפוי</button>';
       document.body.appendChild(warning);
     }
   }, 10000);
+  
+  // וידוא שרענון תמיד עובד - הוספת פונקציות עזר
+  if (typeof window !== 'undefined') {
+    // פונקציה גלובלית לרענון כפוי
+    window.forceRefresh = async () => {
+      console.log('🔄 רענון כפוי...');
+      try {
+        // מחיקת כל ה-Service Workers לפני רענון
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          if (registrations.length > 0) {
+            console.log(`🗑️ מוחק ${registrations.length} Service Workers לפני רענון...`);
+            await Promise.all(registrations.map(reg => reg.unregister()));
+          }
+        }
+        
+        // מחיקת כל המטמונים לפני רענון
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          if (cacheNames.length > 0) {
+            console.log(`🗑️ מוחק ${cacheNames.length} מטמונים לפני רענון...`);
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ שגיאה בניקוי לפני רענון:', err);
+      }
+      
+      // רענון כפוי
+      window.location.reload(true);
+    };
+    
+    // פונקציה לניקוי מלא של Service Workers ומטמונים
+    window.cleanServiceWorkers = async () => {
+      console.log('🧹 מנקה Service Workers ומטמונים...');
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          if (registrations.length > 0) {
+            await Promise.all(registrations.map(reg => reg.unregister()));
+            console.log(`✅ נמחקו ${registrations.length} Service Workers`);
+          } else {
+            console.log('✅ אין Service Workers לניקוי');
+          }
+        }
+        
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          if (cacheNames.length > 0) {
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+            console.log(`✅ נמחקו ${cacheNames.length} מטמונים`);
+          } else {
+            console.log('✅ אין מטמונים לניקוי');
+          }
+        }
+        
+        console.log('✨ ניקוי הושלם! כעת תוכלי לרענן את הדף (F5)');
+      } catch (err) {
+        console.error('❌ שגיאה בניקוי:', err);
+      }
+    };
+    
+    console.log('✅ פונקציות עזר זמינות:');
+    console.log('   - window.forceRefresh() - רענון כפוי עם ניקוי');
+    console.log('   - window.cleanServiceWorkers() - ניקוי Service Workers ומטמונים');
+  }
 }
 
 console.log('⚡ main.jsx loading...');
