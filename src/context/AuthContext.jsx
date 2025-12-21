@@ -171,14 +171,18 @@ export function AuthProvider({ children }) {
                 const currentUser = await getCurrentUser();
                 if (mounted) {
                   setUser(currentUser);
+                  setLoading(false); // וידוא ש-loading מתעדכן
                 }
               } catch (err) {
                 console.error('שגיאה בטעינת משתמש:', err);
                 // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
                 if (mounted) {
                   setUser(session.user);
+                  setLoading(false); // וידוא ש-loading מתעדכן
                 }
               }
+            } else if (mounted) {
+              setLoading(false); // גם אם אין סשן, עדכן loading
             }
             return;
           }
