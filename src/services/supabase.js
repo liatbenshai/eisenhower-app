@@ -520,12 +520,12 @@ export async function updateTask(taskId, updates) {
     updateData.time_spent = parseInt(updates.time_spent) || 0;
   }
   
-  // עדכון פשוט עם SELECT
+  // עדכון פשוט עם SELECT - בוחרים רק שדות בסיסיים
   const { data, error } = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .select('*')
+    .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id')
     .single();
   
   if (error) {
