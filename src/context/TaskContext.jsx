@@ -253,17 +253,23 @@ export function TaskProvider({ children }) {
 
   // עדכון זמן שבוצע למשימה (מ-TaskTimer) - עם מניעת race conditions
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
-    // אם יש עדכון בתהליך, נמתין לו במקום להתחיל חדש
+    // אם יש עדכון בתהליך, נבדוק אם הוא עדיין פעיל
     const existingUpdate = updatingTasksRef.current.get(taskId);
     if (existingUpdate) {
       console.log('⏳ עדכון כבר בתהליך למשימה:', taskId, '- ממתין לעדכון קודם...');
       try {
-        // נמתין לעדכון הקודם להסתיים
-        await existingUpdate;
+        // נמתין לעדכון הקודם להסתיים, אבל עם timeout קצר
+        const waitTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Timeout waiting for previous update')), 5000);
+        });
+        await Promise.race([existingUpdate, waitTimeout]);
         console.log('✅ עדכון קודם הסתיים, ממשיך...');
+        // אם העדכון הקודם הצליח, נחזיר את התוצאה שלו במקום לעדכן שוב
+        return;
       } catch (err) {
-        console.warn('⚠️ עדכון קודם נכשל, ממשיך עם עדכון חדש:', err);
-        // אם העדכון הקודם נכשל, נמשיך עם עדכון חדש
+        console.warn('⚠️ עדכון קודם נכשל או timeout, ממשיך עם עדכון חדש:', err);
+        // אם העדכון הקודם נכשל או timeout, נסיר אותו ונמשיך עם עדכון חדש
+        updatingTasksRef.current.delete(taskId);
       }
     }
     
@@ -347,25 +353,25 @@ export function TaskProvider({ children }) {
     // שמירת ה-Promise ב-Map
     updatingTasksRef.current.set(taskId, updatePromise);
     
-    // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 30 שניות, נסיר אותו
-    const stuckTimeout = setTimeout(() => {
-      if (updatingTasksRef.current.get(taskId) === updatePromise) {
-        console.warn('⚠️ עדכון לוקח יותר מ-30 שניות, מסיר מהרשימה');
-        updatingTasksRef.current.delete(taskId);
-        // הודעה למשתמש
-        if (typeof window !== 'undefined' && window.toast) {
-          window.toast?.error('⏱️ העדכון לוקח זמן - בדוק את החיבור לאינטרנט', { duration: 5000 });
+      // timeout אוטומטי למניעת תקיעות - אם העדכון לא הסתיים תוך 60 שניות, נסיר אותו
+      const stuckTimeout = setTimeout(() => {
+        if (updatingTasksRef.current.get(taskId) === updatePromise) {
+          console.warn('⚠️ עדכון לוקח יותר מ-60 שניות, מסיר מהרשימה');
+          updatingTasksRef.current.delete(taskId);
+          // הודעה למשתמש
+          if (typeof window !== 'undefined' && window.toast) {
+            window.toast?.error('⏱️ העדכון לוקח זמן - בדוק את החיבור לאינטרנט', { duration: 5000 });
+          }
         }
-      }
-    }, 30000); // 30 שניות
-    
-    try {
-      // הוספת timeout ל-Promise עצמו - עם retry
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - בדוק את החיבור לאינטרנט'));
-        }, 30000); // 30 שניות timeout
-      });
+      }, 60000); // 60 שניות
+      
+      try {
+        // הוספת timeout ל-Promise עצמו - עם retry
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('⏱️ עדכון לוקח יותר מדי זמן - בדוק את החיבור לאינטרנט'));
+          }, 60000); // 60 שניות timeout (הוגדל מ-30)
+        });
       
       const result = await Promise.race([updatePromise, timeoutPromise]);
       

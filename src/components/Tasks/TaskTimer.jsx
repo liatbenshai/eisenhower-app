@@ -212,20 +212,23 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     }
   }, [elapsedSeconds, isRunning]);
 
-  // בדיקת הגעה ליעד זמן
+  // בדיקת הגעה ליעד זמן - אבל לא עוצר את הטיימר, רק מציג הודעה
   useEffect(() => {
     if (isRunning && targetMinutes > 0 && !hasReachedTarget) {
       const targetSeconds = targetMinutes * 60;
       if (elapsedSeconds >= targetSeconds) {
         setHasReachedTarget(true);
-        setIsRunning(false);
+        // לא עוצרים את הטיימר - ממשיכים לעבוד מעבר ליעד!
         playAlarm();
-        toast.success(`⏰ הגעת ליעד של ${targetMinutes} דקות!`, {
+        toast.success(`⏰ הגעת ליעד של ${targetMinutes} דקות! ממשיכים לעבוד...`, {
           duration: 5000,
           icon: '🎉'
         });
+        // שמירה אוטומטית כשמגיעים ליעד (בלי לעצור)
         if (saveProgressRef.current) {
-          saveProgressRef.current(false, true);
+          saveProgressRef.current(false, true).catch(err => {
+            console.warn('⚠️ שמירה אוטומטית נכשלה:', err);
+          });
         }
       }
     }
@@ -243,22 +246,26 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   }
 
   const startTimer = () => {
+    // אם הגענו ליעד, רק מסירים את הדגל - לא מאפסים זמן
     if (hasReachedTarget) {
-      // התחלה מחדש אחרי שהגענו ליעד
-      setElapsedSeconds(0);
       setHasReachedTarget(false);
     }
-    const now = new Date();
-    setStartTime(now);
     
-    // שמירת זמן התחלה ב-localStorage
-    if (currentTask?.id) {
-      localStorage.setItem(timerStorageKey, now.toISOString());
-      console.log('💾 זמן התחלה נשמר ב-localStorage:', now.toISOString());
+    // אם הטיימר לא רץ, מתחילים אותו
+    if (!isRunning) {
+      const now = new Date();
+      // אם יש startTime קיים, נשתמש בו (למקרה שהטיימר היה מושהה)
+      if (!startTime) {
+        setStartTime(now);
+        // שמירת זמן התחלה ב-localStorage
+        if (currentTask?.id) {
+          localStorage.setItem(timerStorageKey, now.toISOString());
+          console.log('💾 זמן התחלה נשמר ב-localStorage:', now.toISOString());
+        }
+      }
+      setIsRunning(true);
+      toast.success('טיימר הופעל');
     }
-    
-    setIsRunning(true);
-    toast.success('טיימר הופעל');
   };
   
   const pauseTimer = () => {
@@ -413,20 +420,20 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     // שמירת ה-Promise
     savingRef.current = savePromise;
     
-    // timeout אוטומטי - אם השמירה לוקחת יותר מ-30 שניות, נסיר את הדגל
+    // timeout אוטומטי - אם השמירה לוקחת יותר מ-60 שניות, נסיר את הדגל
     savingTimeoutRef.current = setTimeout(() => {
       if (savingRef.current === savePromise) {
-        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (30 שניות), מסיר דגל...');
+        console.warn('⚠️ שמירה לוקחת יותר מדי זמן (60 שניות), מסיר דגל...');
         savingRef.current = null;
       }
-    }, 30000); // הגדלתי ל-30 שניות
+    }, 60000); // 60 שניות
     
     try {
       // הוספת timeout ל-Promise עצמו
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
           reject(new Error('⏱️ שמירה לוקחת יותר מדי זמן - בדוק את החיבור לאינטרנט'));
-        }, 35000); // 35 שניות timeout
+        }, 65000); // 65 שניות timeout (הוגדל מ-35)
       });
       
       const result = await Promise.race([savePromise, timeoutPromise]);
@@ -462,10 +469,10 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   saveProgressRef.current = saveProgress;
 
   const continueAfterTarget = () => {
+    // לא מאפסים את הזמן - ממשיכים מהזמן הנוכחי!
     setHasReachedTarget(false);
-    setElapsedSeconds(0);
-    setIsRunning(true);
-    toast.success('ממשיכים לעבוד!');
+    // הטיימר כבר רץ, רק מסירים את הדגל
+    toast.success('ממשיכים לעבוד מעבר ליעד!');
   };
   
   const formatTime = (seconds) => {
@@ -528,9 +535,13 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           {formatTime(Math.abs(displayTime))}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-          {!hasReachedTarget && isRunning && (
+          {isRunning && (
             <div>
-              {remainingMinutes > 0 ? (
+              {hasReachedTarget ? (
+                <span className="text-green-600 dark:text-green-400 font-bold">
+                  🎉 הגעת ליעד! ממשיכים לעבוד... (+{Math.floor((elapsedSeconds - targetMinutes * 60) / 60)} דקות מעבר ליעד)
+                </span>
+              ) : remainingMinutes > 0 ? (
                 <span className="text-orange-600 dark:text-orange-400 font-medium">
                   נותרו {remainingMinutes} דקות
                 </span>
@@ -609,9 +620,18 @@ function TaskTimer({ task, onUpdate, onComplete }) {
               <Button
                 onClick={async () => {
                   console.log('🟢 לחיצה על: שמור וסיים (אחרי הגעה ליעד)');
-                  await saveProgress(true, true); // reset + skipUpdate
-                  resetTimer();
-                  toast.success('✅ התקדמות נשמרה וטיימר אופס');
+                  try {
+                    const result = await saveProgress(true, true); // reset + skipUpdate
+                    if (result && result.success) {
+                      resetTimer();
+                      toast.success('✅ התקדמות נשמרה וטיימר אופס');
+                    } else {
+                      toast.error('שגיאה בשמירה - נסי שוב', { duration: 3000 });
+                    }
+                  } catch (err) {
+                    console.error('❌ שגיאה בשמירה:', err);
+                    toast.error('שגיאה בשמירה - נסי שוב', { duration: 3000 });
+                  }
                 }}
                 className="flex-1 bg-green-500 hover:bg-green-600 text-white"
               >
@@ -674,31 +694,67 @@ function TaskTimer({ task, onUpdate, onComplete }) {
                   onClick={async () => {
                     console.log('🟢 לחיצה על: שמור וסמן כהושלם');
                     
-                    // שמירה BLI onUpdate כדי שהכרטיס לא ייסגר באמצע
-                    const result = await saveProgress(true, true);
-                    
-                    if (result && result.success) {
-                      console.log('✅ שמירה הצליחה:', result);
-                      resetTimer();
+                    try {
+                      // שמירה עם retry במקרה של timeout
+                      let result = null;
+                      let attempts = 0;
+                      const maxAttempts = 3;
                       
-                      if (onComplete) {
-                        console.log('🎯 מסמן משימה כהושלמה');
-                        // סימון המשימה כהושלמה - זה יעדכן הכל
-                        await onComplete();
-                        toast.success('🎉 המשימה הושלמה! הזמן נשמר והמערכת למדה ממנה', {
-                          duration: 4000
-                        });
+                      while (attempts < maxAttempts && (!result || !result.success)) {
+                        attempts++;
+                        console.log(`💾 ניסיון שמירה ${attempts}/${maxAttempts}...`);
+                        
+                        try {
+                          result = await saveProgress(true, true);
+                          if (result && result.success) {
+                            break;
+                          }
+                        } catch (err) {
+                          console.warn(`⚠️ ניסיון ${attempts} נכשל:`, err);
+                          if (attempts < maxAttempts) {
+                            // נמתין קצת לפני ניסיון נוסף
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                          }
+                        }
+                      }
+                      
+                      if (result && result.success) {
+                        console.log('✅ שמירה הצליחה:', result);
+                        resetTimer();
+                        
+                        if (onComplete) {
+                          console.log('🎯 מסמן משימה כהושלמה');
+                          // סימון המשימה כהושלמה - זה יעדכן הכל
+                          try {
+                            await onComplete();
+                            toast.success('🎉 המשימה הושלמה! הזמן נשמר והמערכת למדה ממנה', {
+                              duration: 4000
+                            });
+                          } catch (err) {
+                            console.error('❌ שגיאה בסימון משימה כהושלמה:', err);
+                            toast.success('✅ הזמן נשמר! (אבל הייתה שגיאה בסימון כהושלם)', {
+                              duration: 3000
+                            });
+                          }
+                        } else {
+                          console.warn('⚠️ אין onComplete callback');
+                          toast.success('✅ הזמן נשמר!', {
+                            duration: 3000
+                          });
+                        }
                       } else {
-                        console.warn('⚠️ אין onComplete callback');
-                        toast.success('✅ הזמן נשמר!', {
-                          duration: 3000
-                        });
+                        console.error('❌ השמירה נכשלה אחרי כל הניסיונות:', result);
+                        if (result && result.reason !== 'less_than_minute') {
+                          toast.error('שגיאה בשמירת הזמן - נסי שוב או בדקי את החיבור לאינטרנט', {
+                            duration: 5000
+                          });
+                        }
                       }
-                    } else {
-                      console.error('❌ השמירה נכשלה:', result);
-                      if (result && result.reason !== 'less_than_minute') {
-                        toast.error('שגיאה בשמירת הזמן');
-                      }
+                    } catch (err) {
+                      console.error('❌ שגיאה כללית בשמירה:', err);
+                      toast.error('שגיאה בשמירת הזמן - נסי שוב', {
+                        duration: 5000
+                      });
                     }
                   }}
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold shadow-lg"
