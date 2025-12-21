@@ -87,6 +87,8 @@ export function TaskProvider({ children }) {
   }, [loadTasks, authLoading]);
 
   // הוספת משימה
+  // חשוב: אין הגבלה על הוספת משימות - ניתן להוסיף משימות חדשות תמיד,
+  // גם אם יש משימות פעילות, לא הושלמו, או טיימרים פועלים
   const addTask = async (taskData) => {
     console.log('🟢 TaskContext.addTask נקרא עם:', taskData);
     console.log('🔑 User ID:', user?.id);

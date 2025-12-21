@@ -36,6 +36,7 @@ function Dashboard() {
   const stats = getStats();
 
   // פתיחת טופס הוספת משימה
+  // חשוב: ניתן להוסיף משימות חדשות תמיד, ללא הגבלה על משימות פעילות או לא הושלמו
   const handleAddTask = (quadrant = 1) => {
     setEditingTask(null);
     setActiveQuadrant(quadrant);
