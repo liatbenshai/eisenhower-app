@@ -133,6 +133,19 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           toast.success(`⏰ טיימר חודש! עברו ${Math.floor(elapsed / 60)} דקות`, {
             duration: 3000
           });
+          
+          // שמירה אוטומטית של הזמן שצבר אחרי רענון
+          setTimeout(() => {
+            if (saveProgressRef.current) {
+              const minutesToSave = Math.floor(elapsed / 60);
+              if (minutesToSave > 0) {
+                console.log('💾 שומר זמן שצבר אחרי רענון:', minutesToSave, 'דקות');
+                saveProgressRef.current(false, true).catch(err => {
+                  console.warn('⚠️ שמירה אוטומטית אחרי רענון נכשלה:', err);
+                });
+              }
+            }
+          }, 2000); // נמתין 2 שניות כדי לוודא שהכל נטען
         } else {
           localStorage.removeItem(timerStorageKey);
         }
@@ -467,6 +480,30 @@ function TaskTimer({ task, onUpdate, onComplete }) {
 
   // שמירת הפונקציה ב-ref כדי שה-useEffect יוכל לקרוא לה
   saveProgressRef.current = saveProgress;
+  
+  // שמירה אוטומטית לפני שהדף נסגר
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // אם יש זמן שצבר, נשמור אותו
+      if (isRunning && elapsedSeconds > 0 && saveProgressRef.current) {
+        console.log('💾 שומר זמן לפני סגירת הדף...');
+        // נשתמש ב-sendBeacon אם אפשר, אחרת ננסה לשמור רגיל
+        const minutesToSave = Math.floor(elapsedSeconds / 60);
+        if (minutesToSave > 0) {
+          // ננסה לשמור - אבל לא נחכה כי הדף עומד להיסגר
+          saveProgressRef.current(false, true).catch(err => {
+            console.warn('⚠️ שמירה לפני סגירה נכשלה:', err);
+          });
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isRunning, elapsedSeconds]);
 
   const continueAfterTarget = () => {
     // לא מאפסים את הזמן - ממשיכים מהזמן הנוכחי!

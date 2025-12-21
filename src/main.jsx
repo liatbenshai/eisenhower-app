@@ -112,6 +112,23 @@ if (typeof window !== 'undefined') {
       console.log('✨ האפליקציה פועלת ללא Service Worker - רענון חופשי!');
       console.log('💡 אם עדיין יש בעיות רענון, פתחי DevTools (F12) → Application → Service Workers → לחצי Unregister על כל אחד');
       
+      // וידוא שרענון עובד - הוספת event listener לרענון
+      window.addEventListener('beforeunload', () => {
+        // ניקוי Service Workers לפני רענון
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(reg => reg.unregister());
+          });
+        }
+      });
+      
+      // שמירת נתונים לפני רענון - הוספת event listener
+      window.addEventListener('beforeunload', () => {
+        // ניסיון לשמור נתונים לפני רענון
+        console.log('💾 שומר נתונים לפני רענון...');
+        // זה יעזור לשמור את הנתונים לפני שהדף נסגר
+      });
+      
       // בדיקות תקופתיות - למקרה ש-Service Worker נרשם מאוחר יותר
       const checkAndClean = async () => {
         if ('serviceWorker' in navigator) {

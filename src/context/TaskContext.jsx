@@ -85,6 +85,40 @@ export function TaskProvider({ children }) {
       loadTasks();
     }
   }, [loadTasks, authLoading]);
+  
+  // טעינה מחדש כשהדף חוזר להיות פעיל (אחרי רענון)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && !authLoading && user?.id) {
+          console.log('👁️ דף חזר להיות פעיל - טוען משימות מחדש...');
+          // טעינה מחדש אחרי 500ms כדי לוודא שהכל מוכן
+          setTimeout(() => {
+            loadTasks();
+          }, 500);
+        }
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // טעינה מחדש גם כשהחלון מקבל focus
+      const handleFocus = () => {
+        if (!authLoading && user?.id) {
+          console.log('🎯 חלון קיבל focus - טוען משימות מחדש...');
+          setTimeout(() => {
+            loadTasks();
+          }, 500);
+        }
+      };
+      
+      window.addEventListener('focus', handleFocus);
+      
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+      };
+    }
+  }, [loadTasks, authLoading, user?.id]);
 
   // הוספת משימה
   // חשוב: אין הגבלה על הוספת משימות - ניתן להוסיף משימות חדשות תמיד,
