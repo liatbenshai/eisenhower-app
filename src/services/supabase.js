@@ -516,35 +516,17 @@ export async function updateTask(taskId, updates) {
   if (updates.estimated_duration !== undefined) {
     updateData.estimated_duration = updates.estimated_duration ? parseInt(updates.estimated_duration) : null;
   }
-  if (updates.time_spent !== undefined) {
-    updateData.time_spent = parseInt(updates.time_spent) || 0;
-  }
   
-  // הסרת time_spent מ-updateData אם הוא לא קיים בטבלה
-  // (אם יש שגיאה, נסיר אותו וננסה שוב)
-  let finalUpdateData = { ...updateData };
+  // לא נוסיף time_spent ל-updateData - העמודה לא קיימת בטבלה
+  // אם צריך לעדכן time_spent, צריך להריץ את ה-migration קודם
   
-  // נסיר time_spent מ-updateData אם הוא לא קיים בטבלה
-  // (נבדוק לפי השגיאה)
-  let { data, error } = await supabase
+  // עדכון פשוט - בלי time_spent
+  const { data, error } = await supabase
     .from('tasks')
-    .update(finalUpdateData)
+    .update(updateData)
     .eq('id', taskId)
     .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id')
     .single();
-  
-  // אם יש שגיאה על time_spent, נסיר אותו וננסה שוב
-  if (error && error.code === '42703' && error.message?.includes('time_spent')) {
-    delete finalUpdateData.time_spent;
-    const result = await supabase
-      .from('tasks')
-      .update(finalUpdateData)
-      .eq('id', taskId)
-      .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id')
-      .single();
-    data = result.data;
-    error = result.error;
-  }
   
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
