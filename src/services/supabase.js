@@ -503,22 +503,52 @@ export async function updateTask(taskId, updates) {
     throw new Error('❌ אין משתמש מחובר. אנא התחברי מחדש.');
   }
   
-  // הכנת נתונים לעדכון
+  // הכנת נתונים לעדכון - רק שדות בסיסיים
   const updateData = {
-    ...updates,
     updated_at: new Date().toISOString()
   };
   
-  // המרת שדות מספריים אם צריך
+  // הוספת רק שדות שקיימים בטבלה
+  if (updates.is_completed !== undefined) {
+    updateData.is_completed = updates.is_completed;
+  }
+  if (updates.completed_at !== undefined) {
+    updateData.completed_at = updates.completed_at;
+  }
+  if (updates.title !== undefined) {
+    updateData.title = updates.title;
+  }
+  if (updates.description !== undefined) {
+    updateData.description = updates.description;
+  }
+  if (updates.quadrant !== undefined) {
+    updateData.quadrant = updates.quadrant;
+  }
+  if (updates.due_date !== undefined) {
+    updateData.due_date = updates.due_date;
+  }
+  if (updates.due_time !== undefined) {
+    updateData.due_time = updates.due_time;
+  }
   if (updates.reminder_minutes !== undefined) {
     updateData.reminder_minutes = updates.reminder_minutes ? parseInt(updates.reminder_minutes) : null;
   }
   if (updates.estimated_duration !== undefined) {
     updateData.estimated_duration = updates.estimated_duration ? parseInt(updates.estimated_duration) : null;
   }
+  if (updates.task_type !== undefined) {
+    updateData.task_type = updates.task_type;
+  }
+  if (updates.is_project !== undefined) {
+    updateData.is_project = updates.is_project;
+  }
+  if (updates.parent_task_id !== undefined) {
+    updateData.parent_task_id = updates.parent_task_id;
+  }
   
-  // לא נוסיף time_spent ל-updateData - העמודה לא קיימת בטבלה
-  // אם צריך לעדכן time_spent, צריך להריץ את ה-migration קודם
+  // לא נוסיף time_spent - העמודה לא קיימת בטבלה
+  
+  console.log('📤 מעדכן משימה:', { taskId, updateData });
   
   // עדכון פשוט - בלי time_spent
   const { data, error } = await supabase
@@ -530,6 +560,14 @@ export async function updateTask(taskId, updates) {
   
   if (error) {
     console.error('❌ שגיאה בעדכון משימה:', error);
+    console.error('📋 פרטי שגיאה:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      taskId,
+      updateData
+    });
     throw error;
   }
   
