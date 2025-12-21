@@ -34,105 +34,28 @@ export function TaskProvider({ children }) {
 
   // מניעת טעינות כפולות
   const loadingRef = useRef(false);
-  const lastLoadTimeRef = useRef(0);
-  const MIN_LOAD_INTERVAL = 3000; // מינימום 3 שניות בין טעינות
   
-  // טעינת משימות
+  // טעינת משימות - פשוט וישיר
   const loadTasks = useCallback(async () => {
-    // מניעת טעינות תכופות מדי
-    const now = Date.now();
-    if (now - lastLoadTimeRef.current < MIN_LOAD_INTERVAL) {
-      console.log('⏳ טעינה אחרונה הייתה לפני פחות מ-3 שניות, מדלג...');
-      return;
-    }
-    // אם האותנטיקציה עדיין נטענת, נחכה
-    if (authLoading) {
-      console.log('⏳ ממתין לאימות משתמש...');
-      return;
-    }
-
-    // אם אין משתמש אחרי שהאותנטיקציה נטענה, ננקה את המשימות
-    if (!user?.id) {
-      console.log('ℹ️ אין משתמש מחובר - מנקה משימות');
-      setTasks([]);
-      setLoading(false);
-      setError(null);
-      loadingRef.current = false;
+    if (authLoading || !user?.id || loadingRef.current) {
       return;
     }
     
-    // מניעת טעינות כפולות
-    if (loadingRef.current) {
-      console.log('⏳ טעינה כבר בתהליך, מדלג...');
-      return;
-    }
-    
-    console.log('📥 טוען משימות עבור משתמש:', user.id);
-
     loadingRef.current = true;
     setLoading(true);
     setError(null);
     
     try {
-      // retry logic - 3 ניסיונות
-      let lastError = null;
-      let attempts = 0;
-      const maxAttempts = 3;
-      let data = null;
-      
-      while (attempts < maxAttempts && !data) {
-        attempts++;
-        console.log(`🔄 ניסיון טעינה ${attempts}/${maxAttempts}...`);
-        
-        try {
-          // timeout מוגדל ל-60 שניות
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('טעינת משימות לקחה יותר מדי זמן - נסי לרענן את הדף')), 60000);
-          });
-          
-          data = await Promise.race([
-            getTasks(user.id),
-            timeoutPromise
-          ]);
-          
-          // אם הצלחנו, נצא מהלולאה
-          if (data) {
-            break;
-          }
-        } catch (err) {
-          lastError = err;
-          console.warn(`⚠️ ניסיון ${attempts} נכשל:`, err.message);
-          
-          // אם זה לא הניסיון האחרון, נמתין קצת לפני ניסיון נוסף
-          if (attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-      }
-      
-      if (data) {
-        // וידוא שכל המשימות יש להן את השדות הנדרשים
-        const safeData = (data || []).map(task => ({
-          ...task,
-          time_spent: task.time_spent || 0,
-          estimated_duration: task.estimated_duration || null
-        }));
-        setTasks(safeData);
-        lastLoadTimeRef.current = Date.now();
-        console.log(`✅ טעינת משימות הצליחה - ${safeData.length} משימות`);
-      } else {
-        // אם כל הניסיונות נכשלו
-        throw lastError || new Error('טעינת משימות נכשלה אחרי כל הניסיונות');
-      }
+      const data = await getTasks(user.id);
+      const safeData = (data || []).map(task => ({
+        ...task,
+        time_spent: task.time_spent || 0,
+        estimated_duration: task.estimated_duration || null
+      }));
+      setTasks(safeData);
     } catch (err) {
       console.error('שגיאה בטעינת משימות:', err);
-      // לא נציג שגיאה אם זה רק timeout - נציג הודעה ידידותית יותר
-      const errorMessage = err.message?.includes('יותר מדי זמן') 
-        ? 'טעינת משימות לוקחת זמן - נסי לרענן את הדף או לבדוק את החיבור לאינטרנט'
-        : (err.message || 'שגיאה בטעינת משימות');
-      setError(errorMessage);
-      // לא ננקה את המשימות הקיימות - נשאיר אותן
-      // setTasks([]);
+      setError(err.message || 'שגיאה בטעינת משימות');
     } finally {
       setLoading(false);
       loadingRef.current = false;
@@ -144,7 +67,8 @@ export function TaskProvider({ children }) {
     if (!authLoading && user?.id) {
       loadTasks();
     }
-  }, [user?.id, authLoading, loadTasks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]); // לא loadTasks כדי למנוע לולאה
 
   // הוספת משימה
   // חשוב: אין הגבלה על הוספת משימות - ניתן להוסיף משימות חדשות תמיד,
