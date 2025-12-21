@@ -1,9 +1,10 @@
 // מחיקת Service Workers ו-cache - אגרסיבי מאוד + לפני רענון
 if (typeof window !== 'undefined') {
-  // פונקציה למחיקת כל ה-Service Workers ו-cache
+  // פונקציה למחיקת כל ה-Service Workers ו-cache - חזקה מאוד
   const clearServiceWorkersAndCache = () => {
-    // מחיקת Service Workers
+    // מחיקת Service Workers - חזק יותר
     if ('serviceWorker' in navigator) {
+      // נסיון 1: דרך getRegistrations
       navigator.serviceWorker.getRegistrations().then(registrations => {
         registrations.forEach(reg => {
           reg.unregister().then(() => {
@@ -11,9 +12,20 @@ if (typeof window !== 'undefined') {
           }).catch(() => {});
         });
       }).catch(() => {});
+      
+      // נסיון 2: דרך getRegistration לכל URL אפשרי
+      ['/', '/index.html', '/sw.js', '/service-worker.js'].forEach(url => {
+        navigator.serviceWorker.getRegistration(url).then(reg => {
+          if (reg) {
+            reg.unregister().then(() => {
+              console.log('✅ Service Worker נמחק:', url);
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      });
     }
     
-    // מחיקת כל ה-cache
+    // מחיקת כל ה-cache - חזק יותר
     if ('caches' in window) {
       caches.keys().then(cacheNames => {
         cacheNames.forEach(cacheName => {
@@ -24,23 +36,31 @@ if (typeof window !== 'undefined') {
       }).catch(() => {});
     }
     
-    // מחיקת localStorage ו-sessionStorage של Service Workers
+    // מחיקת כל ה-localStorage ו-sessionStorage
     try {
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('service-worker') || key.includes('sw-') || key.includes('workbox')) {
-          localStorage.removeItem(key);
+      // מחיקת כל המפתחות שקשורים ל-Service Workers
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('service-worker') || key.includes('sw-') || key.includes('workbox') || key.includes('cache'))) {
+          keysToRemove.push(key);
         }
-      });
-      Object.keys(sessionStorage).forEach(key => {
-        if (key.includes('service-worker') || key.includes('sw-') || key.includes('workbox')) {
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.includes('service-worker') || key.includes('sw-') || key.includes('workbox') || key.includes('cache'))) {
           sessionStorage.removeItem(key);
         }
-      });
+      }
     } catch (e) {}
   };
   
-  // מחיקה מיד בטעינה
+  // מחיקה מיד בטעינה - כמה פעמים
   clearServiceWorkersAndCache();
+  setTimeout(clearServiceWorkersAndCache, 100);
+  setTimeout(clearServiceWorkersAndCache, 500);
   
   // מחיקה לפני רענון/סגירה
   window.addEventListener('beforeunload', () => {
@@ -49,14 +69,22 @@ if (typeof window !== 'undefined') {
   
   // מחיקה גם ב-visibilitychange (כשהדף נסגר/נפתח)
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      clearServiceWorkersAndCache();
-    }
+    clearServiceWorkersAndCache();
   });
   
-  // מניעת יצירת Service Workers חדשים - חזק יותר
+  // מחיקה גם ב-focus (כשהדף חוזר להיות פעיל)
+  window.addEventListener('focus', () => {
+    clearServiceWorkersAndCache();
+  });
+  
+  // מניעת יצירת Service Workers חדשים - חזק מאוד
   if ('serviceWorker' in navigator) {
-    const originalRegister = navigator.serviceWorker.register;
+    // שמירת הפונקציות המקוריות (אם צריך)
+    if (!window._originalServiceWorkerRegister) {
+      window._originalServiceWorkerRegister = navigator.serviceWorker.register;
+    }
+    
+    // חסימת register
     navigator.serviceWorker.register = function() {
       console.warn('🚫 נחסם ניסיון לרישום Service Worker');
       return Promise.reject(new Error('Service Workers disabled'));
@@ -67,30 +95,41 @@ if (typeof window !== 'undefined') {
       get: function() {
         return Promise.reject(new Error('Service Workers disabled'));
       },
-      configurable: true
+      configurable: true,
+      enumerable: false
     });
     
     // חסימת getRegistration
-    const originalGetRegistration = navigator.serviceWorker.getRegistration;
     navigator.serviceWorker.getRegistration = function() {
       return Promise.resolve(null);
     };
     
     // חסימת getRegistrations
-    const originalGetRegistrations = navigator.serviceWorker.getRegistrations;
     navigator.serviceWorker.getRegistrations = function() {
       return Promise.resolve([]);
     };
   }
   
-  // הוספת version ל-URL כדי למנוע cache ישן
+  // הוספת version ל-URL כדי למנוע cache ישן - חזק יותר
   const originalFetch = window.fetch;
   window.fetch = function(...args) {
     const url = args[0];
-    if (typeof url === 'string' && url.includes('/src/')) {
-      args[0] = url + (url.includes('?') ? '&' : '?') + '_v=' + Date.now();
+    if (typeof url === 'string') {
+      // הוספת timestamp לכל בקשה
+      const separator = url.includes('?') ? '&' : '?';
+      args[0] = url + separator + '_v=' + Date.now() + '&_r=' + Math.random();
     }
     return originalFetch.apply(this, args);
+  };
+  
+  // מניעת cache גם ב-XMLHttpRequest
+  const originalXHROpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    if (typeof url === 'string') {
+      const separator = url.includes('?') ? '&' : '?';
+      url = url + separator + '_v=' + Date.now();
+    }
+    return originalXHROpen.call(this, method, url, ...rest);
   };
   
   console.log('✨ Service Workers ו-Cache מושבתים - רענון חופשי!');

@@ -9,10 +9,14 @@
   <meta name="description" content="אפליקציית ניהול זמן מבוססת מטריצת אייזנהאואר" />
   <meta name="theme-color" content="#3B82F6" />
   
-  <!-- מניעת caching -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <!-- מניעת caching - חזק מאוד -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  
+  <!-- מניעת Service Workers -->
+  <meta name="mobile-web-app-capable" content="no" />
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -29,7 +33,7 @@
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
+  <script type="module" src="/src/main.jsx?v=<?php echo time(); ?>"></script>
 </body>
 </html>
 
