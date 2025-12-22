@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
+import { useAuth } from '../../hooks/useAuth';
 import { TASK_TYPES } from '../DailyView/DailyView';
 import { timeToMinutes, minutesToTime } from '../../utils/timeOverlap';
+import { getTaskTypeLearning, calculateSuggestedTime } from '../../services/supabase';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -58,6 +60,7 @@ function formatMinutes(minutes) {
  */
 function SmartWorkIntake({ onClose, onCreated }) {
   const { tasks, addTask, editTask, loadTasks } = useTasks();
+  const { user } = useAuth();
   
   // שלב בתהליך
   const [step, setStep] = useState(1); // 1: פרטים, 2: ניתוח, 3: שיבוץ
@@ -73,6 +76,10 @@ function SmartWorkIntake({ onClose, onCreated }) {
     description: ''
   });
 
+  // נתוני למידה
+  const [learningData, setLearningData] = useState(null);
+  const [adjustedHours, setAdjustedHours] = useState(null);
+
   // תוצאות הניתוח
   const [analysis, setAnalysis] = useState(null);
   
@@ -83,6 +90,28 @@ function SmartWorkIntake({ onClose, onCreated }) {
   const [proposedSchedule, setProposedSchedule] = useState([]);
   
   const [loading, setLoading] = useState(false);
+
+  // טעינת נתוני למידה כשמשתנה סוג המשימה
+  useEffect(() => {
+    if (user?.id && formData.taskType) {
+      getTaskTypeLearning(user.id, formData.taskType)
+        .then(data => {
+          setLearningData(data);
+          // חישוב זמן מותאם אם יש מספיק נתונים
+          if (data && data.total_tasks >= 3 && formData.totalHours) {
+            const baseMinutes = parseFloat(formData.totalHours) * 60;
+            const adjusted = calculateSuggestedTime(data, baseMinutes);
+            setAdjustedHours(adjusted / 60);
+          } else {
+            setAdjustedHours(null);
+          }
+        })
+        .catch(err => {
+          console.error('שגיאה בטעינת נתוני למידה:', err);
+          setLearningData(null);
+        });
+    }
+  }, [user?.id, formData.taskType, formData.totalHours]);
 
   // עדכון שדה
   const handleChange = (e) => {
@@ -457,6 +486,48 @@ function SmartWorkIntake({ onClose, onCreated }) {
               />
             </div>
           </div>
+
+          {/* המלצת למידה */}
+          {learningData && learningData.total_tasks >= 3 && formData.totalHours && (
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">🧠</span>
+                <div className="flex-1">
+                  <div className="font-medium text-purple-800 dark:text-purple-200 text-sm">
+                    המערכת למדה מ-{learningData.total_tasks} משימות קודמות:
+                  </div>
+                  <div className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                    {learningData.average_ratio > 1.1 ? (
+                      <>
+                        {TASK_TYPES[formData.taskType]?.name} בד"כ לוקח לך <strong>{Math.round((learningData.average_ratio - 1) * 100)}% יותר</strong> מההערכה.
+                        <br />
+                        💡 מומלץ לתכנן <strong>{adjustedHours?.toFixed(1)} שעות</strong> במקום {formData.totalHours}.
+                      </>
+                    ) : learningData.average_ratio < 0.9 ? (
+                      <>
+                        {TASK_TYPES[formData.taskType]?.name} בד"כ לוקח לך <strong>{Math.round((1 - learningData.average_ratio) * 100)}% פחות</strong> מההערכה.
+                        <br />
+                        💡 את יעילה! אפשר לתכנן <strong>{adjustedHours?.toFixed(1)} שעות</strong>.
+                      </>
+                    ) : (
+                      <>
+                        ההערכות שלך מדויקות! 🎯
+                      </>
+                    )}
+                  </div>
+                  {adjustedHours && Math.abs(adjustedHours - parseFloat(formData.totalHours)) > 0.25 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, totalHours: adjustedHours.toFixed(1) }))}
+                      className="mt-2 px-3 py-1 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      עדכן ל-{adjustedHours.toFixed(1)} שעות
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* גודל בלוק */}
           <div>

@@ -130,7 +130,7 @@ function isToday(date) {
 /**
  * תצוגת יום עבודה - מסך ראשי חדש
  */
-function DailyView() {
+function DailyView({ initialView = 'day' }) {
   const { user } = useAuth();
   const { tasks, loading, error, loadTasks, editTask } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -139,7 +139,7 @@ function DailyView() {
   const [showWorkIntake, setShowWorkIntake] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('day'); // 'day', 'week', or 'analytics'
+  const [viewMode, setViewMode] = useState(initialView); // 'day', 'week', or 'analytics'
 
   // ניווט בין ימים
   const goToPreviousDay = () => {
