@@ -9,10 +9,8 @@ import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
 import Tabs from '../components/UI/Tabs';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
-import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
 import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
 import CalendarView from '../components/Calendar/CalendarView';
-import TimePlanningRecommendations from '../components/Recommendations/TimePlanningRecommendations';
 import TaskList from '../components/Tasks/TaskList';
 
 /**
@@ -140,37 +138,24 @@ function Dashboard() {
         defaultTab={0}
         tabs={[
           {
-            label: 'תכנון vs ביצוע',
-            icon: '📊',
-            content: (
-              <div className="space-y-6">
-                {/* עדכון זמן ידני */}
-                <ManualTimeUpdate 
-                  onUpdated={loadTasks} 
-                />
-                <PlanningVsExecution />
-              </div>
-            )
-          },
-          {
             label: 'לוח שנה',
             icon: '📅',
             content: <CalendarView onAddTask={handleAddTask} onEditTask={handleEditTask} />
           },
           {
+            label: 'משימות',
+            icon: '📝',
+            content: (
+              <div className="space-y-4">
+                <ManualTimeUpdate onUpdated={loadTasks} />
+                <TaskList onEditTask={handleEditTask} />
+              </div>
+            )
+          },
+          {
             label: 'ניתוח זמן',
             icon: '⏱️',
             content: <TimeAnalytics />
-          },
-          {
-            label: 'המלצות',
-            icon: '🧠',
-            content: <TimePlanningRecommendations />
-          },
-          {
-            label: 'משימות',
-            icon: '📝',
-            content: <TaskList onEditTask={handleEditTask} />
           }
         ]}
       />
