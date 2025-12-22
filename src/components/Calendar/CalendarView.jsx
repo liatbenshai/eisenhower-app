@@ -312,9 +312,16 @@ function CalendarView({ onAddTask, onEditTask }) {
                               key={task.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onEditTask && onEditTask(task);
+                                // אם זו subtask, לא מאפשרים עריכה ישירה (צריך לערוך דרך הפרויקט)
+                                if (!task.is_subtask && onEditTask) {
+                                  onEditTask(task);
+                                }
                               }}
-                              className={`p-2 rounded-lg border-2 cursor-pointer hover:shadow-md transition-all ${
+                              className={`p-2 rounded-lg border-2 transition-all ${
+                                task.is_subtask 
+                                  ? 'cursor-default opacity-75' 
+                                  : 'cursor-pointer hover:shadow-md'
+                              } ${
                                 status === 'overdue' 
                                   ? 'border-red-500 bg-red-50 dark:bg-red-900/20' 
                                   : status === 'today'
@@ -431,9 +438,16 @@ function CalendarView({ onAddTask, onEditTask }) {
                                   key={task.id}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onEditTask && onEditTask(task);
+                                    // אם זו subtask, לא מאפשרים עריכה ישירה
+                                    if (!task.is_subtask && onEditTask) {
+                                      onEditTask(task);
+                                    }
                                   }}
-                                  className={`p-1.5 rounded border text-xs cursor-pointer hover:shadow-sm transition-all ${
+                                  className={`p-1.5 rounded border text-xs transition-all ${
+                                    task.is_subtask 
+                                      ? 'cursor-default opacity-75' 
+                                      : 'cursor-pointer hover:shadow-sm'
+                                  } ${
                                     status === 'overdue' 
                                       ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' 
                                       : status === 'today'

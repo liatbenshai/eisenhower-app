@@ -190,6 +190,13 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
     
     try {
       if (isEditing) {
+        // בדיקה אם זו subtask (לא ניתן לערוך subtasks ישירות)
+        if (task.is_subtask || task.id?.startsWith('subtask-')) {
+          toast.error('לא ניתן לערוך שלבים ישירות. יש לערוך דרך הפרויקט הראשי.');
+          setLoading(false);
+          return;
+        }
+        
         console.log('✏️ עורך משימה קיימת:', task.id);
         const result = await editTask(task.id, formData);
         console.log('✅ תוצאת עריכה:', result);
