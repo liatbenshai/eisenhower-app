@@ -4,6 +4,12 @@ import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { TASK_TYPES } from '../DailyView/DailyView';
 import { timeToMinutes, minutesToTime } from '../../utils/timeOverlap';
+import Modal from '../UI/Modal';
+import QuickAdd from '../QuickAdd/QuickAdd';
+import UrgentReschedule from '../Scheduler/UrgentReschedule';
+import WeeklyReview from '../Analytics/WeeklyReview';
+import ClientTracker from '../Analytics/ClientTracker';
+import WorkPreferences from '../Settings/WorkPreferences';
 
 /**
  * שעות העבודה
@@ -91,11 +97,18 @@ function getGreeting() {
  */
 function Dashboard({ onNavigate }) {
   const { user } = useAuth();
-  const { tasks, loading } = useTasks();
+  const { tasks, loading, loadTasks } = useTasks();
   const [currentTime, setCurrentTime] = useState(getCurrentTime());
   const [lastAlertedTask, setLastAlertedTask] = useState(null);
   const [showTaskAlert, setShowTaskAlert] = useState(false);
   const [alertedWarnings, setAlertedWarnings] = useState(new Set());
+  
+  // מודלים
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showUrgent, setShowUrgent] = useState(false);
+  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+  const [showClientTracker, setShowClientTracker] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   
   // עדכון שעה כל דקה
   useEffect(() => {
@@ -475,6 +488,30 @@ function Dashboard({ onNavigate }) {
           </button>
         </motion.div>
 
+        {/* כפתורים מהירים */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55 }}
+          className="grid grid-cols-2 gap-3"
+        >
+          <button
+            onClick={() => setShowQuickAdd(true)}
+            className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-all flex items-center justify-center gap-2"
+          >
+            <span className="text-lg">⚡</span>
+            <span className="font-medium text-yellow-700 dark:text-yellow-300 text-sm">משהו צץ</span>
+          </button>
+          
+          <button
+            onClick={() => setShowUrgent(true)}
+            className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all flex items-center justify-center gap-2"
+          >
+            <span className="text-lg">🚨</span>
+            <span className="font-medium text-red-700 dark:text-red-300 text-sm">דחוף!</span>
+          </button>
+        </motion.div>
+
         {/* כפתור הוספת עבודה */}
         <motion.button
           initial={{ opacity: 0, scale: 0.9 }}
@@ -486,7 +523,79 @@ function Dashboard({ onNavigate }) {
           <span className="text-xl">📥</span>
           <span>הוסף עבודה חדשה</span>
         </motion.button>
+
+        {/* כפתורי דוחות והגדרות */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          className="flex gap-2 justify-center"
+        >
+          <button
+            onClick={() => setShowWeeklyReview(true)}
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
+          >
+            <span>📊</span> סקירה שבועית
+          </button>
+          <button
+            onClick={() => setShowClientTracker(true)}
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
+          >
+            <span>👥</span> לקוחות
+          </button>
+          <button
+            onClick={() => setShowPreferences(true)}
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
+          >
+            <span>⚙️</span> העדפות
+          </button>
+        </motion.div>
       </div>
+
+      {/* מודלים */}
+      <QuickAdd 
+        isOpen={showQuickAdd} 
+        onClose={() => setShowQuickAdd(false)}
+        onAdded={loadTasks}
+      />
+
+      <Modal
+        isOpen={showUrgent}
+        onClose={() => setShowUrgent(false)}
+        title="🚨 עבודה דחופה"
+      >
+        <UrgentReschedule
+          onClose={() => setShowUrgent(false)}
+          onRescheduled={loadTasks}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={showWeeklyReview}
+        onClose={() => setShowWeeklyReview(false)}
+        title="📊 סקירה שבועית"
+      >
+        <WeeklyReview onClose={() => setShowWeeklyReview(false)} />
+      </Modal>
+
+      <Modal
+        isOpen={showClientTracker}
+        onClose={() => setShowClientTracker(false)}
+        title="👥 מעקב לקוחות"
+      >
+        <ClientTracker onClose={() => setShowClientTracker(false)} />
+      </Modal>
+
+      <Modal
+        isOpen={showPreferences}
+        onClose={() => setShowPreferences(false)}
+        title="⚙️ העדפות עבודה"
+      >
+        <WorkPreferences 
+          onClose={() => setShowPreferences(false)}
+          onSaved={loadTasks}
+        />
+      </Modal>
     </div>
   );
 }
