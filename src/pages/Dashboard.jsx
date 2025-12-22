@@ -10,19 +10,7 @@ import MobileNav from '../components/Layout/MobileNav';
 import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
 import Tabs from '../components/UI/Tabs';
-import SummaryView from '../components/Summary/SummaryView';
-import CalendarView from '../components/Calendar/CalendarView';
-import ProgressTracker from '../components/Tasks/ProgressTracker';
-import TaskTimer from '../components/Tasks/TaskTimer';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
-import WorkloadAnalysis from '../components/Analytics/WorkloadAnalysis';
-import TaskTemplateManager from '../components/Templates/TaskTemplateManager';
-import TimeBlockManager from '../components/TimeBlocks/TimeBlockManager';
-import SmartRecommendations from '../components/Recommendations/SmartRecommendations';
-import HabitTracker from '../components/Habits/HabitTracker';
-import AutoScheduler from '../components/SmartScheduler/AutoScheduler';
-import CompletedTasksView from '../components/Tasks/CompletedTasksView';
-import TimeCorrectionRules from '../components/Learning/TimeCorrectionRules';
 import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
 import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
 
@@ -144,22 +132,30 @@ function Dashboard() {
         </div>
       </motion.div>
 
-      {/* לשוניות */}
+      {/* לשוניות - רק מה שחשוב */}
       <Tabs
         defaultTab={0}
         tabs={[
           {
             label: 'תכנון vs ביצוע',
             icon: '📊',
-            content: <PlanningVsExecution />
+            content: (
+              <div className="space-y-6">
+                {/* עדכון זמן ידני */}
+                <ManualTimeUpdate 
+                  onUpdated={loadTasks} 
+                />
+                <PlanningVsExecution />
+              </div>
+            )
           },
           {
-            label: 'סיכום',
-            icon: '📈',
-            content: <SummaryView />
+            label: 'ניתוח זמן',
+            icon: '⏱️',
+            content: <TimeAnalytics />
           },
           {
-            label: 'מטריצה',
+            label: 'משימות',
             icon: '📋',
             content: (
               <div>
@@ -170,69 +166,7 @@ function Dashboard() {
                 <MobileNav onAddTask={handleAddTask} />
               </div>
             )
-          },
-          {
-            label: 'יומן',
-            icon: '📅',
-            content: <CalendarView />
-          },
-          {
-            label: 'תבניות',
-            icon: '📋',
-            content: <TaskTemplateManager />
-          },
-          {
-            label: 'תכנון זמן',
-            icon: '📅',
-            content: <TimeBlockManager />
-          },
-          {
-            label: 'המלצות',
-            icon: '💡',
-            content: <SmartRecommendations />
-          },
-          {
-            label: 'משימות שהושלמו',
-            icon: '✅',
-            content: <CompletedTasksView />
-          },
-          {
-            label: 'למידה אישית',
-            icon: '🎯',
-            content: <TimeCorrectionRules />
-          },
-          {
-            label: 'הרגלים',
-            icon: '📊',
-            content: <HabitTracker />
-          },
-          {
-            label: 'ניתוח זמן',
-            icon: '⏱️',
-            content: <TimeAnalytics />
-          },
-          {
-            label: 'תכנון אוטומטי',
-            icon: '🤖',
-            content: <AutoScheduler />
-          },
-          {
-            label: 'ניתוח עומס',
-            icon: '⚖️',
-            content: <WorkloadAnalysis />
-          },
-          {
-            label: 'התקדמות',
-            icon: '⏱️',
-            content: (
-              <div className="space-y-6">
-                {/* עדכון זמן ידני - 5.5 שעות = 5 שעות 30 דקות */}
-                <ManualTimeUpdate 
-                  onUpdated={loadTasks} 
-                  initialTaskTitle="בית חולים יוספטל"
-                  initialHours={5}
-                  initialMinutes={30}
-                />
+          }
                 {/* כל המשימות עם זמן שבוצע */}
                 {tasks && tasks.filter(t => !t.is_project && !t.parent_task_id && (t.time_spent || 0) > 0).length > 0 && (
                   <div>

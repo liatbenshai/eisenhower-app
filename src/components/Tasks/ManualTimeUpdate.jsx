@@ -8,11 +8,11 @@ import toast from 'react-hot-toast';
 /**
  * עדכון זמן ידני למשימה
  */
-function ManualTimeUpdate({ onUpdated, initialTaskTitle = '', initialHours = 0, initialMinutes = 0 }) {
+function ManualTimeUpdate({ onUpdated }) {
   const { tasks, loadTasks } = useTasks();
-  const [taskTitle, setTaskTitle] = useState(initialTaskTitle);
-  const [hours, setHours] = useState(initialHours);
-  const [minutes, setMinutes] = useState(initialMinutes);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const handleUpdate = async () => {
