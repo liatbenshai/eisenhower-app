@@ -24,6 +24,7 @@ import AutoScheduler from '../components/SmartScheduler/AutoScheduler';
 import CompletedTasksView from '../components/Tasks/CompletedTasksView';
 import TimeCorrectionRules from '../components/Learning/TimeCorrectionRules';
 import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
+import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
 
 /**
  * דף לוח המחוונים הראשי
@@ -225,6 +226,13 @@ function Dashboard() {
             icon: '⏱️',
             content: (
               <div className="space-y-6">
+                {/* עדכון זמן ידני - 5.5 שעות = 5 שעות 30 דקות */}
+                <ManualTimeUpdate 
+                  onUpdated={loadTasks} 
+                  initialTaskTitle="בית חולים יוספטל"
+                  initialHours={5}
+                  initialMinutes={30}
+                />
                 {/* כל המשימות עם זמן שבוצע */}
                 {tasks && tasks.filter(t => !t.is_project && !t.parent_task_id && (t.time_spent || 0) > 0).length > 0 && (
                   <div>
