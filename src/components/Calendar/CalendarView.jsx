@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTasks } from '../../hooks/useTasks';
 import { 
   format, 
@@ -25,12 +25,15 @@ import {
 import { he } from 'date-fns/locale';
 import TaskCard from '../Tasks/TaskCard';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
+import toast from 'react-hot-toast';
 
 /**
  * יומן - תצוגה יומית/שבועית/חודשית עם שעות
  */
 function CalendarView({ onAddTask, onEditTask }) {
-  const { tasks } = useTasks();
+  const { tasks, editTask, removeTask, loadTasks } = useTasks();
+  const [draggedTask, setDraggedTask] = useState(null);
+  const [dragOverTarget, setDragOverTarget] = useState(null); // { date, hour }
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('week'); // 'day', 'week', 'month'
   
@@ -178,6 +181,42 @@ function CalendarView({ onAddTask, onEditTask }) {
   const weekDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
   const weekDaysShort = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
   
+  // הזזה אוטומטית של משימות לא הושלמו למחר
+  const handleMoveUncompletedToTomorrow = useCallback(async () => {
+    try {
+      const movedTasks = await moveUncompletedTasksToTomorrow(editTask, tasks);
+      if (movedTasks.length > 0) {
+        toast.success(`${movedTasks.length} משימות הוזזו למחר`);
+        await loadTasks();
+      } else {
+        toast.success('אין משימות להזיז');
+      }
+    } catch (err) {
+      console.error('שגיאה בהזזת משימות:', err);
+      toast.error('שגיאה בהזזת משימות');
+    }
+  }, [editTask, tasks, loadTasks]);
+  
+  // בדיקה אוטומטית בבוקר - אם יש משימות להזיז
+  useEffect(() => {
+    const checkAndMove = async () => {
+      const lastMoveDate = localStorage.getItem('lastAutoMoveDate');
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // רק פעם ביום, בבוקר (אחרי 6:00)
+      if (lastMoveDate !== today && new Date().getHours() >= 6) {
+        const movedTasks = await moveUncompletedTasksToTomorrow(editTask, tasks);
+        if (movedTasks.length > 0) {
+          localStorage.setItem('lastAutoMoveDate', today);
+          toast.success(`הוזזו ${movedTasks.length} משימות לא הושלמו למחר`, { duration: 5000 });
+          await loadTasks();
+        }
+      }
+    };
+    
+    checkAndMove();
+  }, [tasks, editTask, loadTasks]);
+  
   return (
     <div className="space-y-4">
       {/* כותרת עם ניווט */}
@@ -235,6 +274,13 @@ function CalendarView({ onAddTask, onEditTask }) {
               className="px-4 py-2 text-sm rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 font-medium"
             >
               היום
+            </button>
+            <button
+              onClick={handleMoveUncompletedToTomorrow}
+              className="px-4 py-2 text-sm rounded-lg bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600 font-medium"
+              title="הזז משימות לא הושלמו למחר"
+            >
+              📅 הזז למחר
             </button>
             <button
               onClick={goToNext}
@@ -300,7 +346,13 @@ function CalendarView({ onAddTask, onEditTask }) {
                   
                   {/* תוכן - משימות */}
                   <div 
-                    className="flex-1 p-3 relative"
+                    className={`flex-1 p-3 relative ${
+                      dragOverTarget?.date && isSameDay(dragOverTarget.date, currentDate) && dragOverTarget.hour === hour
+                        ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500'
+                        : ''
+                    }`}
+                    onDragOver={(e) => handleDragOver(e, currentDate, hour)}
+                    onDrop={(e) => handleDrop(e, currentDate, hour)}
                     onClick={() => onAddTask && onAddTask(format(currentDate, 'yyyy-MM-dd'), `${hour.toString().padStart(2, '0')}:00`)}
                   >
                     {hourTasks.length > 0 ? (
@@ -310,17 +362,29 @@ function CalendarView({ onAddTask, onEditTask }) {
                           return (
                             <div
                               key={task.id}
+                              draggable={!task.is_subtask && !task.id?.startsWith('subtask-')}
+                              onDragStart={(e) => {
+                                if (!task.is_subtask && !task.id?.startsWith('subtask-')) {
+                                  handleDragStart(task, currentDate, hour);
+                                  e.dataTransfer.effectAllowed = 'move';
+                                } else {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onDragEnd={handleDragEnd}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 // אם זו subtask, לא מאפשרים עריכה ישירה (צריך לערוך דרך הפרויקט)
-                                if (!task.is_subtask && onEditTask) {
+                                if (!task.is_subtask && !task.id?.startsWith('subtask-') && onEditTask) {
                                   onEditTask(task);
                                 }
                               }}
-                              className={`p-2 rounded-lg border-2 transition-all ${
-                                task.is_subtask 
+                              className={`p-2 rounded-lg border-2 transition-all relative group ${
+                                task.is_subtask || task.id?.startsWith('subtask-')
                                   ? 'cursor-default opacity-75' 
                                   : 'cursor-pointer hover:shadow-md'
+                              } ${
+                                draggedTask?.task.id === task.id ? 'opacity-50' : ''
                               } ${
                                 status === 'overdue' 
                                   ? 'border-red-500 bg-red-50 dark:bg-red-900/20' 
@@ -332,14 +396,27 @@ function CalendarView({ onAddTask, onEditTask }) {
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <h4 className="font-medium text-sm text-gray-900 dark:text-white">
+                                <h4 className="font-medium text-sm text-gray-900 dark:text-white flex-1">
                                   {task.title}
                                 </h4>
-                                {task.due_time && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    {task.due_time}
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {task.due_time && (
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      {task.due_time}
+                                    </span>
+                                  )}
+                                  {!task.is_subtask && !task.id?.startsWith('subtask-') && (
+                                    <button
+                                      onClick={(e) => handleDeleteTask(task.id, e)}
+                                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-opacity"
+                                      title="מחק משימה"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -425,8 +502,12 @@ function CalendarView({ onAddTask, onEditTask }) {
                       <div
                         key={`${day.toISOString()}-${hour}`}
                         className={`min-h-[80px] border-r border-gray-200 dark:border-gray-700 p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                          isCurrentHour ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+                          dragOverTarget?.date && isSameDay(dragOverTarget.date, day) && dragOverTarget.hour === hour
+                            ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500'
+                            : isCurrentHour ? 'bg-blue-50 dark:bg-blue-900/10' : ''
                         }`}
+                        onDragOver={(e) => handleDragOver(e, day, hour)}
+                        onDrop={(e) => handleDrop(e, day, hour)}
                         onClick={() => onAddTask && onAddTask(format(day, 'yyyy-MM-dd'), `${hour.toString().padStart(2, '0')}:00`)}
                       >
                         {hourTasks.length > 0 && (
@@ -436,17 +517,29 @@ function CalendarView({ onAddTask, onEditTask }) {
                               return (
                                 <div
                                   key={task.id}
+                                  draggable={!task.is_subtask && !task.id?.startsWith('subtask-')}
+                                  onDragStart={(e) => {
+                                    if (!task.is_subtask && !task.id?.startsWith('subtask-')) {
+                                      handleDragStart(task, day, hour);
+                                      e.dataTransfer.effectAllowed = 'move';
+                                    } else {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                  onDragEnd={handleDragEnd}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     // אם זו subtask, לא מאפשרים עריכה ישירה
-                                    if (!task.is_subtask && onEditTask) {
+                                    if (!task.is_subtask && !task.id?.startsWith('subtask-') && onEditTask) {
                                       onEditTask(task);
                                     }
                                   }}
-                                  className={`p-1.5 rounded border text-xs transition-all ${
-                                    task.is_subtask 
+                                  className={`p-1.5 rounded border text-xs transition-all relative group ${
+                                    task.is_subtask || task.id?.startsWith('subtask-')
                                       ? 'cursor-default opacity-75' 
                                       : 'cursor-pointer hover:shadow-sm'
+                                  } ${
+                                    draggedTask?.task.id === task.id ? 'opacity-50' : ''
                                   } ${
                                     status === 'overdue' 
                                       ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' 
@@ -457,10 +550,25 @@ function CalendarView({ onAddTask, onEditTask }) {
                                       : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/10 text-gray-900 dark:text-white'
                                   }`}
                                 >
-                                  <div className="font-medium truncate">{task.title}</div>
-                                  {task.due_time && (
-                                    <div className="text-[10px] opacity-75">{task.due_time}</div>
-                                  )}
+                                  <div className="flex items-center justify-between">
+                                    <div className="font-medium truncate flex-1">{task.title}</div>
+                                    <div className="flex items-center gap-1">
+                                      {task.due_time && (
+                                        <span className="text-[10px] opacity-75">{task.due_time}</span>
+                                      )}
+                                      {!task.is_subtask && !task.id?.startsWith('subtask-') && (
+                                        <button
+                                          onClick={(e) => handleDeleteTask(task.id, e)}
+                                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-opacity"
+                                          title="מחק משימה"
+                                        >
+                                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               );
                             })}
