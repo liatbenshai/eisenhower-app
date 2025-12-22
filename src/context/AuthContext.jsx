@@ -120,8 +120,15 @@ export function AuthProvider({ children }) {
       }
     };
 
-    // אתחול ראשוני
-    initializeAuth();
+    // אתחול ראשוני - עם timeout קצר יותר
+    initializeAuth().catch(err => {
+      console.error('❌ שגיאה ב-initializeAuth:', err);
+      if (mounted) {
+        clearTimeout(loadingTimeout);
+        updateUser(null);
+        setLoading(false);
+      }
+    });
     
     // בדיקה תקופתית של הסשן (כל 5 דקות)
     sessionCheckInterval = setInterval(checkSession, 5 * 60 * 1000);
@@ -141,21 +148,23 @@ export function AuthProvider({ children }) {
           if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
             // רק עדכן את המשתמש אם יש סשן
             if (session?.user) {
-              try {
-                const currentUser = await getCurrentUser();
-                if (mounted) {
-                  setUser(currentUser);
-                  setLoading(false); // וידוא ש-loading מתעדכן
-                }
-              } catch (err) {
-                console.error('שגיאה בטעינת משתמש:', err);
-                // אם יש שגיאה בטעינת הפרופיל, נשתמש במשתמש הבסיסי
-                if (mounted) {
-                  setUser(session.user);
-                  setLoading(false); // וידוא ש-loading מתעדכן
-                }
+              // עדכן מיד עם המשתמש מהסשן (לא חוסם)
+              if (mounted) {
+                clearTimeout(loadingTimeout);
+                updateUser({ ...session.user, profile: null });
+                setLoading(false);
               }
+              
+              // נסה לטעון פרופיל ברקע (לא חוסם)
+              getCurrentUser().then(fullUser => {
+                if (mounted && fullUser) {
+                  updateUser(fullUser);
+                }
+              }).catch(() => {
+                // לא קריטי - נמשיך עם המשתמש מהסשן
+              });
             } else if (mounted) {
+              clearTimeout(loadingTimeout);
               setLoading(false); // גם אם אין סשן, עדכן loading
             }
             return;
