@@ -340,6 +340,7 @@ function DailyView() {
 
         {/* ניווט בין ימים - רק בתצוגת יום או שבוע */}
         {viewMode !== 'analytics' && (
+        <>
         <div className="flex items-center justify-between">
           <button
             onClick={goToPreviousDay}
@@ -373,6 +374,7 @@ function DailyView() {
         <p className="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
           שעות עבודה: {WORK_HOURS.start}:00 - {WORK_HOURS.end}:00
         </p>
+        </>
         )}
       </motion.div>
 
