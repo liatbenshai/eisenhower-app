@@ -63,11 +63,15 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
     <motion.div
       layout
       className={`
-        card p-4 transition-all duration-200
-        ${currentTask.is_completed ? 'opacity-60' : ''}
+        card p-4 transition-all duration-200 border-r-4
+        ${currentTask.is_completed ? 'opacity-60 border-r-gray-300' : ''}
         ${deleting ? 'opacity-50 scale-95' : ''}
-        ${isOverTime ? 'border-l-4 border-l-red-500' : ''}
+        ${isOverTime && !currentTask.is_completed ? 'border-l-4 border-l-red-500' : ''}
+        ${!currentTask.is_completed && !isOverTime ? taskType.color.split(' ').filter(c => c.startsWith('border-')).join(' ') : ''}
       `}
+      style={{
+        borderRightColor: !currentTask.is_completed ? undefined : undefined
+      }}
     >
       <div className="flex items-start gap-3">
         {/* כפתור סימון */}
@@ -93,7 +97,9 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
         <div className="flex-1 min-w-0">
           {/* שורה ראשונה: כותרת וסוג */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-lg">{taskType.icon}</span>
+            <span className={`text-lg px-2 py-0.5 rounded-full ${taskType.color.split(' ').slice(0, 4).join(' ')}`}>
+              {taskType.icon}
+            </span>
             <h3 className={`
               font-medium text-gray-900 dark:text-white
               ${currentTask.is_completed ? 'line-through text-gray-500' : ''}

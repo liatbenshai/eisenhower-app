@@ -161,8 +161,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
               className={`
                 p-3 rounded-lg border-2 text-center transition-all
                 ${formData.taskType === type.id
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? type.color + ' border-current ring-2 ring-offset-2 ring-current'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'
                 }
               `}
             >

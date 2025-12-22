@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TASK_TYPES } from './DailyView';
+import toast from 'react-hot-toast';
 
 /**
  * שעות העבודה
@@ -41,9 +42,12 @@ function getHebrewDate(date) {
 }
 
 /**
- * תצוגת שבוע כיומן
+ * תצוגת שבוע כיומן עם גרירה
  */
-function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
+function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onUpdateTask }) {
+  const [draggedTask, setDraggedTask] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+
   // ימות השבוע (ראשון עד חמישי - ימי עבודה)
   const weekDays = useMemo(() => {
     const days = [];
@@ -110,6 +114,61 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
     return Math.max(1, Math.ceil(duration / 60));
   };
 
+  // התחלת גרירה
+  const handleDragStart = (e, task) => {
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', task.id);
+  };
+
+  // גרירה מעל תא
+  const handleDragOver = (e, dateISO, hour) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTarget({ date: dateISO, hour });
+  };
+
+  // יציאה מתא
+  const handleDragLeave = () => {
+    setDropTarget(null);
+  };
+
+  // שחרור
+  const handleDrop = async (e, dateISO, hour) => {
+    e.preventDefault();
+    setDropTarget(null);
+    
+    if (!draggedTask) return;
+    
+    const newTime = `${hour.toString().padStart(2, '0')}:00`;
+    
+    // בדיקה אם יש שינוי
+    if (draggedTask.due_date === dateISO && draggedTask.due_time === newTime) {
+      setDraggedTask(null);
+      return;
+    }
+
+    try {
+      if (onUpdateTask) {
+        await onUpdateTask(draggedTask.id, {
+          dueDate: dateISO,
+          dueTime: newTime
+        });
+        toast.success('המשימה הועברה');
+      }
+    } catch (err) {
+      toast.error('שגיאה בהעברת המשימה');
+    }
+    
+    setDraggedTask(null);
+  };
+
+  // סיום גרירה
+  const handleDragEnd = () => {
+    setDraggedTask(null);
+    setDropTarget(null);
+  };
+
   // שמות הימים בעברית
   const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי'];
 
@@ -173,32 +232,50 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
               const dateISO = getDateISO(day);
               const tasksInSlot = tasksByDayAndHour[dateISO]?.[hour] || [];
               const isTodayDay = isToday(day);
+              const isDropZone = dropTarget?.date === dateISO && dropTarget?.hour === hour;
               
               return (
                 <div
                   key={dayIndex}
+                  onDragOver={(e) => handleDragOver(e, dateISO, hour)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, dateISO, hour)}
                   className={`
                     p-1 border-r border-gray-100 dark:border-gray-800 relative
+                    transition-colors duration-200
                     ${isTodayDay ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}
+                    ${isDropZone ? 'bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 ring-inset' : ''}
                   `}
                 >
+                  {/* אינדיקטור שחרור */}
+                  {isDropZone && tasksInSlot.length === 0 && (
+                    <div className="absolute inset-2 border-2 border-dashed border-green-400 rounded flex items-center justify-center">
+                      <span className="text-green-600 dark:text-green-400 text-xs">שחרר כאן</span>
+                    </div>
+                  )}
+                  
                   {tasksInSlot.map((task) => {
                     const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
                     const rowSpan = getTaskRowSpan(task);
+                    const isDragging = draggedTask?.id === task.id;
                     
                     return (
-                      <motion.button
+                      <motion.div
                         key={task.id}
                         initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        animate={{ opacity: isDragging ? 0.5 : 1, scale: 1 }}
+                        draggable={!task.is_completed}
+                        onDragStart={(e) => handleDragStart(e, task)}
+                        onDragEnd={handleDragEnd}
                         onClick={() => onEditTask(task)}
                         className={`
-                          w-full text-right p-1.5 rounded text-xs mb-1
-                          transition-all hover:shadow-md cursor-pointer
+                          w-full text-right p-1.5 rounded text-xs mb-1 border
+                          transition-all hover:shadow-md
                           ${task.is_completed 
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 line-through opacity-60' 
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 line-through opacity-60 border-gray-200 dark:border-gray-700 cursor-pointer' 
+                            : taskType.color + ' hover:opacity-80 cursor-grab active:cursor-grabbing'
                           }
+                          ${isDragging ? 'shadow-lg ring-2 ring-blue-500' : ''}
                         `}
                         style={{
                           minHeight: `${rowSpan * 50}px`
@@ -216,12 +293,24 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
                             )}
                           </div>
                         )}
-                      </motion.button>
+                      </motion.div>
                     );
                   })}
                 </div>
               );
             })}
+          </div>
+        ))}
+      </div>
+      
+      {/* מקרא צבעים */}
+      <div className="mt-4 flex flex-wrap gap-2 justify-center text-xs">
+        {Object.values(TASK_TYPES).map(type => (
+          <div 
+            key={type.id}
+            className={`px-2 py-1 rounded-full border ${type.color}`}
+          >
+            {type.icon} {type.name}
           </div>
         ))}
       </div>
