@@ -7,6 +7,7 @@ import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
 import SmartScheduler from '../Scheduler/SmartScheduler';
+import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
 import SmartNotifications from '../Notifications/SmartNotifications';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
@@ -381,6 +382,11 @@ function DailyView() {
       {/* תצוגת אנליטיקס */}
       {viewMode === 'analytics' && (
         <TimeAnalyticsDashboard />
+      )}
+
+      {/* משימות שלא הושלמו מימים קודמים - רק בתצוגה יומית והיום */}
+      {viewMode === 'day' && isToday(selectedDate) && (
+        <UnfinishedTasksHandler onTasksMoved={loadTasks} />
       )}
 
       {/* תצוגה שבועית - כיומן */}
