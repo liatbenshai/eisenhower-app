@@ -98,9 +98,14 @@ export function validateTaskDescription(description) {
 }
 
 /**
- * אימות רבע
+ * אימות רבע - אופציונלי
  */
 export function validateQuadrant(quadrant) {
+  // אם אין quadrant, זה תקין (אופציונלי)
+  if (!quadrant || quadrant === null || quadrant === undefined) {
+    return { valid: true, message: '' };
+  }
+  
   const validQuadrants = [1, 2, 3, 4];
   
   if (!validQuadrants.includes(quadrant)) {

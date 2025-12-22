@@ -168,7 +168,6 @@ function Dashboard() {
       >
         <TaskForm
           task={editingTask}
-          defaultQuadrant={1}
           defaultDate={selectedDateForTask}
           defaultTime={selectedTimeForTask}
           onClose={handleCloseForm}

@@ -340,103 +340,112 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
         )}
       </div>
 
-      {/* בחירת רבע */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            רבע במטריצה
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="autoQuadrant"
-              checked={autoQuadrant}
-              onChange={(e) => {
-                setAutoQuadrant(e.target.checked);
-                if (e.target.checked) {
-                  // עדכון אוטומטי
-                  const taskData = {
-                    title: formData.title,
-                    description: formData.description,
-                    dueDate: formData.dueDate,
-                    dueTime: formData.dueTime
-                  };
-                  const explanation = getQuadrantExplanation(taskData, tasks || []);
-                  setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
-                  setQuadrantExplanation(explanation);
-                }
-              }}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="autoQuadrant" className="text-xs text-gray-600 dark:text-gray-400">
-              קביעה אוטומטית
-            </label>
+      {/* בחירת רבע - אופציונלי */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center justify-between">
+            <span>רבע במטריצה (אופציונלי)</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 group-open:hidden">לחיצה להצגה</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 hidden group-open:inline">לחיצה להסתרה</span>
+          </summary>
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="autoQuadrant"
+                  checked={autoQuadrant}
+                  onChange={(e) => {
+                    setAutoQuadrant(e.target.checked);
+                    if (e.target.checked) {
+                      // עדכון אוטומטי
+                      const taskData = {
+                        title: formData.title,
+                        description: formData.description,
+                        dueDate: formData.dueDate,
+                        dueTime: formData.dueTime
+                      };
+                      const explanation = getQuadrantExplanation(taskData, tasks || []);
+                      setFormData(prev => ({ ...prev, quadrant: explanation.quadrant }));
+                      setQuadrantExplanation(explanation);
+                    }
+                  }}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="autoQuadrant" className="text-xs text-gray-600 dark:text-gray-400">
+                  קביעה אוטומטית
+                </label>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[1, 2, 3, 4].map(q => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, quadrant: q }));
+                    setAutoQuadrant(false); // ביטול אוטומטי כשמשנים ידנית
+                  }}
+                  className={`
+                    flex items-center gap-2 p-3 rounded-lg border-2 transition-all
+                    ${formData.quadrant === q
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    }
+                  `}
+                >
+                  <span className="text-lg">{QUADRANT_ICONS[q]}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {QUADRANT_NAMES[q]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {quadrantExplanation && autoQuadrant && (
+              <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                💡 נקבע אוטומטית: {quadrantExplanation.reason}
+              </p>
+            )}
+            {errors.quadrant && (
+              <p className="mt-1 text-sm text-red-500">{errors.quadrant}</p>
+            )}
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {[1, 2, 3, 4].map(q => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => {
-                setFormData(prev => ({ ...prev, quadrant: q }));
-                setAutoQuadrant(false); // ביטול אוטומטי כשמשנים ידנית
-              }}
-              className={`
-                flex items-center gap-2 p-3 rounded-lg border-2 transition-all
-                ${formData.quadrant === q
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                }
-              `}
-            >
-              <span className="text-lg">{QUADRANT_ICONS[q]}</span>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {QUADRANT_NAMES[q]}
-              </span>
-            </button>
-          ))}
-        </div>
-        {quadrantExplanation && autoQuadrant && (
-          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded">
-            💡 נקבע אוטומטית: {quadrantExplanation.reason}
-          </p>
-        )}
-        {errors.quadrant && (
-          <p className="mt-1 text-sm text-red-500">{errors.quadrant}</p>
-        )}
+        </details>
       </div>
 
-      {/* תאריך התחלה */}
-      <Input
-        label="תאריך התחלה"
-        type="date"
-        name="startDate"
-        value={formData.startDate}
-        onChange={handleChange}
-        error={errors.startDate}
-        min={getTodayISO()}
-      />
-
-      {/* תאריך ושעה */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* תאריכים וזמנים - חשוב לתכנון */}
+      <div className="space-y-3">
+        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          📅 תאריכים וזמנים
+        </div>
         <Input
-          label="תאריך יעד"
+          label="תאריך התחלה (מתי מתחילים)"
           type="date"
-          name="dueDate"
-          value={formData.dueDate}
+          name="startDate"
+          value={formData.startDate}
           onChange={handleChange}
-          error={errors.dueDate}
-          min={formData.startDate || getTodayISO()}
+          error={errors.startDate}
+          min={getTodayISO()}
         />
-        <Input
-          label="שעה"
-          type="time"
-          name="dueTime"
-          value={formData.dueTime}
-          onChange={handleChange}
-          error={errors.dueTime}
-        />
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="תאריך יעד (מתי לסיים)"
+            type="date"
+            name="dueDate"
+            value={formData.dueDate}
+            onChange={handleChange}
+            error={errors.dueDate}
+            min={formData.startDate || getTodayISO()}
+          />
+          <Input
+            label="שעה משוערת"
+            type="time"
+            name="dueTime"
+            value={formData.dueTime}
+            onChange={handleChange}
+            error={errors.dueTime}
+          />
+        </div>
       </div>
 
       {/* תזכורת */}
@@ -459,10 +468,10 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
       </div>
 
       {/* זמן ביצוע משוער עם הצעה חכמה */}
-      <div>
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
         <div className="flex items-center justify-between mb-1">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            זמן ביצוע משוער (דקות)
+            ⏱️ זמן ביצוע משוער (דקות)
           </label>
           {aiPrediction && aiPrediction.predictedTime && (
             <button
