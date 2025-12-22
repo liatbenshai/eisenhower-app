@@ -563,6 +563,7 @@ function DailyView() {
           onClose={handleCloseForm}
           taskTypes={TASK_TYPES}
           defaultDate={getDateISO(selectedDate)}
+          existingTasks={tasks}
         />
       </Modal>
 

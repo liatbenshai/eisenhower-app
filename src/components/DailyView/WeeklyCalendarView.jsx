@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TASK_TYPES } from './DailyView';
+import { findOverlappingTasks, findNextFreeSlot, timeToMinutes, minutesToTime } from '../../utils/timeOverlap';
 import toast from 'react-hot-toast';
 
 /**
@@ -47,6 +48,7 @@ function getHebrewDate(date) {
 function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onUpdateTask }) {
   const [draggedTask, setDraggedTask] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [overlapDialog, setOverlapDialog] = useState(null); // {task, newDate, newTime, overlapping, suggestedTime}
 
   // ימות השבוע (ראשון עד חמישי - ימי עבודה)
   const weekDays = useMemo(() => {
@@ -148,6 +150,36 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
       return;
     }
 
+    // בדיקת חפיפות
+    const newTaskData = {
+      id: draggedTask.id,
+      dueDate: dateISO,
+      dueTime: newTime,
+      estimatedDuration: draggedTask.estimated_duration || 30
+    };
+
+    const overlapping = findOverlappingTasks(newTaskData, tasks);
+    
+    if (overlapping.length > 0) {
+      // מציאת זמן פנוי חלופי
+      const nextFree = findNextFreeSlot(
+        dateISO,
+        draggedTask.estimated_duration || 30,
+        tasks
+      );
+
+      setOverlapDialog({
+        task: draggedTask,
+        newDate: dateISO,
+        newTime: newTime,
+        overlapping: overlapping,
+        suggestedTime: nextFree
+      });
+      setDraggedTask(null);
+      return;
+    }
+
+    // אין חפיפה - מעדכן
     try {
       if (onUpdateTask) {
         await onUpdateTask(draggedTask.id, {
@@ -161,6 +193,44 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
     }
     
     setDraggedTask(null);
+  };
+
+  // אישור העברה למרות חפיפה
+  const handleForceMove = async () => {
+    if (!overlapDialog) return;
+    
+    try {
+      if (onUpdateTask) {
+        await onUpdateTask(overlapDialog.task.id, {
+          dueDate: overlapDialog.newDate,
+          dueTime: overlapDialog.newTime
+        });
+        toast.success('המשימה הועברה');
+      }
+    } catch (err) {
+      toast.error('שגיאה בהעברת המשימה');
+    }
+    
+    setOverlapDialog(null);
+  };
+
+  // העברה לזמן פנוי
+  const handleMoveToFreeSlot = async () => {
+    if (!overlapDialog?.suggestedTime) return;
+    
+    try {
+      if (onUpdateTask) {
+        await onUpdateTask(overlapDialog.task.id, {
+          dueDate: overlapDialog.newDate,
+          dueTime: overlapDialog.suggestedTime
+        });
+        toast.success(`המשימה הועברה ל-${overlapDialog.suggestedTime}`);
+      }
+    } catch (err) {
+      toast.error('שגיאה בהעברת המשימה');
+    }
+    
+    setOverlapDialog(null);
   };
 
   // סיום גרירה
@@ -314,6 +384,80 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
           </div>
         ))}
       </div>
+
+      {/* דיאלוג חפיפה */}
+      <AnimatePresence>
+        {overlapDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setOverlapDialog(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-xl p-5 max-w-md w-full shadow-xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <span className="text-3xl">⚠️</span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    יש חפיפה בזמנים!
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    המשימה "{overlapDialog.task.title}" חופפת עם:
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {overlapDialog.overlapping.map(t => {
+                  const taskType = TASK_TYPES[t.task_type] || TASK_TYPES.other;
+                  const endTime = timeToMinutes(t.due_time) + (t.estimated_duration || 30);
+                  return (
+                    <div key={t.id} className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                      <span className={`px-2 py-1 rounded ${taskType.color}`}>{taskType.icon}</span>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 dark:text-white">{t.title}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {t.due_time} - {minutesToTime(endTime)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-2">
+                {overlapDialog.suggestedTime && (
+                  <button
+                    onClick={handleMoveToFreeSlot}
+                    className="w-full py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                  >
+                    ✅ העבר ל-{overlapDialog.suggestedTime} (זמן פנוי)
+                  </button>
+                )}
+                <button
+                  onClick={handleForceMove}
+                  className="w-full py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                >
+                  ⚡ העבר בכל זאת (חפיפה)
+                </button>
+                <button
+                  onClick={() => setOverlapDialog(null)}
+                  className="w-full py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  ✕ ביטול
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
