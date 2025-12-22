@@ -9,7 +9,7 @@ import Button from '../UI/Button';
 /**
  * טופס משימה פשוט - מותאם לניהול זמן
  */
-function SimpleTaskForm({ task, onClose, taskTypes }) {
+function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
   const { addTask, editTask } = useTasks();
   const { user } = useAuth();
   const isEditing = !!task;
@@ -18,9 +18,8 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
   const [formData, setFormData] = useState({
     title: '',
     taskType: 'other',
-    taskParameter: '', // פרמטר (אורך קובץ / עמודים)
     estimatedDuration: '',
-    dueDate: new Date().toISOString().split('T')[0], // ברירת מחדל היום
+    dueDate: defaultDate || new Date().toISOString().split('T')[0],
     dueTime: '',
     description: ''
   });
@@ -35,14 +34,13 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
       setFormData({
         title: task.title || '',
         taskType: task.task_type || 'other',
-        taskParameter: task.task_parameter || '',
         estimatedDuration: task.estimated_duration || '',
-        dueDate: task.due_date || new Date().toISOString().split('T')[0],
+        dueDate: task.due_date || defaultDate || new Date().toISOString().split('T')[0],
         dueTime: task.due_time || '',
         description: task.description || ''
       });
     }
-  }, [task]);
+  }, [task, defaultDate]);
 
   // טעינת נתוני למידה כשמשתנה סוג המשימה
   useEffect(() => {
@@ -58,38 +56,23 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
     }
   }, [user?.id, formData.taskType]);
 
-  // חישוב זמן מוצע כשמשתנה פרמטר או סוג משימה
+  // חישוב זמן מוצע כשמשתנה סוג משימה
   useEffect(() => {
     const taskType = taskTypes[formData.taskType];
     if (!taskType) return;
 
     let suggested = null;
 
-    if (taskType.hasParameter && formData.taskParameter) {
-      const param = parseInt(formData.taskParameter);
-      if (param > 0) {
-        // אם יש נתוני למידה, נשתמש בהם
-        if (learningData && learningData.average_ratio) {
-          // הנוסחה: פרמטר * מכפיל_ברירת_מחדל * יחס_למידה
-          suggested = Math.round(param * taskType.defaultMultiplier * learningData.average_ratio);
-        } else {
-          // אין נתוני למידה - נשתמש בברירת מחדל
-          suggested = param * taskType.defaultMultiplier;
-        }
-      }
-    } else if (!taskType.hasParameter) {
-      // משימה ללא פרמטר
-      if (learningData && learningData.total_tasks > 0) {
-        // יש נתוני למידה - נשתמש בממוצע שלה
-        suggested = Math.round(learningData.total_actual_minutes / learningData.total_tasks);
-      } else {
-        // אין נתוני למידה - ברירת מחדל
-        suggested = taskType.defaultDuration;
-      }
+    // אם יש נתוני למידה - נשתמש בממוצע שלה
+    if (learningData && learningData.total_tasks > 0) {
+      suggested = Math.round(learningData.total_actual_minutes / learningData.total_tasks);
+    } else {
+      // אין נתוני למידה - ברירת מחדל
+      suggested = taskType.defaultDuration;
     }
 
     setSuggestedTime(suggested);
-  }, [formData.taskType, formData.taskParameter, learningData, taskTypes]);
+  }, [formData.taskType, learningData, taskTypes]);
 
   // טיפול בשינוי שדה
   const handleChange = (e) => {
@@ -127,11 +110,10 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
         title: formData.title.trim(),
         description: formData.description.trim() || null,
         taskType: formData.taskType,
-        taskParameter: formData.taskParameter ? parseInt(formData.taskParameter) : null,
         estimatedDuration: parseInt(formData.estimatedDuration),
         dueDate: formData.dueDate || null,
         dueTime: formData.dueTime || null,
-        quadrant: 1 // לא משתמשים במטריצה אבל צריך ערך
+        quadrant: 1
       };
 
       if (isEditing) {
@@ -175,7 +157,7 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
             <button
               key={type.id}
               type="button"
-              onClick={() => setFormData(prev => ({ ...prev, taskType: type.id, taskParameter: '' }))}
+              onClick={() => setFormData(prev => ({ ...prev, taskType: type.id }))}
               className={`
                 p-3 rounded-lg border-2 text-center transition-all
                 ${formData.taskType === type.id
@@ -205,19 +187,6 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
         )}
       </div>
 
-      {/* פרמטר (אם רלוונטי) */}
-      {selectedType?.hasParameter && (
-        <Input
-          label={selectedType.parameterName + ' *'}
-          type="number"
-          name="taskParameter"
-          value={formData.taskParameter}
-          onChange={handleChange}
-          placeholder={selectedType.id === 'transcription' ? 'למשל: 30' : 'למשל: 10'}
-          min="1"
-        />
-      )}
-
       {/* זמן משוער */}
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -230,7 +199,7 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
               onClick={handleAcceptSuggestion}
               className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
-              🎯 המלצת המערכת: {suggestedTime} דקות
+              🎯 המלצה: {suggestedTime} דקות
             </button>
           )}
         </div>
@@ -244,7 +213,7 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
         />
         
         {/* הסבר על ההמלצה */}
-        {suggestedTime && (
+        {suggestedTime && !formData.estimatedDuration && (
           <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <div className="text-sm text-blue-800 dark:text-blue-200">
               <strong>💡 למה {suggestedTime} דקות?</strong>
@@ -252,7 +221,7 @@ function SimpleTaskForm({ task, onClose, taskTypes }) {
                 {learningData && learningData.total_tasks > 0 ? (
                   <>
                     לפי {learningData.total_tasks} משימות קודמות מסוג "{selectedType?.name}",
-                    הזמן האמיתי היה בממוצע פי {learningData.average_ratio.toFixed(2)} מההערכה שלך.
+                    זה הזמן הממוצע שלקח לך בפועל.
                   </>
                 ) : (
                   <>

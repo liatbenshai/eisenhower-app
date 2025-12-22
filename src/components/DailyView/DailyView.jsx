@@ -8,58 +8,49 @@ import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
 /**
- * סוגי משימות מוגדרים
+ * סוגי משימות מוגדרים - כולם לפי זמן
  */
 export const TASK_TYPES = {
   transcription: { 
     id: 'transcription', 
     name: 'תמלול', 
     icon: '🎙️',
-    hasParameter: true,
-    parameterName: 'אורך קובץ (דקות)',
-    defaultMultiplier: 3 // ברירת מחדל: פי 3 מאורך הקובץ
+    defaultDuration: 60
   },
   proofreading: { 
     id: 'proofreading', 
     name: 'הגהה', 
     icon: '📝',
-    hasParameter: true,
-    parameterName: 'מספר עמודים',
-    defaultMultiplier: 15 // ברירת מחדל: 15 דקות לעמוד
+    defaultDuration: 45
   },
   email: { 
     id: 'email', 
     name: 'מיילים', 
     icon: '📧',
-    hasParameter: false,
     defaultDuration: 25
   },
   course: { 
     id: 'course', 
     name: 'עבודה על הקורס', 
     icon: '📚',
-    hasParameter: false,
     defaultDuration: 90
   },
   client_communication: { 
     id: 'client_communication', 
     name: 'תקשורת עם לקוחות', 
     icon: '💬',
-    hasParameter: false,
     defaultDuration: 30
   },
   unexpected: { 
     id: 'unexpected', 
     name: 'בלת"מים', 
     icon: '⚡',
-    hasParameter: false,
     defaultDuration: 30
   },
   other: { 
     id: 'other', 
     name: 'אחר', 
     icon: '📋',
-    hasParameter: false,
     defaultDuration: 30
   }
 };
@@ -74,25 +65,52 @@ const WORK_HOURS = {
 };
 
 /**
- * קבלת התאריך של היום בפורמט ישראלי
+ * המרה לתאריך עברי
  */
-function getTodayHebrew() {
-  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-  const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 
-                  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-  const today = new Date();
-  const dayName = days[today.getDay()];
-  const day = today.getDate();
-  const month = months[today.getMonth()];
-  const year = today.getFullYear();
-  return `יום ${dayName}, ${day} ב${month} ${year}`;
+function getHebrewDate(date) {
+  try {
+    const formatter = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    return formatter.format(date);
+  } catch (e) {
+    return '';
+  }
 }
 
 /**
- * קבלת התאריך של היום בפורמט ISO
+ * קבלת התאריך בפורמט ישראלי
  */
-function getTodayISO() {
-  return new Date().toISOString().split('T')[0];
+function getDateHebrew(date) {
+  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 
+                  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+  const dayName = days[date.getDay()];
+  const day = date.getDate();
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  return {
+    full: `יום ${dayName}, ${day} ב${month} ${year}`,
+    short: `${day}/${date.getMonth() + 1}`,
+    dayName
+  };
+}
+
+/**
+ * קבלת תאריך בפורמט ISO
+ */
+function getDateISO(date) {
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * בדיקה אם התאריך הוא היום
+ */
+function isToday(date) {
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
 }
 
 /**
@@ -103,40 +121,75 @@ function DailyView() {
   const { tasks, loading, error, loadTasks } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('day'); // 'day' or 'week'
 
-  // משימות להיום
-  const todaysTasks = useMemo(() => {
-    const today = getTodayISO();
+  // ניווט בין ימים
+  const goToPreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  // קבלת ימי השבוע הנוכחי
+  const getWeekDays = () => {
+    const days = [];
+    const startOfWeek = new Date(selectedDate);
+    const dayOfWeek = startOfWeek.getDay();
+    startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek); // חזרה ליום ראשון
+    
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(startOfWeek);
+      day.setDate(day.getDate() + i);
+      days.push(day);
+    }
+    return days;
+  };
+
+  // משימות לתאריך מסוים
+  const getTasksForDate = (date) => {
+    const dateISO = getDateISO(date);
     return tasks.filter(task => {
-      // משימות עם תאריך יעד היום
-      if (task.due_date === today) return true;
-      // משימות עם תאריך התחלה היום
-      if (task.start_date === today) return true;
-      // משימות פעילות בלי תאריך (נראה אותן תמיד)
-      if (!task.due_date && !task.is_completed) return true;
+      if (task.due_date === dateISO) return true;
+      if (task.start_date === dateISO) return true;
+      // משימות בלי תאריך מופיעות רק ביום הנוכחי
+      if (!task.due_date && !task.is_completed && isToday(date)) return true;
       return false;
     }).sort((a, b) => {
-      // קודם לפי סטטוס (פעילות קודם)
       if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
-      // אחר כך לפי שעה
       if (a.due_time && b.due_time) return a.due_time.localeCompare(b.due_time);
       if (a.due_time) return -1;
       if (b.due_time) return 1;
       return 0;
     });
-  }, [tasks]);
+  };
+
+  // משימות לתאריך הנבחר
+  const selectedDateTasks = useMemo(() => {
+    return getTasksForDate(selectedDate);
+  }, [tasks, selectedDate]);
 
   // חישוב זמנים
   const timeStats = useMemo(() => {
-    const completedMinutes = todaysTasks
+    const completedMinutes = selectedDateTasks
       .filter(t => t.is_completed)
       .reduce((sum, t) => sum + (t.time_spent || 0), 0);
     
-    const plannedMinutes = todaysTasks
+    const plannedMinutes = selectedDateTasks
       .filter(t => !t.is_completed)
       .reduce((sum, t) => sum + (t.estimated_duration || 0), 0);
     
-    const inProgressMinutes = todaysTasks
+    const inProgressMinutes = selectedDateTasks
       .filter(t => !t.is_completed && t.time_spent > 0)
       .reduce((sum, t) => sum + (t.time_spent || 0), 0);
     
@@ -151,7 +204,7 @@ function DailyView() {
       usedPercent: Math.round(((completedMinutes + inProgressMinutes) / WORK_HOURS.totalMinutes) * 100),
       canFitAll: plannedMinutes <= remainingWorkMinutes
     };
-  }, [todaysTasks]);
+  }, [selectedDateTasks]);
 
   // פתיחת טופס הוספה
   const handleAddTask = () => {
@@ -208,19 +261,124 @@ function DailyView() {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
-      {/* כותרת היום */}
+      {/* כותרת עם ניווט */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-6"
       >
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {getTodayHebrew()}
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
+        {/* בחירת תצוגה */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('day')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'day' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              📅 יום
+            </button>
+            <button
+              onClick={() => setViewMode('week')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'week' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              📆 שבוע
+            </button>
+          </div>
+          
+          {!isToday(selectedDate) && (
+            <button
+              onClick={goToToday}
+              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              חזרה להיום
+            </button>
+          )}
+        </div>
+
+        {/* ניווט בין ימים */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={goToPreviousDay}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-2xl"
+          >
+            ◄
+          </button>
+          
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {getDateHebrew(selectedDate).full}
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {getHebrewDate(selectedDate)}
+            </p>
+            {isToday(selectedDate) && (
+              <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                היום
+              </span>
+            )}
+          </div>
+          
+          <button
+            onClick={goToNextDay}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-2xl"
+          >
+            ►
+          </button>
+        </div>
+        
+        <p className="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
           שעות עבודה: {WORK_HOURS.start}:00 - {WORK_HOURS.end}:00
         </p>
       </motion.div>
+
+      {/* תצוגה שבועית */}
+      {viewMode === 'week' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="card p-4 mb-6 overflow-x-auto"
+        >
+          <div className="flex gap-2 min-w-max">
+            {getWeekDays().map((day, index) => {
+              const dayTasks = getTasksForDate(day);
+              const dayInfo = getDateHebrew(day);
+              const isSelected = getDateISO(day) === getDateISO(selectedDate);
+              const isTodayDay = isToday(day);
+              const completedCount = dayTasks.filter(t => t.is_completed).length;
+              const totalCount = dayTasks.length;
+              
+              return (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setSelectedDate(day);
+                    setViewMode('day');
+                  }}
+                  className={`
+                    flex-1 min-w-[100px] p-3 rounded-lg text-center transition-all
+                    ${isSelected ? 'bg-blue-500 text-white' : 
+                      isTodayDay ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                      'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'}
+                  `}
+                >
+                  <div className="font-medium text-sm">{dayInfo.dayName}</div>
+                  <div className="text-lg font-bold">{day.getDate()}</div>
+                  <div className="text-xs mt-1 opacity-75">
+                    {totalCount > 0 ? `${completedCount}/${totalCount}` : '-'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
 
       {/* סרגל זמן */}
       <motion.div
@@ -233,11 +391,11 @@ function DailyView() {
           <div className="flex items-center gap-2">
             <span className="text-2xl">⏱️</span>
             <span className="font-medium text-gray-900 dark:text-white">
-              נשאר היום: {formatMinutes(timeStats.remaining)}
+              {isToday(selectedDate) ? 'נשאר היום' : 'זמן מתוכנן'}: {formatMinutes(timeStats.remaining)}
             </span>
           </div>
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {timeStats.usedPercent}% מהיום נוצל
+            {timeStats.usedPercent}% נוצל
           </span>
         </div>
         
@@ -302,11 +460,11 @@ function DailyView() {
         transition={{ delay: 0.3 }}
         className="space-y-3"
       >
-        {todaysTasks.length === 0 ? (
+        {selectedDateTasks.length === 0 ? (
           <div className="card p-8 text-center">
             <span className="text-4xl mb-4 block">📝</span>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              אין משימות להיום
+              אין משימות ל{isToday(selectedDate) ? 'היום' : 'תאריך זה'}
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
               הוסיפי משימה חדשה להתחיל
@@ -315,7 +473,7 @@ function DailyView() {
         ) : (
           <>
             {/* משימות פעילות */}
-            {todaysTasks.filter(t => !t.is_completed).map(task => (
+            {selectedDateTasks.filter(t => !t.is_completed).map(task => (
               <DailyTaskCard 
                 key={task.id} 
                 task={task} 
@@ -325,13 +483,13 @@ function DailyView() {
             ))}
             
             {/* משימות שהושלמו */}
-            {todaysTasks.filter(t => t.is_completed).length > 0 && (
+            {selectedDateTasks.filter(t => t.is_completed).length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                  ✅ הושלמו היום ({todaysTasks.filter(t => t.is_completed).length})
+                  ✅ הושלמו ({selectedDateTasks.filter(t => t.is_completed).length})
                 </h3>
                 <div className="space-y-2 opacity-60">
-                  {todaysTasks.filter(t => t.is_completed).map(task => (
+                  {selectedDateTasks.filter(t => t.is_completed).map(task => (
                     <DailyTaskCard 
                       key={task.id} 
                       task={task} 
@@ -356,6 +514,7 @@ function DailyView() {
           task={editingTask}
           onClose={handleCloseForm}
           taskTypes={TASK_TYPES}
+          defaultDate={getDateISO(selectedDate)}
         />
       </Modal>
     </div>
