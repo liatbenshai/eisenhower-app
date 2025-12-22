@@ -545,17 +545,18 @@ export async function updateTask(taskId, updates) {
   if (updates.parent_task_id !== undefined) {
     updateData.parent_task_id = updates.parent_task_id;
   }
-  
-  // לא נוסיף time_spent - העמודה לא קיימת בטבלה
+  if (updates.time_spent !== undefined) {
+    updateData.time_spent = updates.time_spent ? parseInt(updates.time_spent) : 0;
+  }
   
   console.log('📤 מעדכן משימה:', { taskId, updateData });
   
-  // עדכון פשוט - בלי time_spent
+  // עדכון עם time_spent
   const { data, error } = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id')
+    .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id, time_spent')
     .single();
   
   if (error) {

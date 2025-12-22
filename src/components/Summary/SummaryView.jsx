@@ -246,6 +246,73 @@ function SummaryView() {
           ))}
         </div>
       </div>
+      
+      {/* משימות עם זמן שבוצע */}
+      {(() => {
+        const tasksWithTime = tasks
+          .filter(t => !t.is_project && !t.parent_task_id && (t.time_spent || 0) > 0)
+          .sort((a, b) => (b.time_spent || 0) - (a.time_spent || 0))
+          .slice(0, 10); // 10 המשימות עם הכי הרבה זמן
+        
+        if (tasksWithTime.length === 0) return null;
+        
+        const formatTime = (minutes) => {
+          if (minutes < 60) return `${minutes} דקות`;
+          const hours = Math.floor(minutes / 60);
+          const mins = minutes % 60;
+          return mins > 0 ? `${hours} שעות ${mins} דקות` : `${hours} שעות`;
+        };
+        
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+              משימות עם זמן שבוצע
+            </h3>
+            <div className="space-y-3">
+              {tasksWithTime.map(task => {
+                const timeSpent = task.time_spent || 0;
+                const estimated = task.estimated_duration || 0;
+                const progress = estimated > 0 ? Math.min(100, Math.round((timeSpent / estimated) * 100)) : 0;
+                
+                return (
+                  <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {task.title}
+                        </span>
+                        {task.is_completed && (
+                          <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
+                            הושלמה
+                          </span>
+                        )}
+                        {!task.is_completed && (
+                          <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                            פעילה
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatTime(timeSpent)}
+                        </span>
+                        {estimated > 0 && (
+                          <>
+                            <span>/ {formatTime(estimated)} משוער</span>
+                            <span className={progress > 100 ? 'text-red-600 dark:text-red-400' : ''}>
+                              ({progress}%)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

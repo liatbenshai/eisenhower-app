@@ -235,19 +235,34 @@ export function TaskProvider({ children }) {
     }
   };
 
-  // עדכון זמן שבוצע למשימה (מ-TaskTimer) - פשוט, בלי time_spent
+  // עדכון זמן שבוצע למשימה (מ-TaskTimer) - שומר גם ב-DB וגם ב-state
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
-    // לא נעדכן time_spent כי העמודה לא קיימת
-    // רק נעדכן את ה-state מקומית
     const timeSpentInt = parseInt(timeSpent) || 0;
     
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
-        ? { ...t, time_spent: timeSpentInt }
-        : t
-    ));
-    
-    return { id: taskId, time_spent: timeSpentInt };
+    try {
+      // עדכון ב-DB דרך updateTaskTimeSpent
+      const { updateTaskTimeSpent } = await import('../services/supabase');
+      const updatedTask = await updateTaskTimeSpent(taskId, timeSpentInt);
+      
+      // עדכון ב-state
+      setTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, time_spent: timeSpentInt }
+          : t
+      ));
+      
+      console.log('✅ זמן עודכן בהצלחה:', { taskId, timeSpent: timeSpentInt });
+      return updatedTask || { id: taskId, time_spent: timeSpentInt };
+    } catch (err) {
+      console.error('❌ שגיאה בעדכון זמן:', err);
+      // עדכון מקומי גם אם השמירה ב-DB נכשלה
+      setTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, time_spent: timeSpentInt }
+          : t
+      ));
+      throw err;
+    }
   }, []);
 
   // סימון כהושלם/לא הושלם

@@ -40,6 +40,7 @@
 📖 **קרא עוד:** 
 - [איך המערכת עובדת?](HOW_IT_WORKS.md)
 - [🎉 מערכת למידה חדשה - התחל כאן!](START_HERE.md)
+- [📚 הסבר מפורט על כל התכונות (התקדמות, ניתוח עומס, ניתוח זמן, הרגלים)](FEATURES_EXPLANATION_HE.md)
 
 ## 🚀 התקנה
 

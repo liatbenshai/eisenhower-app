@@ -17,10 +17,8 @@ function TimeAnalytics() {
     const last7Days = subDays(now, 7);
     const last30Days = subDays(now, 30);
     
-    // זמן כולל שבוצע (רק משימות שהושלמו)
-    const totalTimeSpent = tasks
-      .filter(t => t.is_completed)
-      .reduce((sum, task) => sum + (task.time_spent || 0), 0);
+    // זמן כולל שבוצע (כל המשימות - גם פעילות וגם הושלמו)
+    const totalTimeSpent = tasks.reduce((sum, task) => sum + (task.time_spent || 0), 0);
     
     // זמן משוער כולל (כל המשימות)
     const totalEstimated = tasks.reduce((sum, task) => sum + (task.estimated_duration || 0), 0);
@@ -41,18 +39,51 @@ function TimeAnalytics() {
       }
     });
     
-    // זמן שבוצע ב-7 ימים האחרונים
-    const timeSpentLast7Days = completedLast7Days.reduce((sum, task) => sum + (task.time_spent || 0), 0);
+    // זמן שבוצע ב-7 ימים האחרונים (כל המשימות, לא רק הושלמו)
+    const timeSpentLast7Days = tasks.reduce((sum, task) => {
+      // אם המשימה הושלמה ב-7 ימים האחרונים, מוסיפים את הזמן
+      if (task.completed_at) {
+        try {
+          const completedDate = new Date(task.completed_at);
+          if (completedDate >= last7Days && completedDate <= now) {
+            return sum + (task.time_spent || 0);
+          }
+        } catch (err) {
+          console.error('שגיאה בניתוח תאריך:', err);
+        }
+      }
+      // אם המשימה פעילה ועודכנה ב-7 ימים האחרונים, מוסיפים את הזמן
+      if (!task.is_completed && task.updated_at) {
+        try {
+          const updatedDate = new Date(task.updated_at);
+          if (updatedDate >= last7Days) {
+            return sum + (task.time_spent || 0);
+          }
+        } catch (err) {
+          console.error('שגיאה בניתוח תאריך עדכון:', err);
+        }
+      }
+      return sum;
+    }, 0);
     
-    // זמן שבוצע ב-30 ימים האחרונים
-    const completedLast30Days = tasks.filter(task => {
-      if (!task.completed_at) return false;
-      const completedDate = new Date(task.completed_at);
-      return completedDate >= last30Days;
-    });
-    const timeSpentLast30Days = completedLast30Days.reduce((sum, task) => sum + (task.time_spent || 0), 0);
+    // זמן שבוצע ב-30 ימים האחרונים (כל המשימות)
+    const timeSpentLast30Days = tasks.reduce((sum, task) => {
+      if (task.completed_at) {
+        const completedDate = new Date(task.completed_at);
+        if (completedDate >= last30Days) {
+          return sum + (task.time_spent || 0);
+        }
+      }
+      if (!task.is_completed && task.updated_at) {
+        const updatedDate = new Date(task.updated_at);
+        if (updatedDate >= last30Days) {
+          return sum + (task.time_spent || 0);
+        }
+      }
+      return sum;
+    }, 0);
     
-    // זמן לפי רבע
+    // זמן לפי רבע (כל המשימות - פעילות והושלמו)
     const timeByQuadrant = {
       1: tasks.filter(t => t.quadrant === 1).reduce((sum, t) => sum + (t.time_spent || 0), 0),
       2: tasks.filter(t => t.quadrant === 2).reduce((sum, t) => sum + (t.time_spent || 0), 0),
@@ -96,8 +127,8 @@ function TimeAnalytics() {
     return mins > 0 ? `${hours} שעות ${mins} דקות` : `${hours} שעות`;
   };
   
-  // בדיקה אם יש נתונים
-  const hasData = timeStats.totalTimeSpent > 0 || timeStats.completedLast7Days > 0;
+  // בדיקה אם יש נתונים (כל משימות עם זמן, לא רק הושלמו)
+  const hasData = timeStats.totalTimeSpent > 0;
 
   return (
     <div className="space-y-6">
@@ -106,7 +137,7 @@ function TimeAnalytics() {
           ניתוח זמן
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          לראות איפה הזמן שלך הולך
+          איפה הזמן שלך הולך - כל המשימות עם זמן שבוצע (פעילות והושלמו)
         </p>
       </div>
 
@@ -123,10 +154,10 @@ function TimeAnalytics() {
           <div className="max-w-md mx-auto p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               💡 <strong>כיצד זה עובד:</strong><br/>
-              1. הוסיפי זמן משוער למשימות<br/>
-              2. עקבי אחר הזמן שבוצע (עם טיימר או ידנית)<br/>
-              3. סמני משימות כהושלמו<br/>
-              4. המערכת תנתח איפה הזמן הולך!
+              1. הוסיפי זמן משוער למשימות (אופציונלי)<br/>
+              2. השתמשי בטיימר או עדכני ידנית את הזמן שבוצע<br/>
+              3. הזמן יישמר אוטומטית - גם למשימות פעילות!<br/>
+              4. המערכת תנתח איפה הזמן הולך על כל המשימות (פעילות והושלמו)
             </p>
           </div>
         </div>
