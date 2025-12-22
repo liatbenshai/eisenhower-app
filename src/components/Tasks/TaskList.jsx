@@ -6,16 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion';
  * רשימת משימות - תצוגה רשימתית
  */
 function TaskList({ 
-  quadrant = null, 
   onEditTask,
   emptyMessage = 'אין משימות' 
 }) {
-  const { getFilteredTasks, getTasksByQuadrant } = useTasks();
+  const { getFilteredTasks } = useTasks();
   
-  // קבלת משימות לפי רבע או כולן
-  const tasks = quadrant 
-    ? getTasksByQuadrant(quadrant) 
-    : getFilteredTasks();
+  // קבלת כל המשימות (לא לפי מטריצה)
+  const tasks = getFilteredTasks().filter(t => !t.is_completed && !t.is_project);
 
   if (tasks.length === 0) {
     return (
@@ -39,7 +36,6 @@ function TaskList({
           >
             <TaskCard
               task={task}
-              quadrantId={task.quadrant}
               onEdit={() => onEditTask(task)}
               onDragStart={() => {}}
               onDragEnd={() => {}}

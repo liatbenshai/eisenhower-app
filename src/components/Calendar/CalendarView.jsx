@@ -182,6 +182,68 @@ function CalendarView({ onAddTask, onEditTask }) {
   const weekDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
   const weekDaysShort = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
   
+  // מחיקת משימה
+  const handleDeleteTask = useCallback(async (taskId, e) => {
+    e.stopPropagation();
+    if (!confirm('האם את בטוחה שברצונך למחוק משימה זו?')) return;
+    
+    try {
+      await removeTask(taskId);
+      toast.success('המשימה נמחקה');
+      await loadTasks();
+    } catch (err) {
+      console.error('שגיאה במחיקת משימה:', err);
+      toast.error('שגיאה במחיקת משימה');
+    }
+  }, [removeTask, loadTasks]);
+  
+  // התחלת גרירה
+  const handleDragStart = useCallback((task, date, hour) => {
+    setDraggedTask({ task, sourceDate: date, sourceHour: hour });
+  }, []);
+  
+  // סיום גרירה
+  const handleDragEnd = useCallback(() => {
+    setDraggedTask(null);
+    setDragOverTarget(null);
+  }, []);
+  
+  // מעבר מעל יעד
+  const handleDragOver = useCallback((e, date, hour) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTarget({ date, hour });
+  }, []);
+  
+  // שחרור משימה
+  const handleDrop = useCallback(async (e, targetDate, targetHour) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedTask) return;
+    
+    const { task, sourceDate, sourceHour } = draggedTask;
+    const targetDateStr = format(targetDate, 'yyyy-MM-dd');
+    const targetTimeStr = `${targetHour.toString().padStart(2, '0')}:00`;
+    
+    try {
+      await editTask(task.id, {
+        startDate: targetDateStr,
+        dueDate: targetDateStr,
+        dueTime: targetTimeStr
+      });
+      
+      toast.success('המשימה הוזזה');
+      await loadTasks();
+    } catch (err) {
+      console.error('שגיאה בהזזת משימה:', err);
+      toast.error('שגיאה בהזזת משימה');
+    } finally {
+      setDraggedTask(null);
+      setDragOverTarget(null);
+    }
+  }, [draggedTask, editTask, loadTasks]);
+  
   // הזזה אוטומטית של משימות לא הושלמו למחר
   const handleMoveUncompletedToTomorrow = useCallback(async () => {
     try {
