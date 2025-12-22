@@ -6,9 +6,6 @@ import SimpleTaskForm from './SimpleTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
-import SmartScheduler from '../Scheduler/SmartScheduler';
-import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
-import SmartNotifications from '../Notifications/SmartNotifications';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -132,10 +129,9 @@ function DailyView() {
   const { user } = useAuth();
   const { tasks, loading, error, loadTasks, editTask } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
-  const [showScheduler, setShowScheduler] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('day'); // 'day', 'week', or 'analytics'
+  const [viewMode, setViewMode] = useState('day'); // 'day' or 'week'
 
   // ניווט בין ימים
   const goToPreviousDay = () => {
@@ -341,7 +337,6 @@ function DailyView() {
 
         {/* ניווט בין ימים - רק בתצוגת יום או שבוע */}
         {viewMode !== 'analytics' && (
-        <>
         <div className="flex items-center justify-between">
           <button
             onClick={goToPreviousDay}
@@ -375,18 +370,12 @@ function DailyView() {
         <p className="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
           שעות עבודה: {WORK_HOURS.start}:00 - {WORK_HOURS.end}:00
         </p>
-        </>
         )}
       </motion.div>
 
       {/* תצוגת אנליטיקס */}
       {viewMode === 'analytics' && (
         <TimeAnalyticsDashboard />
-      )}
-
-      {/* משימות שלא הושלמו מימים קודמים - רק בתצוגה יומית והיום */}
-      {viewMode === 'day' && isToday(selectedDate) && (
-        <UnfinishedTasksHandler onTasksMoved={loadTasks} />
       )}
 
       {/* תצוגה שבועית - כיומן */}
@@ -472,32 +461,17 @@ function DailyView() {
       </motion.div>
       )}
 
-      {/* התראות חכמות - רק בתצוגה יומית */}
-      {viewMode === 'day' && (
-        <SmartNotifications onTaskClick={handleEditTask} />
-      )}
-
-      {/* כפתורי פעולה */}
-      {viewMode === 'day' && (
+      {/* כפתור הוספת משימה */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="mb-4 flex gap-2"
+        className="mb-4"
       >
-        <Button onClick={handleAddTask} className="flex-1 py-3 text-lg">
+        <Button onClick={handleAddTask} className="w-full py-3 text-lg">
           + משימה חדשה
         </Button>
-        <Button 
-          onClick={() => setShowScheduler(true)} 
-          variant="secondary"
-          className="py-3 px-4"
-          title="שיבוץ אוטומטי"
-        >
-          🗓️ שיבוץ
-        </Button>
       </motion.div>
-      )}
 
       {/* רשימת משימות - רק בתצוגה יומית */}
       {viewMode === 'day' && (
@@ -563,19 +537,6 @@ function DailyView() {
           onClose={handleCloseForm}
           taskTypes={TASK_TYPES}
           defaultDate={getDateISO(selectedDate)}
-        />
-      </Modal>
-
-      {/* מודל שיבוץ אוטומטי */}
-      <Modal
-        isOpen={showScheduler}
-        onClose={() => setShowScheduler(false)}
-        title="🗓️ שיבוץ אוטומטי"
-      >
-        <SmartScheduler
-          selectedDate={selectedDate}
-          onClose={() => setShowScheduler(false)}
-          onScheduled={loadTasks}
         />
       </Modal>
     </div>
