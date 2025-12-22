@@ -167,13 +167,11 @@ function Dashboard() {
               </div>
             )
           }
-                {/* כל המשימות עם זמן שבוצע */}
-                {tasks && tasks.filter(t => !t.is_project && !t.parent_task_id && (t.time_spent || 0) > 0).length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                      כל המשימות עם זמן שבוצע
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        ]}
+      />
+
+      {/* מודל טופס משימה */}
+      <Modal
                       {tasks
                         .filter(t => !t.is_project && !t.parent_task_id && (t.time_spent || 0) > 0)
                         .sort((a, b) => (b.time_spent || 0) - (a.time_spent || 0))
@@ -333,14 +331,6 @@ function Dashboard() {
                       </Button>
                     </div>
                   </div>
-                )}
-              </div>
-            )
-          }
-        ]}
-      />
-
-      {/* מודל טופס משימה */}
       <Modal
         isOpen={showTaskForm}
         onClose={handleCloseForm}
