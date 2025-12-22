@@ -9,6 +9,7 @@ import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
 import SmartScheduler from '../Scheduler/SmartScheduler';
 import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
+import SmartWorkIntake from '../Scheduler/SmartWorkIntake';
 import SmartNotifications from '../Notifications/SmartNotifications';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
@@ -135,6 +136,7 @@ function DailyView() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
+  const [showWorkIntake, setShowWorkIntake] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('day'); // 'day', 'week', or 'analytics'
@@ -500,13 +502,22 @@ function DailyView() {
             🗓️ שיבוץ
           </Button>
         </div>
-        <button
-          onClick={() => setShowRecurringForm(true)}
-          className="w-full py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center justify-center gap-2"
-        >
-          <span>🔄</span>
-          <span>הוסף משימה חוזרת</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowWorkIntake(true)}
+            className="flex-1 py-2.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
+          >
+            <span>📥</span>
+            <span>עבודה חדשה</span>
+          </button>
+          <button
+            onClick={() => setShowRecurringForm(true)}
+            className="flex-1 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center justify-center gap-2 border border-blue-200 dark:border-blue-800"
+          >
+            <span>🔄</span>
+            <span>משימה חוזרת</span>
+          </button>
+        </div>
       </motion.div>
       )}
 
@@ -599,6 +610,18 @@ function DailyView() {
       >
         <RecurringTaskForm
           onClose={() => setShowRecurringForm(false)}
+          onCreated={loadTasks}
+        />
+      </Modal>
+
+      {/* מודל קליטת עבודה חכמה */}
+      <Modal
+        isOpen={showWorkIntake}
+        onClose={() => setShowWorkIntake(false)}
+        title="📥 עבודה חדשה - שיבוץ חכם"
+      >
+        <SmartWorkIntake
+          onClose={() => setShowWorkIntake(false)}
           onCreated={loadTasks}
         />
       </Modal>
