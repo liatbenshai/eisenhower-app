@@ -35,9 +35,12 @@
   <script>
     (function() {
       'use strict';
+      console.log('🚀 index.html script רץ - מוקדם מאוד!');
       
       // מחיקת Service Workers - מיד
       if ('serviceWorker' in navigator) {
+        console.log('🔍 בודק Service Workers...');
+        
         // חסימת register לפני כל דבר אחר
         const originalRegister = navigator.serviceWorker.register;
         navigator.serviceWorker.register = function() {
@@ -47,23 +50,37 @@
         
         // מחיקת כל ה-Service Workers הקיימים
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          console.log('📋 נמצאו', registrations.length, 'Service Workers');
           registrations.forEach(function(reg) {
             reg.unregister().then(function() {
-              console.log('✅ Service Worker נמחק');
-            }).catch(function() {});
+              console.log('✅ Service Worker נמחק:', reg.scope);
+            }).catch(function(err) {
+              console.error('❌ שגיאה במחיקת Service Worker:', err);
+            });
           });
-        }).catch(function() {});
+        }).catch(function(err) {
+          console.error('❌ שגיאה בקבלת Service Workers:', err);
+        });
+      } else {
+        console.log('ℹ️ אין Service Worker support');
       }
       
       // מחיקת cache - מיד
       if ('caches' in window) {
         caches.keys().then(function(cacheNames) {
+          console.log('📦 נמצאו', cacheNames.length, 'caches');
           cacheNames.forEach(function(cacheName) {
             caches.delete(cacheName).then(function() {
               console.log('✅ Cache נמחק:', cacheName);
-            }).catch(function() {});
+            }).catch(function(err) {
+              console.error('❌ שגיאה במחיקת Cache:', err);
+            });
           });
-        }).catch(function() {});
+        }).catch(function(err) {
+          console.error('❌ שגיאה בקבלת Caches:', err);
+        });
+      } else {
+        console.log('ℹ️ אין Cache API support');
       }
       
       // מניעת cache גם ב-fetch
