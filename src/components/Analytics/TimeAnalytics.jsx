@@ -124,6 +124,21 @@ function TimeAnalytics() {
       ? Math.round((totalTimeSpent / totalEstimated) * 100)
       : 0;
     
+    // חישוב משימות שהושלמו ב-30 ימים האחרונים
+    const completedLast30Days = tasks.filter(task => {
+      if (!task.is_completed || !task.completed_at) return false;
+      try {
+        const completedDate = new Date(task.completed_at);
+        if (isNaN(completedDate.getTime())) {
+          return false;
+        }
+        return completedDate >= last30Days && completedDate <= now;
+      } catch (err) {
+        console.error('שגיאה בניתוח תאריך:', err);
+        return false;
+      }
+    });
+    
     return {
       totalTimeSpent,
       totalEstimated,
