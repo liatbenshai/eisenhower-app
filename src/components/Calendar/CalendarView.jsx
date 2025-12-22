@@ -25,6 +25,7 @@ import {
 import { he } from 'date-fns/locale';
 import TaskCard from '../Tasks/TaskCard';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
+import { moveUncompletedTasksToTomorrow } from '../../utils/autoMoveTasks';
 import toast from 'react-hot-toast';
 
 /**

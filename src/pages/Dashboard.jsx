@@ -13,6 +13,7 @@ import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
 import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
 import CalendarView from '../components/Calendar/CalendarView';
 import TimePlanningRecommendations from '../components/Recommendations/TimePlanningRecommendations';
+import TaskList from '../components/Tasks/TaskList';
 
 /**
  * דף לוח המחוונים הראשי
@@ -165,6 +166,11 @@ function Dashboard() {
             label: 'המלצות',
             icon: '🧠',
             content: <TimePlanningRecommendations />
+          },
+          {
+            label: 'משימות',
+            icon: '📝',
+            content: <TaskList onEditTask={handleEditTask} />
           }
         ]}
       />
