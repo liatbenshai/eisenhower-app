@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
+import RecurringTaskForm from './RecurringTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
@@ -133,6 +134,7 @@ function DailyView() {
   const { tasks, loading, error, loadTasks, editTask } = useTasks();
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('day'); // 'day', 'week', or 'analytics'
@@ -483,19 +485,28 @@ function DailyView() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="mb-4 flex gap-2"
+        className="mb-4 space-y-2"
       >
-        <Button onClick={handleAddTask} className="flex-1 py-3 text-lg">
-          + משימה חדשה
-        </Button>
-        <Button 
-          onClick={() => setShowScheduler(true)} 
-          variant="secondary"
-          className="py-3 px-4"
-          title="שיבוץ אוטומטי"
+        <div className="flex gap-2">
+          <Button onClick={handleAddTask} className="flex-1 py-3 text-lg">
+            + משימה חדשה
+          </Button>
+          <Button 
+            onClick={() => setShowScheduler(true)} 
+            variant="secondary"
+            className="py-3 px-4"
+            title="שיבוץ אוטומטי"
+          >
+            🗓️ שיבוץ
+          </Button>
+        </div>
+        <button
+          onClick={() => setShowRecurringForm(true)}
+          className="w-full py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center justify-center gap-2"
         >
-          🗓️ שיבוץ
-        </Button>
+          <span>🔄</span>
+          <span>הוסף משימה חוזרת</span>
+        </button>
       </motion.div>
       )}
 
@@ -577,6 +588,18 @@ function DailyView() {
           selectedDate={selectedDate}
           onClose={() => setShowScheduler(false)}
           onScheduled={loadTasks}
+        />
+      </Modal>
+
+      {/* מודל משימה חוזרת */}
+      <Modal
+        isOpen={showRecurringForm}
+        onClose={() => setShowRecurringForm(false)}
+        title="🔄 משימה חוזרת"
+      >
+        <RecurringTaskForm
+          onClose={() => setShowRecurringForm(false)}
+          onCreated={loadTasks}
         />
       </Modal>
     </div>
