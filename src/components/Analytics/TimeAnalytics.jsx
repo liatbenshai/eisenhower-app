@@ -100,14 +100,6 @@ function TimeAnalytics() {
       return sum;
     }, 0);
     
-    // זמן לפי רבע (כל המשימות - פעילות והושלמו)
-    const timeByQuadrant = {
-      1: tasks.filter(t => t.quadrant === 1).reduce((sum, t) => sum + (t.time_spent || 0), 0),
-      2: tasks.filter(t => t.quadrant === 2).reduce((sum, t) => sum + (t.time_spent || 0), 0),
-      3: tasks.filter(t => t.quadrant === 3).reduce((sum, t) => sum + (t.time_spent || 0), 0),
-      4: tasks.filter(t => t.quadrant === 4).reduce((sum, t) => sum + (t.time_spent || 0), 0)
-    };
-    
     // פרויקטים עם הכי הרבה זמן
     const projects = tasks.filter(t => t.is_project);
     const topProjects = projects
@@ -144,7 +136,6 @@ function TimeAnalytics() {
       totalEstimated,
       timeSpentLast7Days,
       timeSpentLast30Days,
-      timeByQuadrant,
       topProjects,
       efficiency,
       completedLast7Days: completedLast7Days.length,
@@ -237,58 +228,6 @@ function TimeAnalytics() {
               </p>
             </div>
           </div>
-        </div>
-      </div>
-      
-      {/* זמן לפי רבע */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-          זמן לפי רבע
-        </h3>
-        <div className="space-y-3">
-          {[
-            { id: 1, name: 'דחוף וחשוב', color: 'red', icon: '🔴' },
-            { id: 2, name: 'חשוב אך לא דחוף', color: 'blue', icon: '🔵' },
-            { id: 3, name: 'דחוף אך לא חשוב', color: 'orange', icon: '🟠' },
-            { id: 4, name: 'לא דחוף ולא חשוב', color: 'gray', icon: '⚫' }
-          ].map(quadrant => {
-            const time = timeStats.timeByQuadrant[quadrant.id];
-            const percentage = timeStats.totalTimeSpent > 0 
-              ? Math.round((time / timeStats.totalTimeSpent) * 100)
-              : 0;
-            
-            return (
-              <div key={quadrant.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{quadrant.icon}</span>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {quadrant.name}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                      {formatMinutes(time)}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">
-                      {' '}({percentage}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      quadrant.color === 'red' ? 'bg-red-500' :
-                      quadrant.color === 'blue' ? 'bg-blue-500' :
-                      quadrant.color === 'orange' ? 'bg-orange-500' :
-                      'bg-gray-500'
-                    }`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
       

@@ -64,27 +64,55 @@ function CalendarView() {
     }
   }, [currentDate, viewMode]);
   
-  // קבלת משימות לפי תאריך (כולל שלבים)
+  // קבלת משימות לפי תאריך (כולל שלבים) - לפי תאריך התחלה ותאריך יעד
   const getTasksForDate = (date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const tasksForDate = [];
     
     tasks.forEach(task => {
-      // משימות רגילות
-      if (task.due_date === dateStr && !task.parent_task_id) {
-        tasksForDate.push(task);
+      // משימות רגילות - מופיעות אם התאריך בין תאריך התחלה לתאריך יעד
+      if (!task.parent_task_id) {
+        const startDate = task.start_date || task.due_date; // אם אין start_date, נשתמש ב-due_date
+        const dueDate = task.due_date;
+        
+        // אם יש תאריך יעד, המשימה מופיעה בתאריך זה או בתאריכים בין התחלה ליעד
+        if (dueDate === dateStr) {
+          tasksForDate.push(task);
+        } else if (startDate && dueDate && startDate <= dateStr && dateStr <= dueDate) {
+          // אם התאריך בין תאריך התחלה לתאריך יעד, מוסיפים את המשימה
+          tasksForDate.push(task);
+        }
       }
       
       // שלבים של פרויקטים
       if (task.subtasks && task.subtasks.length > 0) {
         task.subtasks.forEach(st => {
-          if (st.due_date === dateStr) {
+          const subtaskStartDate = st.start_date || st.due_date;
+          const subtaskDueDate = st.due_date;
+          
+          if (subtaskDueDate === dateStr) {
             // יצירת משימה וירטואלית לשלב
             tasksForDate.push({
               ...task,
               id: `subtask-${st.id}`,
               title: `${task.title} - ${st.title}`,
               due_date: st.due_date,
+              start_date: st.start_date,
+              due_time: st.due_time,
+              is_subtask: true,
+              subtask_data: st,
+              progress: st.estimated_duration > 0 
+                ? Math.min(100, Math.round((st.time_spent || 0) / st.estimated_duration * 100))
+                : 0
+            });
+          } else if (subtaskStartDate && subtaskDueDate && subtaskStartDate <= dateStr && dateStr <= subtaskDueDate) {
+            // אם התאריך בין תאריך התחלה לתאריך יעד של השלב
+            tasksForDate.push({
+              ...task,
+              id: `subtask-${st.id}`,
+              title: `${task.title} - ${st.title}`,
+              due_date: st.due_date,
+              start_date: st.start_date,
               due_time: st.due_time,
               is_subtask: true,
               subtask_data: st,

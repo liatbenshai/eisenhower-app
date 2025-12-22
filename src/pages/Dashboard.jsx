@@ -13,6 +13,7 @@ import Tabs from '../components/UI/Tabs';
 import TimeAnalytics from '../components/Analytics/TimeAnalytics';
 import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
 import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
+import CalendarView from '../components/Calendar/CalendarView';
 
 /**
  * דף לוח המחוונים הראשי
@@ -148,6 +149,11 @@ function Dashboard() {
                 <PlanningVsExecution />
               </div>
             )
+          },
+          {
+            label: 'לוח שנה',
+            icon: '📅',
+            content: <CalendarView />
           },
           {
             label: 'ניתוח זמן',

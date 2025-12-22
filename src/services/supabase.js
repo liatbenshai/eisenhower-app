@@ -194,6 +194,7 @@ export async function getTasks(userId) {
         title,
         description,
         order_index,
+        start_date,
         due_date,
         due_time,
         estimated_duration,
@@ -344,8 +345,9 @@ export async function createTask(task) {
     title: task.title.trim(),
     description: task.description?.trim() || null,
     quadrant: task.quadrant || 1,
-    due_date: task.due_date || null,
-    due_time: task.due_time || null,
+    start_date: task.start_date || task.startDate || null,
+    due_date: task.due_date || task.dueDate || null,
+    due_time: task.due_time || task.dueTime || null,
     reminder_minutes: task.reminder_minutes ? parseInt(task.reminder_minutes) : null,
     estimated_duration: task.estimated_duration ? parseInt(task.estimated_duration) : null,
     task_type: task.task_type || 'other', // תמיד יש ערך
@@ -524,11 +526,14 @@ export async function updateTask(taskId, updates) {
   if (updates.quadrant !== undefined) {
     updateData.quadrant = updates.quadrant;
   }
-  if (updates.due_date !== undefined) {
-    updateData.due_date = updates.due_date;
+  if (updates.start_date !== undefined || updates.startDate !== undefined) {
+    updateData.start_date = updates.start_date || updates.startDate || null;
   }
-  if (updates.due_time !== undefined) {
-    updateData.due_time = updates.due_time;
+  if (updates.due_date !== undefined || updates.dueDate !== undefined) {
+    updateData.due_date = updates.due_date || updates.dueDate || null;
+  }
+  if (updates.due_time !== undefined || updates.dueTime !== undefined) {
+    updateData.due_time = updates.due_time || updates.dueTime || null;
   }
   if (updates.reminder_minutes !== undefined) {
     updateData.reminder_minutes = updates.reminder_minutes ? parseInt(updates.reminder_minutes) : null;
@@ -556,7 +561,7 @@ export async function updateTask(taskId, updates) {
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .select('id, title, description, quadrant, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id, time_spent')
+    .select('id, title, description, quadrant, start_date, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id, time_spent')
     .single();
   
   if (error) {
@@ -704,6 +709,7 @@ export async function createProjectTask(projectData) {
     title: taskData.title,
     description: taskData.description || null,
     quadrant: taskData.quadrant,
+    start_date: taskData.startDate || null,
     due_date: taskData.dueDate || null,
     due_time: taskData.dueTime || null,
     reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
@@ -778,6 +784,7 @@ export async function createProjectTask(projectData) {
         title: `${taskData.title} - ${st.title}`,
         description: st.description || null,
         quadrant: quadrant,
+        start_date: st.startDate || null,
         due_date: st.dueDate || null,
         due_time: st.dueTime || null,
         reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
@@ -811,6 +818,7 @@ export async function createProjectTask(projectData) {
           title: st.title,
           description: st.description || null,
           order_index: i,
+          start_date: st.startDate || null,
           due_date: st.dueDate || null,
           due_time: st.dueTime || null,
           estimated_duration: st.estimatedDuration || null,
@@ -911,6 +919,7 @@ export async function createSubtask(taskId, subtaskData) {
       title: subtaskData.title,
       description: subtaskData.description || null,
       order_index: subtaskData.orderIndex || 0,
+      start_date: subtaskData.startDate || null,
       due_date: subtaskData.dueDate || null,
       due_time: subtaskData.dueTime || null,
       estimated_duration: subtaskData.estimatedDuration || null,

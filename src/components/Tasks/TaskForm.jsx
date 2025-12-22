@@ -25,6 +25,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     title: '',
     description: '',
     quadrant: defaultQuadrant,
+    startDate: '',
     dueDate: '',
     dueTime: '',
     reminderMinutes: '',
@@ -76,6 +77,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         title: task.title || '',
         description: task.description || '',
         quadrant: task.quadrant || 1,
+        startDate: task.start_date || '',
         dueDate: task.due_date || '',
         dueTime: task.due_time || '',
         reminderMinutes: task.reminder_minutes || '',
@@ -398,6 +400,17 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
         )}
       </div>
 
+      {/* תאריך התחלה */}
+      <Input
+        label="תאריך התחלה"
+        type="date"
+        name="startDate"
+        value={formData.startDate}
+        onChange={handleChange}
+        error={errors.startDate}
+        min={getTodayISO()}
+      />
+
       {/* תאריך ושעה */}
       <div className="grid grid-cols-2 gap-3">
         <Input
@@ -407,7 +420,7 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
           value={formData.dueDate}
           onChange={handleChange}
           error={errors.dueDate}
-          min={getTodayISO()}
+          min={formData.startDate || getTodayISO()}
         />
         <Input
           label="שעה"
