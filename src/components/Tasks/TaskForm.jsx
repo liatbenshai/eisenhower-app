@@ -16,7 +16,7 @@ import Button from '../UI/Button';
 /**
  * טופס הוספה/עריכת משימה
  */
-function TaskForm({ task, defaultQuadrant = 1, onClose }) {
+function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime = null, onClose }) {
   const { addTask, editTask, tasks } = useTasks();
   const { user } = useAuth();
   const isEditing = !!task;
@@ -25,9 +25,9 @@ function TaskForm({ task, defaultQuadrant = 1, onClose }) {
     title: '',
     description: '',
     quadrant: defaultQuadrant,
-    startDate: '',
-    dueDate: '',
-    dueTime: '',
+    startDate: defaultDate || '',
+    dueDate: defaultDate || '',
+    dueTime: defaultTime || '',
     reminderMinutes: '',
     estimatedDuration: '',
     taskType: 'other' // ברירת מחדל חשובה!

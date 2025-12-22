@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTasks } from '../hooks/useTasks';
-import Matrix from '../components/Matrix/Matrix';
 import TaskForm from '../components/Tasks/TaskForm';
 import ProjectTaskForm from '../components/Tasks/ProjectTaskForm';
 import TaskFilters from '../components/Tasks/TaskFilters';
 import ExportButtons from '../components/Export/ExportButtons';
-import MobileNav from '../components/Layout/MobileNav';
 import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
 import Tabs from '../components/UI/Tabs';
@@ -23,22 +21,24 @@ function Dashboard() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [activeQuadrant, setActiveQuadrant] = useState(null); // לנייד
+  const [selectedDateForTask, setSelectedDateForTask] = useState(null); // תאריך נבחר להוספת משימה
+  const [selectedTimeForTask, setSelectedTimeForTask] = useState(null); // שעה נבחרת להוספת משימה
   const stats = getStats();
 
   // פתיחת טופס הוספת משימה
-  // חשוב: ניתן להוסיף משימות חדשות תמיד, ללא הגבלה על משימות פעילות או לא הושלמו
-  const handleAddTask = (quadrant = 1) => {
+  const handleAddTask = (date = null, time = null) => {
     setEditingTask(null);
-    setActiveQuadrant(quadrant);
+    setSelectedDateForTask(date);
+    setSelectedTimeForTask(time);
     setShowTaskForm(true);
     setShowProjectForm(false);
   };
 
   // פתיחת טופס יצירת פרויקט
-  const handleAddProject = (quadrant = 1) => {
+  const handleAddProject = () => {
     setEditingTask(null);
-    setActiveQuadrant(quadrant);
+    setSelectedDateForTask(null);
+    setSelectedTimeForTask(null);
     setShowProjectForm(true);
     setShowTaskForm(false);
   };
@@ -153,25 +153,12 @@ function Dashboard() {
           {
             label: 'לוח שנה',
             icon: '📅',
-            content: <CalendarView />
+            content: <CalendarView onAddTask={handleAddTask} onEditTask={handleEditTask} />
           },
           {
             label: 'ניתוח זמן',
             icon: '⏱️',
             content: <TimeAnalytics />
-          },
-          {
-            label: 'משימות',
-            icon: '📋',
-            content: (
-              <div>
-                <Matrix 
-                  onAddTask={handleAddTask}
-                  onEditTask={handleEditTask}
-                />
-                <MobileNav onAddTask={handleAddTask} />
-              </div>
-            )
           }
         ]}
       />
@@ -184,7 +171,9 @@ function Dashboard() {
       >
         <TaskForm
           task={editingTask}
-          defaultQuadrant={activeQuadrant}
+          defaultQuadrant={1}
+          defaultDate={selectedDateForTask}
+          defaultTime={selectedTimeForTask}
           onClose={handleCloseForm}
         />
       </Modal>
@@ -197,7 +186,7 @@ function Dashboard() {
         size="xl"
       >
         <ProjectTaskForm
-          defaultQuadrant={activeQuadrant || 1}
+          defaultQuadrant={1}
           onClose={handleCloseForm}
         />
       </Modal>
