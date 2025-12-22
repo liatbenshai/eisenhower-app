@@ -32,6 +32,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(null);
+  const [originalStartTime, setOriginalStartTime] = useState(null); // זמן התחלה מקורי שלא מתאפס
   const [targetMinutes, setTargetMinutes] = useState(30); // זמן יעד - נעדכן ב-useEffect
   const [hasReachedTarget, setHasReachedTarget] = useState(false);
   const intervalRef = useRef(null);
@@ -114,6 +115,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   useEffect(() => {
     if (currentTask?.id && timerStorageKey) {
       const savedStartTime = localStorage.getItem(timerStorageKey);
+      const savedOriginalStartTime = localStorage.getItem(`${timerStorageKey}_original`);
+      
       if (savedStartTime) {
         const start = new Date(savedStartTime);
         const now = new Date();
@@ -129,6 +132,16 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           setStartTime(start);
           setElapsedSeconds(elapsed);
           setIsRunning(true);
+          
+          // אם יש זמן התחלה מקורי, נשתמש בו
+          if (savedOriginalStartTime) {
+            const originalStart = new Date(savedOriginalStartTime);
+            setOriginalStartTime(originalStart);
+            console.log('⏰ זמן התחלה מקורי נטען:', originalStart.toISOString());
+          } else {
+            // אם אין, נשתמש ב-startTime כ-originalStartTime
+            setOriginalStartTime(start);
+          }
 
           toast.success(`⏰ טיימר חודש! עברו ${Math.floor(elapsed / 60)} דקות`, {
             duration: 3000
@@ -148,6 +161,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           }, 2000); // נמתין 2 שניות כדי לוודא שהכל נטען
         } else {
           localStorage.removeItem(timerStorageKey);
+          localStorage.removeItem(`${timerStorageKey}_original`);
         }
       }
     }
@@ -227,16 +241,28 @@ function TaskTimer({ task, onUpdate, onComplete }) {
 
   // בדיקת הגעה ליעד זמן - אבל לא עוצר את הטיימר, רק מציג הודעה
   useEffect(() => {
-    if (isRunning && targetMinutes > 0 && !hasReachedTarget && startTime) {
-      const targetSeconds = targetMinutes * 60;
-      // חישוב זמן מדויק לפי startTime (לא לפי elapsedSeconds שעלול להתאפס)
-      const now = new Date();
-      const actualElapsedSeconds = Math.floor((now - startTime) / 1000);
+    if (isRunning && targetMinutes > 0 && !hasReachedTarget) {
+      const targetMinutesTotal = targetMinutes;
       
-      if (actualElapsedSeconds >= targetSeconds) {
+      // חישוב הזמן הכולל: time_spent + הזמן מהסשן הנוכחי
+      // אם יש originalStartTime, נשתמש בו (זמן התחלה מקורי שלא מתאפס)
+      // אחרת נשתמש ב-startTime (שמתאפס אחרי שמירה אוטומטית)
+      let totalMinutes = timeSpent; // הזמן שכבר נשמר
+      
+      if (originalStartTime) {
+        // חישוב הזמן הכולל מהתחלה המקורית
+        const now = new Date();
+        const totalSecondsFromStart = Math.floor((now - originalStartTime) / 1000);
+        totalMinutes = Math.floor(totalSecondsFromStart / 60);
+      } else if (startTime) {
+        // אם אין originalStartTime, נשתמש ב-startTime + timeSpent
+        const now = new Date();
+        const sessionSeconds = Math.floor((now - startTime) / 1000);
+        totalMinutes = timeSpent + Math.floor(sessionSeconds / 60);
+      }
+      
+      if (totalMinutes >= targetMinutesTotal) {
         setHasReachedTarget(true);
-        // עדכון elapsedSeconds למה שהוא באמת
-        setElapsedSeconds(actualElapsedSeconds);
         // לא עוצרים את הטיימר - ממשיכים לעבוד מעבר ליעד!
         playAlarm();
         toast.success(`⏰ הגעת ליעד של ${targetMinutes} דקות! ממשיכים לעבוד...`, {
@@ -251,7 +277,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         }
       }
     }
-  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget, startTime]);
+  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget, startTime, originalStartTime, timeSpent]);
 
   // Early return AFTER all hooks are called
   if (!task || !task.id || !currentTask) {
@@ -280,6 +306,15 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         if (currentTask?.id) {
           localStorage.setItem(timerStorageKey, now.toISOString());
           console.log('💾 זמן התחלה נשמר ב-localStorage:', now.toISOString());
+        }
+      }
+      // שמירת זמן התחלה מקורי (אם עדיין לא נשמר)
+      if (!originalStartTime) {
+        setOriginalStartTime(now);
+        // שמירה ב-localStorage
+        if (currentTask?.id) {
+          localStorage.setItem(`${timerStorageKey}_original`, now.toISOString());
+          console.log('⏰ זמן התחלה מקורי נשמר:', now.toISOString());
         }
       }
       setIsRunning(true);
@@ -328,10 +363,12 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setElapsedSeconds(0);
     setHasReachedTarget(false);
     setStartTime(null);
+    setOriginalStartTime(null); // גם מאפסים את הזמן המקורי
     
     // ניקוי מ-localStorage
     if (currentTask?.id) {
       localStorage.removeItem(timerStorageKey);
+      localStorage.removeItem(`${timerStorageKey}_original`);
       console.log('🗑️ זמן התחלה נמחק מ-localStorage (reset)');
     }
   };
@@ -389,6 +426,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         
         // אחרי שמירה, מאפסים את startTime לזמן הנוכחי כדי שלא נספור כפול
         // אבל רק אם זה לא reset מלא (אז אנחנו ממשיכים לעבוד)
+        // חשוב: originalStartTime לא מתאפס - הוא נשאר כדי שנוכל לבדוק הגעה ליעד
         if (!reset && startTime) {
           const now = new Date();
           setStartTime(now);
