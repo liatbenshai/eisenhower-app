@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
+import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -312,9 +313,19 @@ function DailyView() {
             >
               📆 שבוע
             </button>
+            <button
+              onClick={() => setViewMode('analytics')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'analytics' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              📊 דוחות
+            </button>
           </div>
           
-          {!isToday(selectedDate) && (
+          {!isToday(selectedDate) && viewMode !== 'analytics' && (
             <button
               onClick={goToToday}
               className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -324,7 +335,8 @@ function DailyView() {
           )}
         </div>
 
-        {/* ניווט בין ימים */}
+        {/* ניווט בין ימים - רק בתצוגת יום או שבוע */}
+        {viewMode !== 'analytics' && (
         <div className="flex items-center justify-between">
           <button
             onClick={goToPreviousDay}
@@ -358,7 +370,13 @@ function DailyView() {
         <p className="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
           שעות עבודה: {WORK_HOURS.start}:00 - {WORK_HOURS.end}:00
         </p>
+        )}
       </motion.div>
+
+      {/* תצוגת אנליטיקס */}
+      {viewMode === 'analytics' && (
+        <TimeAnalyticsDashboard />
+      )}
 
       {/* תצוגה שבועית - כיומן */}
       {viewMode === 'week' && (
