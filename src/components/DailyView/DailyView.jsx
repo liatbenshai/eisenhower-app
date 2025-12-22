@@ -4,6 +4,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import DailyTaskCard from './DailyTaskCard';
+import WeeklyCalendarView from './WeeklyCalendarView';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -338,49 +339,27 @@ function DailyView() {
         </p>
       </motion.div>
 
-      {/* תצוגה שבועית */}
+      {/* תצוגה שבועית - כיומן */}
       {viewMode === 'week' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="card p-4 mb-6 overflow-x-auto"
+          className="card p-4 mb-6"
         >
-          <div className="flex gap-2 min-w-max">
-            {getWeekDays().map((day, index) => {
-              const dayTasks = getTasksForDate(day);
-              const dayInfo = getDateHebrew(day);
-              const isSelected = getDateISO(day) === getDateISO(selectedDate);
-              const isTodayDay = isToday(day);
-              const completedCount = dayTasks.filter(t => t.is_completed).length;
-              const totalCount = dayTasks.length;
-              
-              return (
-                <button
-                  key={index}
-                  onClick={() => {
-                    setSelectedDate(day);
-                    setViewMode('day');
-                  }}
-                  className={`
-                    flex-1 min-w-[100px] p-3 rounded-lg text-center transition-all
-                    ${isSelected ? 'bg-blue-500 text-white' : 
-                      isTodayDay ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
-                      'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'}
-                  `}
-                >
-                  <div className="font-medium text-sm">{dayInfo.dayName}</div>
-                  <div className="text-lg font-bold">{day.getDate()}</div>
-                  <div className="text-xs mt-1 opacity-75">
-                    {totalCount > 0 ? `${completedCount}/${totalCount}` : '-'}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <WeeklyCalendarView
+            tasks={tasks}
+            selectedDate={selectedDate}
+            onSelectDate={(day) => {
+              setSelectedDate(day);
+              setViewMode('day');
+            }}
+            onEditTask={handleEditTask}
+          />
         </motion.div>
       )}
 
-      {/* סרגל זמן */}
+      {/* סרגל זמן - רק בתצוגה יומית */}
+      {viewMode === 'day' && (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -440,6 +419,7 @@ function DailyView() {
           </div>
         )}
       </motion.div>
+      )}
 
       {/* כפתור הוספת משימה */}
       <motion.div
@@ -453,7 +433,8 @@ function DailyView() {
         </Button>
       </motion.div>
 
-      {/* רשימת משימות */}
+      {/* רשימת משימות - רק בתצוגה יומית */}
+      {viewMode === 'day' && (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -503,6 +484,7 @@ function DailyView() {
           </>
         )}
       </motion.div>
+      )}
 
       {/* מודל טופס */}
       <Modal
