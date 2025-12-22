@@ -39,14 +39,17 @@ function TimeAnalytics() {
       }
     });
     
-    // זמן שבוצע ב-7 ימים האחרונים (כל המשימות, לא רק הושלמו)
+    // זמן שבוצע ב-7 ימים האחרונים (כל המשימות עם זמן שבוצע, לא רק הושלמו)
     const timeSpentLast7Days = tasks.reduce((sum, task) => {
+      const timeSpent = task.time_spent || 0;
+      if (timeSpent === 0) return sum;
+      
       // אם המשימה הושלמה ב-7 ימים האחרונים, מוסיפים את הזמן
       if (task.completed_at) {
         try {
           const completedDate = new Date(task.completed_at);
           if (completedDate >= last7Days && completedDate <= now) {
-            return sum + (task.time_spent || 0);
+            return sum + timeSpent;
           }
         } catch (err) {
           console.error('שגיאה בניתוח תאריך:', err);
@@ -57,29 +60,43 @@ function TimeAnalytics() {
         try {
           const updatedDate = new Date(task.updated_at);
           if (updatedDate >= last7Days) {
-            return sum + (task.time_spent || 0);
+            return sum + timeSpent;
           }
         } catch (err) {
           console.error('שגיאה בניתוח תאריך עדכון:', err);
         }
+      }
+      // גם אם אין תאריך עדכון, אבל יש זמן שבוצע, נוסיף אותו (למקרה שהמשימה עודכנה היום)
+      if (!task.is_completed && !task.updated_at && timeSpent > 0) {
+        return sum + timeSpent;
       }
       return sum;
     }, 0);
     
     // זמן שבוצע ב-30 ימים האחרונים (כל המשימות)
     const timeSpentLast30Days = tasks.reduce((sum, task) => {
+      const timeSpent = task.time_spent || 0;
+      if (timeSpent === 0) return sum;
+      
       if (task.completed_at) {
         const completedDate = new Date(task.completed_at);
         if (completedDate >= last30Days) {
-          return sum + (task.time_spent || 0);
+          return sum + timeSpent;
         }
       }
-      if (!task.is_completed && task.updated_at) {
-        const updatedDate = new Date(task.updated_at);
-        if (updatedDate >= last30Days) {
-          return sum + (task.time_spent || 0);
+      
+      if (!task.is_completed) {
+        if (task.updated_at) {
+          const updatedDate = new Date(task.updated_at);
+          if (updatedDate >= last30Days) {
+            return sum + timeSpent;
+          }
+        } else {
+          // אם אין תאריך עדכון - כנראה עודכן לאחרונה
+          return sum + timeSpent;
         }
       }
+      
       return sum;
     }, 0);
     

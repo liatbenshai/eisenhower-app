@@ -47,11 +47,19 @@ export function TaskProvider({ children }) {
     
     try {
       const data = await getTasks(user.id);
-      const safeData = (data || []).map(task => ({
-        ...task,
-        time_spent: task.time_spent || 0,
-        estimated_duration: task.estimated_duration || null
-      }));
+      console.log('📥 טעינת משימות מה-DB:', { count: data?.length, sample: data?.[0] });
+      const safeData = (data || []).map(task => {
+        const taskWithTime = {
+          ...task,
+          time_spent: task.time_spent || 0,
+          estimated_duration: task.estimated_duration || null
+        };
+        if (task.time_spent > 0) {
+          console.log('⏱️ משימה עם זמן:', { id: task.id, title: task.title, time_spent: task.time_spent });
+        }
+        return taskWithTime;
+      });
+      console.log('✅ משימות נטענו:', { count: safeData.length, tasksWithTime: safeData.filter(t => (t.time_spent || 0) > 0).length });
       setTasks(safeData);
     } catch (err) {
       console.error('שגיאה בטעינת משימות:', err);
@@ -239,22 +247,36 @@ export function TaskProvider({ children }) {
   const updateTaskTime = useCallback(async (taskId, timeSpent) => {
     const timeSpentInt = parseInt(timeSpent) || 0;
     
+    console.log('🔄 updateTaskTime נקרא:', { taskId, timeSpent, timeSpentInt });
+    
     try {
       // עדכון ב-DB דרך updateTaskTimeSpent
       const { updateTaskTimeSpent } = await import('../services/supabase');
+      console.log('📤 שומר זמן ב-DB...');
       const updatedTask = await updateTaskTimeSpent(taskId, timeSpentInt);
+      console.log('✅ זמן נשמר ב-DB:', updatedTask);
       
       // עדכון ב-state
-      setTasks(prev => prev.map(t => 
-        t.id === taskId 
-          ? { ...t, time_spent: timeSpentInt }
-          : t
-      ));
+      setTasks(prev => {
+        const updated = prev.map(t => 
+          t.id === taskId 
+            ? { ...t, time_spent: timeSpentInt }
+            : t
+        );
+        console.log('✅ State עודכן:', { taskId, timeSpent: timeSpentInt, updatedTask: updated.find(t => t.id === taskId) });
+        return updated;
+      });
       
-      console.log('✅ זמן עודכן בהצלחה:', { taskId, timeSpent: timeSpentInt });
+      console.log('✅ זמן עודכן בהצלחה ב-DB וב-state:', { taskId, timeSpent: timeSpentInt });
       return updatedTask || { id: taskId, time_spent: timeSpentInt };
     } catch (err) {
       console.error('❌ שגיאה בעדכון זמן:', err);
+      console.error('❌ פרטי שגיאה:', {
+        message: err.message,
+        stack: err.stack,
+        taskId,
+        timeSpentInt
+      });
       // עדכון מקומי גם אם השמירה ב-DB נכשלה
       setTasks(prev => prev.map(t => 
         t.id === taskId 
