@@ -26,6 +26,15 @@ export function AuthProvider({ children }) {
     let subscription = null;
     let sessionCheckInterval = null;
     let visibilityHandler = null;
+    let loadingTimeout = null;
+
+    // Timeout ל-loading - אם לא התעדכן תוך 5 שניות, נכריח אותו
+    loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('⚠️ Timeout בטעינת אותנטיקציה - מכריח loading=false');
+        setLoading(false);
+      }
+    }, 5000);
 
     // טעינת משתמש ראשונית - פשוט
     const initializeAuth = async () => {
@@ -36,6 +45,7 @@ export function AuthProvider({ children }) {
         if (sessionError) {
           console.error('שגיאה בקבלת סשן:', sessionError);
           if (mounted) {
+            clearTimeout(loadingTimeout);
             updateUser(null);
             setLoading(false);
           }
@@ -45,6 +55,7 @@ export function AuthProvider({ children }) {
         if (session?.user) {
           // סשן תקף - עדכן משתמש
           if (mounted) {
+            clearTimeout(loadingTimeout);
             updateUser({ ...session.user, profile: null });
             setLoading(false);
           }
@@ -60,6 +71,7 @@ export function AuthProvider({ children }) {
         } else {
           // אין סשן
           if (mounted) {
+            clearTimeout(loadingTimeout);
             updateUser(null);
             setLoading(false);
           }
@@ -67,6 +79,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         console.error('שגיאה באתחול אותנטיקציה:', err);
         if (mounted) {
+          clearTimeout(loadingTimeout);
           updateUser(null);
           setLoading(false);
         }
@@ -201,6 +214,7 @@ export function AuthProvider({ children }) {
           // עבור INITIAL_SESSION - פשוט עדכן loading
           if (event === 'INITIAL_SESSION') {
             if (mounted) {
+              clearTimeout(loadingTimeout);
               if (session?.user) {
                 updateUser({ ...session.user, profile: null });
               } else {
@@ -239,6 +253,9 @@ export function AuthProvider({ children }) {
 
         return () => {
           mounted = false;
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
           if (subscription) {
             subscription.unsubscribe();
           }
