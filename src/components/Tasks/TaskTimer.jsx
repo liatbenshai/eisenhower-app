@@ -381,6 +381,20 @@ function TaskTimer({ task, onUpdate, onComplete }) {
           await updateSubtaskProgress(latestTask.subtask_id, newTimeSpent);
         }
         
+        // אחרי שמירה, מאפסים את startTime לזמן הנוכחי כדי שלא נספור כפול
+        // אבל רק אם זה לא reset מלא (אז אנחנו ממשיכים לעבוד)
+        if (!reset && startTime) {
+          const now = new Date();
+          setStartTime(now);
+          // עדכון localStorage
+          if (currentTask?.id) {
+            localStorage.setItem(timerStorageKey, now.toISOString());
+            console.log('🔄 startTime אופס אחרי שמירה:', now.toISOString());
+          }
+          // מאפסים את elapsedSeconds כי הזמן כבר נשמר
+          setElapsedSeconds(0);
+        }
+        
         if (reset) {
           setElapsedSeconds(0);
         }
