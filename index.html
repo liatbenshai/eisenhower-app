@@ -30,6 +30,61 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   
   <title>מטריצת אייזנהאואר</title>
+  
+  <!-- מחיקת Service Workers ו-cache - מוקדם מאוד, לפני כל דבר אחר -->
+  <script>
+    (function() {
+      'use strict';
+      
+      // מחיקת Service Workers - מיד
+      if ('serviceWorker' in navigator) {
+        // חסימת register לפני כל דבר אחר
+        const originalRegister = navigator.serviceWorker.register;
+        navigator.serviceWorker.register = function() {
+          console.warn('🚫 נחסם ניסיון לרישום Service Worker');
+          return Promise.reject(new Error('Service Workers disabled'));
+        };
+        
+        // מחיקת כל ה-Service Workers הקיימים
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          registrations.forEach(function(reg) {
+            reg.unregister().then(function() {
+              console.log('✅ Service Worker נמחק');
+            }).catch(function() {});
+          });
+        }).catch(function() {});
+      }
+      
+      // מחיקת cache - מיד
+      if ('caches' in window) {
+        caches.keys().then(function(cacheNames) {
+          cacheNames.forEach(function(cacheName) {
+            caches.delete(cacheName).then(function() {
+              console.log('✅ Cache נמחק:', cacheName);
+            }).catch(function() {});
+          });
+        }).catch(function() {});
+      }
+      
+      // מניעת cache גם ב-fetch
+      const originalFetch = window.fetch;
+      window.fetch = function(...args) {
+        const url = args[0];
+        if (typeof url === 'string') {
+          const isSupabaseRequest = url.includes('supabase.co') || url.includes('/rest/v1/') || url.includes('/auth/v1/');
+          const isApiRequest = url.startsWith('http') && (url.includes('/api/') || url.includes('/rest/') || url.includes('/auth/'));
+          
+          if (!isSupabaseRequest && !isApiRequest && !url.startsWith('http')) {
+            const separator = url.includes('?') ? '&' : '?';
+            args[0] = url + separator + '_v=' + Date.now();
+          }
+        }
+        return originalFetch.apply(this, args);
+      };
+      
+      console.log('✨ Service Workers ו-Cache מושבתים - רענון חופשי!');
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>
