@@ -227,10 +227,16 @@ function TaskTimer({ task, onUpdate, onComplete }) {
 
   // בדיקת הגעה ליעד זמן - אבל לא עוצר את הטיימר, רק מציג הודעה
   useEffect(() => {
-    if (isRunning && targetMinutes > 0 && !hasReachedTarget) {
+    if (isRunning && targetMinutes > 0 && !hasReachedTarget && startTime) {
       const targetSeconds = targetMinutes * 60;
-      if (elapsedSeconds >= targetSeconds) {
+      // חישוב זמן מדויק לפי startTime (לא לפי elapsedSeconds שעלול להתאפס)
+      const now = new Date();
+      const actualElapsedSeconds = Math.floor((now - startTime) / 1000);
+      
+      if (actualElapsedSeconds >= targetSeconds) {
         setHasReachedTarget(true);
+        // עדכון elapsedSeconds למה שהוא באמת
+        setElapsedSeconds(actualElapsedSeconds);
         // לא עוצרים את הטיימר - ממשיכים לעבוד מעבר ליעד!
         playAlarm();
         toast.success(`⏰ הגעת ליעד של ${targetMinutes} דקות! ממשיכים לעבוד...`, {
@@ -245,7 +251,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         }
       }
     }
-  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget]);
+  }, [elapsedSeconds, isRunning, targetMinutes, hasReachedTarget, startTime]);
 
   // Early return AFTER all hooks are called
   if (!task || !task.id || !currentTask) {
