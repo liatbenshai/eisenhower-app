@@ -409,7 +409,7 @@ function CalendarView({ onAddTask, onEditTask }) {
                   
                   {/* תוכן - משימות */}
                   <div 
-                    className={`flex-1 p-3 relative ${
+                    className={`flex-1 p-3 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                       dragOverTarget?.date && isSameDay(dragOverTarget.date, currentDate) && dragOverTarget.hour === hour
                         ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500'
                         : ''
@@ -417,6 +417,7 @@ function CalendarView({ onAddTask, onEditTask }) {
                     onDragOver={(e) => handleDragOver(e, currentDate, hour)}
                     onDrop={(e) => handleDrop(e, currentDate, hour)}
                     onClick={() => onAddTask && onAddTask(format(currentDate, 'yyyy-MM-dd'), `${hour.toString().padStart(2, '0')}:00`)}
+                    title={`לחיצה להוספת משימה בשעה ${hour}:00`}
                   >
                     {hourTasks.length > 0 ? (
                       <div className="space-y-2">
@@ -486,8 +487,8 @@ function CalendarView({ onAddTask, onEditTask }) {
                         })}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-400 dark:text-gray-600 h-full flex items-center">
-                        {/* ריק - לחיצה תוסיף משימה */}
+                      <div className="text-xs text-gray-400 dark:text-gray-600 h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <span className="text-gray-300 dark:text-gray-700">לחיצה להוספת משימה</span>
                       </div>
                     )}
                   </div>

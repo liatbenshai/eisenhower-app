@@ -21,12 +21,18 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
   const { user } = useAuth();
   const isEditing = !!task;
 
+  // אם יש תאריך/שעה ברירת מחדל, נשתמש בהם - אחרת נשתמש בהיום
+  const getDefaultDate = () => {
+    if (defaultDate) return defaultDate;
+    return getTodayISO();
+  };
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    quadrant: defaultQuadrant,
-    startDate: defaultDate || '',
-    dueDate: defaultDate || '',
+    quadrant: defaultQuadrant || 1, // ברירת מחדל אבל לא חובה
+    startDate: defaultDate || getTodayISO(),
+    dueDate: defaultDate || getTodayISO(),
     dueTime: defaultTime || '',
     reminderMinutes: '',
     estimatedDuration: '',
