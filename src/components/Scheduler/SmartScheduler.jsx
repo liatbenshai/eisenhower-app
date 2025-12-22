@@ -13,10 +13,40 @@ const WORK_HOURS = {
 };
 
 /**
+ * יחידת זמן מינימלית (בדקות)
+ */
+const TIME_SLOT = 15;
+
+/**
  * קבלת תאריך בפורמט ISO
  */
 function getDateISO(date) {
   return date.toISOString().split('T')[0];
+}
+
+/**
+ * המרת שעה לדקות מתחילת היום
+ */
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [hours, mins] = timeStr.split(':').map(Number);
+  return hours * 60 + (mins || 0);
+}
+
+/**
+ * המרת דקות לשעה
+ */
+function minutesToTime(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
+
+/**
+ * עיגול דקות ל-TIME_SLOT הקרוב (כלפי מעלה)
+ */
+function roundUpToSlot(minutes) {
+  return Math.ceil(minutes / TIME_SLOT) * TIME_SLOT;
 }
 
 /**
@@ -39,7 +69,7 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     });
   }, [tasks]);
 
-  // משימות משובצות ליום הנבחר
+  // משימות משובצות ליום הנבחר (עם שעה!)
   const scheduledForDay = useMemo(() => {
     const dateISO = getDateISO(selectedDate);
     return tasks.filter(task => {
@@ -48,78 +78,57 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     });
   }, [tasks, selectedDate]);
 
+  // חישוב זמנים תפוסים ביום (כמערך של {start, end} בדקות)
+  const occupiedSlots = useMemo(() => {
+    return scheduledForDay.map(task => {
+      const startMinutes = timeToMinutes(task.due_time);
+      const duration = task.estimated_duration || 30;
+      return {
+        start: startMinutes,
+        end: startMinutes + duration,
+        task
+      };
+    }).sort((a, b) => a.start - b.start);
+  }, [scheduledForDay]);
+
   // חישוב זמנים פנויים ביום
   const freeSlots = useMemo(() => {
-    const dateISO = getDateISO(selectedDate);
     const slots = [];
+    const dayStart = WORK_HOURS.start * 60;
+    const dayEnd = WORK_HOURS.end * 60;
     
-    // יצירת מפת שעות (כל 30 דקות)
-    const timeMap = {};
-    for (let hour = WORK_HOURS.start; hour < WORK_HOURS.end; hour++) {
-      timeMap[`${hour.toString().padStart(2, '0')}:00`] = null;
-      timeMap[`${hour.toString().padStart(2, '0')}:30`] = null;
-    }
-
-    // סימון זמנים תפוסים
-    scheduledForDay.forEach(task => {
-      if (!task.due_time) return;
-      const startHour = parseInt(task.due_time.split(':')[0]);
-      const startMin = parseInt(task.due_time.split(':')[1]) || 0;
-      const duration = task.estimated_duration || 30;
-      
-      // סימון כל 30 דקות של המשימה
-      let currentMin = startHour * 60 + startMin;
-      const endMin = currentMin + duration;
-      
-      while (currentMin < endMin && currentMin < WORK_HOURS.end * 60) {
-        const hour = Math.floor(currentMin / 60);
-        const min = currentMin % 60;
-        const timeKey = `${hour.toString().padStart(2, '0')}:${min === 0 ? '00' : '30'}`;
-        if (timeMap.hasOwnProperty(timeKey)) {
-          timeMap[timeKey] = task;
-        }
-        currentMin += 30;
-      }
-    });
-
-    // מציאת רצפים פנויים
-    let currentSlotStart = null;
-    let currentSlotDuration = 0;
-
-    Object.keys(timeMap).sort().forEach((time, index, arr) => {
-      if (timeMap[time] === null) {
-        // זמן פנוי
-        if (currentSlotStart === null) {
-          currentSlotStart = time;
-          currentSlotDuration = 30;
-        } else {
-          currentSlotDuration += 30;
-        }
-      } else {
-        // זמן תפוס - סגור את הרצף הקודם
-        if (currentSlotStart !== null && currentSlotDuration >= 30) {
+    let currentTime = dayStart;
+    
+    for (const occupied of occupiedSlots) {
+      // אם יש רווח לפני המשימה הבאה
+      if (currentTime < occupied.start) {
+        const gapDuration = occupied.start - currentTime;
+        if (gapDuration >= TIME_SLOT) {
           slots.push({
-            start: currentSlotStart,
-            duration: currentSlotDuration,
-            end: time
+            start: currentTime,
+            end: occupied.start,
+            duration: gapDuration
           });
         }
-        currentSlotStart = null;
-        currentSlotDuration = 0;
       }
-    });
-
-    // סגירת רצף אחרון
-    if (currentSlotStart !== null && currentSlotDuration >= 30) {
-      slots.push({
-        start: currentSlotStart,
-        duration: currentSlotDuration,
-        end: `${WORK_HOURS.end}:00`
-      });
+      // מעדכנים את הזמן הנוכחי לסוף המשימה
+      currentTime = Math.max(currentTime, occupied.end);
     }
-
+    
+    // רווח אחרי המשימה האחרונה עד סוף היום
+    if (currentTime < dayEnd) {
+      const gapDuration = dayEnd - currentTime;
+      if (gapDuration >= TIME_SLOT) {
+        slots.push({
+          start: currentTime,
+          end: dayEnd,
+          duration: gapDuration
+        });
+      }
+    }
+    
     return slots;
-  }, [scheduledForDay, selectedDate]);
+  }, [occupiedSlots]);
 
   // חישוב סה"כ זמן פנוי
   const totalFreeTime = useMemo(() => {
@@ -131,53 +140,58 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     return unscheduledTasks.reduce((sum, task) => sum + (task.estimated_duration || 30), 0);
   }, [unscheduledTasks]);
 
-  // אלגוריתם שיבוץ
+  // אלגוריתם שיבוץ משופר
   const calculateSchedule = () => {
     const schedule = [];
-    const availableSlots = [...freeSlots];
+    
+    // עותק עמוק של החלונות הפנויים
+    const availableSlots = freeSlots.map(slot => ({ ...slot }));
+    
+    // מיון משימות: קצרות קודם (Best Fit)
     const tasksToSchedule = [...unscheduledTasks].sort((a, b) => {
-      // מיון לפי עדיפות: קודם לפי דחיפות, אח"כ לפי משך (קצרות קודם)
-      const priorityA = a.priority || 0;
-      const priorityB = b.priority || 0;
-      if (priorityA !== priorityB) return priorityB - priorityA;
       return (a.estimated_duration || 30) - (b.estimated_duration || 30);
     });
 
-    tasksToSchedule.forEach(task => {
-      const duration = task.estimated_duration || 30;
+    for (const task of tasksToSchedule) {
+      const duration = roundUpToSlot(task.estimated_duration || 30);
       
-      // מציאת חלון מתאים
+      // מציאת החלון הקטן ביותר שמתאים (Best Fit)
+      let bestSlotIndex = -1;
+      let bestSlotSize = Infinity;
+      
       for (let i = 0; i < availableSlots.length; i++) {
         const slot = availableSlots[i];
-        
-        if (slot.duration >= duration) {
-          // נמצא חלון מתאים
-          schedule.push({
-            task,
-            time: slot.start,
-            date: getDateISO(selectedDate)
-          });
-
-          // עדכון החלון
-          if (slot.duration === duration) {
-            // החלון נוצל במלואו
-            availableSlots.splice(i, 1);
-          } else {
-            // עדכון זמן ההתחלה של החלון
-            const startMinutes = parseInt(slot.start.split(':')[0]) * 60 + parseInt(slot.start.split(':')[1]);
-            const newStartMinutes = startMinutes + duration;
-            const newHour = Math.floor(newStartMinutes / 60);
-            const newMin = newStartMinutes % 60;
-            slot.start = `${newHour.toString().padStart(2, '0')}:${newMin.toString().padStart(2, '0')}`;
-            slot.duration -= duration;
-          }
-          
-          break;
+        if (slot.duration >= duration && slot.duration < bestSlotSize) {
+          bestSlotIndex = i;
+          bestSlotSize = slot.duration;
         }
       }
-    });
+      
+      if (bestSlotIndex !== -1) {
+        const slot = availableSlots[bestSlotIndex];
+        
+        // שיבוץ המשימה
+        schedule.push({
+          task,
+          time: minutesToTime(slot.start),
+          date: getDateISO(selectedDate),
+          duration
+        });
 
-    return schedule;
+        // עדכון החלון
+        if (slot.duration === duration) {
+          // החלון נוצל במלואו - מסירים
+          availableSlots.splice(bestSlotIndex, 1);
+        } else {
+          // מעדכנים את תחילת החלון
+          slot.start += duration;
+          slot.duration -= duration;
+        }
+      }
+    }
+
+    // מיון לפי שעה
+    return schedule.sort((a, b) => a.time.localeCompare(b.time));
   };
 
   // תצוגה מקדימה
@@ -263,9 +277,31 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
                 key={index}
                 className="px-2 py-1 bg-white dark:bg-gray-700 rounded text-sm border border-gray-200 dark:border-gray-600"
               >
-                {slot.start} - {slot.end} ({formatMinutes(slot.duration)})
+                {minutesToTime(slot.start)} - {minutesToTime(slot.end)} ({formatMinutes(slot.duration)})
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* משימות שכבר משובצות */}
+      {scheduledForDay.length > 0 && (
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            📋 כבר משובצות היום ({scheduledForDay.length}):
+          </h4>
+          <div className="space-y-1 max-h-24 overflow-y-auto">
+            {scheduledForDay.map(task => {
+              const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
+              return (
+                <div key={task.id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span>{task.due_time}</span>
+                  <span>{taskType.icon}</span>
+                  <span className="truncate">{task.title}</span>
+                  <span className="text-gray-400">({formatMinutes(task.estimated_duration || 30)})</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -273,13 +309,19 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
       {/* אזהרות */}
       {totalUnscheduledTime > totalFreeTime && (
         <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-700 dark:text-orange-300 text-sm">
-          ⚠️ יש יותר משימות מזמן פנוי. חלק מהמשימות לא ישובצו.
+          ⚠️ יש יותר משימות ({formatMinutes(totalUnscheduledTime)}) מזמן פנוי ({formatMinutes(totalFreeTime)}). חלק מהמשימות לא ישובצו.
         </div>
       )}
 
       {unscheduledTasks.length === 0 && (
         <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400 text-sm text-center">
           ✅ כל המשימות כבר משובצות!
+        </div>
+      )}
+
+      {freeSlots.length === 0 && unscheduledTasks.length > 0 && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-700 dark:text-red-300 text-sm text-center">
+          ❌ אין זמן פנוי ביום הזה. נסי יום אחר.
         </div>
       )}
 
@@ -300,6 +342,7 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
             <div className="max-h-60 overflow-y-auto">
               {scheduledTasks.map((item, index) => {
                 const taskType = TASK_TYPES[item.task.task_type] || TASK_TYPES.other;
+                const endTime = timeToMinutes(item.time) + item.duration;
                 return (
                   <div
                     key={index}
@@ -314,7 +357,8 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
                       </span>
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {item.time} • {formatMinutes(item.task.estimated_duration || 30)}
+                      <span className="font-medium">{item.time}</span>
+                      <span className="text-gray-400"> - {minutesToTime(endTime)}</span>
                     </div>
                   </div>
                 );
@@ -362,7 +406,7 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
 
       {/* הסבר */}
       <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-        💡 המערכת משבצת משימות קצרות קודם לניצול מיטבי של הזמן
+        💡 המערכת משבצת משימות לחלונות הפנויים בלבד, ללא חפיפות
       </div>
     </div>
   );
