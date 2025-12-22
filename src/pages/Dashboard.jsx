@@ -12,6 +12,7 @@ import TimeAnalytics from '../components/Analytics/TimeAnalytics';
 import PlanningVsExecution from '../components/Planning/PlanningVsExecution';
 import ManualTimeUpdate from '../components/Tasks/ManualTimeUpdate';
 import CalendarView from '../components/Calendar/CalendarView';
+import TimePlanningRecommendations from '../components/Recommendations/TimePlanningRecommendations';
 
 /**
  * דף לוח המחוונים הראשי
@@ -159,6 +160,11 @@ function Dashboard() {
             label: 'ניתוח זמן',
             icon: '⏱️',
             content: <TimeAnalytics />
+          },
+          {
+            label: 'המלצות',
+            icon: '🧠',
+            content: <TimePlanningRecommendations />
           }
         ]}
       />
