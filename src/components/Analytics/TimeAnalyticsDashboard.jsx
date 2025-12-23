@@ -533,10 +533,11 @@ function TimeAnalyticsDashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {insightsData.insights.map((insight) => {
+                {insightsData.insights
+                  .filter(insight => !actionResults[insight.id]) // הסתר המלצות שבוצעו
+                  .map((insight) => {
                   const hasAction = insight.action && ACTION_DEFINITIONS[insight.action.id];
                   const isExecuting = executingAction === insight.id;
-                  const result = actionResults[insight.id];
                   
                   return (
                   <div 
@@ -569,23 +570,23 @@ function TimeAnalyticsDashboard() {
                         </div>
                         
                         {/* כפתור יישום */}
-                        {hasAction && !result && (
+                        {hasAction && (
                           <button
                             onClick={() => executeAction(insight)}
                             disabled={isExecuting || executingAction}
                             className={`
-                              mt-3 w-full py-2 px-4 rounded-lg font-medium text-sm
+                              mt-3 w-full py-2.5 px-4 rounded-lg font-medium text-sm
                               transition-all flex items-center justify-center gap-2
                               ${isExecuting
                                 ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
-                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
                               }
                             `}
                           >
                             {isExecuting ? (
                               <>
                                 <span className="animate-spin">⏳</span>
-                                מבצע...
+                                מעדכן משימות...
                               </>
                             ) : (
                               <>
@@ -596,27 +597,7 @@ function TimeAnalyticsDashboard() {
                           </button>
                         )}
                         
-                        {/* תוצאת ביצוע */}
-                        {result && (
-                          <div className="mt-3 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg text-sm">
-                            <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium">
-                              <span>✅</span>
-                              הפעולה בוצעה בהצלחה!
-                            </div>
-                            {result.details && result.details.length > 0 && (
-                              <div className="mt-2 text-xs text-green-600 dark:text-green-400">
-                                {result.updated && `${result.updated} הערכות עודכנו`}
-                                {result.moved && `${result.moved} משימות הוזזו`}
-                                {result.optimized && `${result.optimized} משימות שובצו מחדש`}
-                                {result.balanced && `${result.balanced} משימות אוזנו`}
-                                {result.created && `${result.created} משימות מילוי נוצרו`}
-                                {result.adjusted && `${result.adjusted} דדליינים הוקדמו`}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        
-                        {insight.impact && !result && (
+                        {insight.impact && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                             ✨ {insight.impact}
                           </p>
@@ -637,6 +618,41 @@ function TimeAnalyticsDashboard() {
                   </div>
                   );
                 })}
+                
+                {/* הצגת פעולות שבוצעו */}
+                {Object.keys(actionResults).length > 0 && (
+                  <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <h4 className="font-semibold text-green-700 dark:text-green-300 mb-3 flex items-center gap-2">
+                      <span>✅</span>
+                      פעולות שבוצעו
+                    </h4>
+                    <div className="space-y-2">
+                      {Object.entries(actionResults).map(([id, result]) => {
+                        const insight = insightsData.insights.find(i => i.id === id);
+                        const count = result.updated || result.moved || result.optimized || result.balanced || result.created || result.adjusted || 0;
+                        return (
+                          <div key={id} className="flex items-center justify-between text-sm">
+                            <span className="text-green-600 dark:text-green-400">
+                              {insight?.icon} {insight?.title}
+                            </span>
+                            <span className="text-green-700 dark:text-green-300 font-medium">
+                              {count} משימות עודכנו
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* אם כל ההמלצות בוצעו */}
+                {insightsData.insights.filter(i => !actionResults[i.id]).length === 0 && (
+                  <div className="text-center py-8 text-green-600">
+                    <div className="text-4xl mb-2">🎉</div>
+                    <div className="font-medium">כל ההמלצות יושמו!</div>
+                    <div className="text-sm text-gray-500 mt-1">חזרי מאוחר יותר לראות תובנות חדשות</div>
+                  </div>
+                )}
               </div>
             )}
           </div>

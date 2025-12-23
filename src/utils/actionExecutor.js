@@ -2,17 +2,33 @@
  * מנוע יישום המלצות - מבצע פעולות על משימות בהתאם לתובנות
  */
 
+import { scheduleLongTask, findFreeSlots } from './autoScheduler';
+
+/**
+ * מציאת שעה פנויה ביום מסוים
+ */
+function findFreeTimeSlot(dateISO, tasks, duration = 60) {
+  const slots = findFreeSlots(dateISO, tasks);
+  
+  // מציאת חלון מתאים
+  for (const slot of slots) {
+    if (slot.minutes >= duration) {
+      const hours = Math.floor(slot.start / 60);
+      const mins = slot.start % 60;
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  // אם אין חלון מתאים, שים ב-9:00
+  return '09:00';
+}
+
 /**
  * עדכון הערכות זמן במשימות עתידיות
- * @param {Array} tasks - כל המשימות
- * @param {Function} editTask - פונקציה לעריכת משימה
- * @param {number} adjustmentPercent - אחוז להוספה (לדוגמה: 30 = הוסף 30%)
- * @param {string|null} taskType - סוג משימה ספציפי (אופציונלי)
  */
 export async function adjustFutureEstimations(tasks, editTask, adjustmentPercent, taskType = null) {
   const today = new Date().toISOString().split('T')[0];
   
-  // סינון משימות עתידיות שלא הושלמו
   const futureTasks = tasks.filter(t => 
     !t.is_completed && 
     t.due_date >= today &&
@@ -47,24 +63,18 @@ export async function adjustFutureEstimations(tasks, editTask, adjustmentPercent
 }
 
 /**
- * הזזת משימות מיום מסוים לימים אחרים
- * @param {Array} tasks - כל המשימות
- * @param {Function} editTask - פונקציה לעריכת משימה
- * @param {number} fromDayIndex - יום המקור (0=ראשון, 4=חמישי)
- * @param {number[]} targetDays - ימי יעד אפשריים
+ * הזזת משימות מיום מסוים לימים אחרים - עם שיבוץ אוטומטי
  */
 export async function rescheduleFromDay(tasks, editTask, fromDayIndex, targetDays = [0, 1, 2, 3, 4]) {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0];
   
-  // סינון משימות עתידיות מהיום המבוקש
   const tasksToMove = tasks.filter(t => {
     if (t.is_completed || !t.due_date || t.due_date < todayISO) return false;
     const taskDate = new Date(t.due_date);
     return taskDate.getDay() === fromDayIndex;
   });
 
-  // הסרת היום הבעייתי מהיעדים
   const validTargets = targetDays.filter(d => d !== fromDayIndex);
   
   const results = {
@@ -73,28 +83,40 @@ export async function rescheduleFromDay(tasks, editTask, fromDayIndex, targetDay
     details: []
   };
 
+  // עדכון רשימת המשימות לאחר כל הזזה
+  let updatedTasks = [...tasks];
+
   let targetIndex = 0;
   for (const task of tasksToMove) {
     try {
       const taskDate = new Date(task.due_date);
       const currentDay = taskDate.getDay();
       
-      // מציאת היום הקרוב ביותר מהיעדים
       const targetDay = validTargets[targetIndex % validTargets.length];
       let daysToAdd = targetDay - currentDay;
-      if (daysToAdd <= 0) daysToAdd += 7; // עבור לשבוע הבא אם צריך
+      if (daysToAdd <= 0) daysToAdd += 7;
       
       const newDate = new Date(taskDate);
       newDate.setDate(newDate.getDate() + daysToAdd);
       const newDateISO = newDate.toISOString().split('T')[0];
       
-      await editTask(task.id, { dueDate: newDateISO });
+      // מציאת שעה פנויה ביום החדש
+      const newTime = findFreeTimeSlot(newDateISO, updatedTasks, task.estimated_duration || 60);
+      
+      await editTask(task.id, { dueDate: newDateISO, dueTime: newTime });
+      
+      // עדכון הרשימה המקומית
+      updatedTasks = updatedTasks.map(t => 
+        t.id === task.id ? { ...t, due_date: newDateISO, due_time: newTime } : t
+      );
+      
       results.moved++;
       results.details.push({
         id: task.id,
         title: task.title,
         oldDate: task.due_date,
-        newDate: newDateISO
+        newDate: newDateISO,
+        newTime
       });
       
       targetIndex++;
@@ -109,19 +131,15 @@ export async function rescheduleFromDay(tasks, editTask, fromDayIndex, targetDay
 
 /**
  * שיבוץ מחדש לשעות פרודוקטיביות
- * @param {Array} tasks - כל המשימות
- * @param {Function} editTask - פונקציה לעריכת משימה
- * @param {number[]} productiveHours - שעות פרודוקטיביות (לדוגמה: [9, 10, 11])
  */
 export async function optimizeByProductiveHours(tasks, editTask, productiveHours) {
   const today = new Date().toISOString().split('T')[0];
   
-  // משימות מורכבות (הערכה של יותר מ-45 דקות) שלא בשעות פרודוקטיביות
   const complexTasks = tasks.filter(t => {
     if (t.is_completed || !t.due_date || t.due_date < today) return false;
     if (!t.estimated_duration || t.estimated_duration < 45) return false;
     
-    if (!t.due_time) return true; // אין שעה - צריך לקבוע
+    if (!t.due_time) return true;
     
     const hour = parseInt(t.due_time.split(':')[0]);
     return !productiveHours.includes(hour);
@@ -159,16 +177,12 @@ export async function optimizeByProductiveHours(tasks, editTask, productiveHours
 }
 
 /**
- * איזון עומס בין ימים
- * @param {Array} tasks - כל המשימות
- * @param {Function} editTask - פונקציה לעריכת משימה
- * @param {number} maxMinutesPerDay - מקסימום דקות עבודה ביום
+ * איזון עומס בין ימים - עם שיבוץ אוטומטי
  */
 export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0];
   
-  // קיבוץ משימות עתידיות לפי יום
   const futureTasks = tasks.filter(t => 
     !t.is_completed && 
     t.due_date >= todayISO
@@ -182,13 +196,11 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
     tasksByDay[t.due_date].push(t);
   });
 
-  // חישוב עומס לכל יום
   const dayLoads = {};
   Object.entries(tasksByDay).forEach(([date, dayTasks]) => {
     dayLoads[date] = dayTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
   });
 
-  // מציאת ימים עמוסים וימים עם מקום
   const overloadedDays = Object.entries(dayLoads)
     .filter(([_, load]) => load > maxMinutesPerDay)
     .sort((a, b) => b[1] - a[1]);
@@ -199,19 +211,21 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
     details: []
   };
 
+  let updatedTasks = [...tasks];
+
   for (const [overloadedDate, load] of overloadedDays) {
     const excess = load - maxMinutesPerDay;
     const dayTasks = tasksByDay[overloadedDate]
-      .filter(t => t.quadrant !== 1) // לא להזיז דחוף וחשוב
+      .filter(t => t.quadrant !== 1)
       .sort((a, b) => (b.estimated_duration || 30) - (a.estimated_duration || 30));
 
     let movedMinutes = 0;
     for (const task of dayTasks) {
       if (movedMinutes >= excess) break;
 
-      // מציאת יום עם מקום
       const taskDate = new Date(overloadedDate);
       let targetDate = null;
+      let targetTime = null;
 
       for (let i = 1; i <= 7; i++) {
         const checkDate = new Date(taskDate);
@@ -219,21 +233,24 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
         const checkDateISO = checkDate.toISOString().split('T')[0];
         const checkDay = checkDate.getDay();
         
-        // רק ימי עבודה
         if (checkDay > 4) continue;
         
         const currentLoad = dayLoads[checkDateISO] || 0;
         if (currentLoad + (task.estimated_duration || 30) <= maxMinutesPerDay) {
           targetDate = checkDateISO;
+          targetTime = findFreeTimeSlot(checkDateISO, updatedTasks, task.estimated_duration || 30);
           break;
         }
       }
 
       if (targetDate) {
         try {
-          await editTask(task.id, { dueDate: targetDate });
+          await editTask(task.id, { dueDate: targetDate, dueTime: targetTime });
           
-          // עדכון העומסים
+          updatedTasks = updatedTasks.map(t => 
+            t.id === task.id ? { ...t, due_date: targetDate, due_time: targetTime } : t
+          );
+          
           dayLoads[overloadedDate] -= (task.estimated_duration || 30);
           dayLoads[targetDate] = (dayLoads[targetDate] || 0) + (task.estimated_duration || 30);
           
@@ -243,7 +260,8 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
             id: task.id,
             title: task.title,
             oldDate: overloadedDate,
-            newDate: targetDate
+            newDate: targetDate,
+            newTime: targetTime
           });
         } catch (err) {
           results.failed++;
@@ -257,16 +275,12 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
 }
 
 /**
- * הזזת דדליינים קדימה (buffer)
- * @param {Array} tasks - כל המשימות
- * @param {Function} editTask - פונקציה לעריכת משימה
- * @param {number} bufferDays - כמה ימים להקדים
+ * הזזת דדליינים קדימה - עם שמירה על שעה
  */
 export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0];
   
-  // משימות עתידיות עם דדליין
   const tasksWithDeadline = tasks.filter(t => 
     !t.is_completed && 
     t.due_date > todayISO
@@ -284,12 +298,14 @@ export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() - bufferDays);
       
-      // לא להזיז לפני היום
       if (newDate < today) continue;
       
       const newDateISO = newDate.toISOString().split('T')[0];
       
-      await editTask(task.id, { dueDate: newDateISO });
+      // שמירה על השעה הקיימת או מציאת חדשה
+      const newTime = task.due_time || findFreeTimeSlot(newDateISO, tasks, task.estimated_duration || 60);
+      
+      await editTask(task.id, { dueDate: newDateISO, dueTime: newTime });
       results.adjusted++;
       results.details.push({
         id: task.id,
@@ -308,9 +324,10 @@ export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
 
 /**
  * יצירת משימות מילוי לזמן מת
- * @param {Function} addTask - פונקציה להוספת משימה
  */
 export async function createFillerTasks(addTask) {
+  const today = new Date().toISOString().split('T')[0];
+  
   const fillerTasks = [
     { title: 'מיילים קצרים', duration: 15, type: 'admin' },
     { title: 'קריאת מאמר מקצועי', duration: 20, type: 'learning' },
@@ -329,8 +346,9 @@ export async function createFillerTasks(addTask) {
     try {
       await addTask({
         title: `⚡ ${filler.title}`,
-        description: 'משימת מילוי לזמן מת',
-        quadrant: 4, // לא דחוף ולא חשוב
+        description: 'משימת מילוי לזמן מת - עשי אותה כשיש לך כמה דקות פנויות',
+        quadrant: 4,
+        dueDate: today,
         estimatedDuration: filler.duration,
         taskType: filler.type
       });
@@ -350,7 +368,7 @@ export async function createFillerTasks(addTask) {
  */
 export const ACTION_DEFINITIONS = {
   'estimation-low': {
-    name: 'עדכן הערכות',
+    name: 'עדכון הערכות',
     description: 'הוסף אחוז לכל ההערכות העתידיות',
     execute: async (context) => {
       const { tasks, editTask, params } = context;
@@ -358,7 +376,7 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'estimation-type': {
-    name: 'עדכן הערכות לסוג זה',
+    name: 'עדכון הערכות לסוג',
     description: 'הוסף אחוז להערכות של סוג משימה ספציפי',
     execute: async (context) => {
       const { tasks, editTask, params } = context;
@@ -366,7 +384,7 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'deadlines-low': {
-    name: 'הקדם דדליינים',
+    name: 'הקדמת דדליינים',
     description: 'הקדם את כל הדדליינים ביום אחד',
     execute: async (context) => {
       const { tasks, editTask } = context;
@@ -374,15 +392,15 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'deadlines-day': {
-    name: 'הזז משימות מיום זה',
-    description: 'הזז משימות מהיום הבעייתי לימים אחרים',
+    name: 'הזזת משימות',
+    description: 'הזז משימות מהיום הבעייתי ושבץ בזמנים פנויים',
     execute: async (context) => {
       const { tasks, editTask, params } = context;
       return rescheduleFromDay(tasks, editTask, params.dayIndex);
     }
   },
   'idle-high': {
-    name: 'צור משימות מילוי',
+    name: 'יצירת משימות מילוי',
     description: 'צור משימות קצרות לזמן מת',
     execute: async (context) => {
       const { addTask } = context;
@@ -390,7 +408,7 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'hours-productive': {
-    name: 'שבץ לשעות זהב',
+    name: 'שיבוץ לשעות זהב',
     description: 'שבץ משימות מורכבות לשעות הפרודוקטיביות',
     execute: async (context) => {
       const { tasks, editTask, params } = context;
@@ -398,19 +416,19 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'workload-unbalanced': {
-    name: 'אזן עומס',
-    description: 'פזר משימות באופן אחיד על פני השבוע',
+    name: 'איזון עומס',
+    description: 'פזר משימות באופן אחיד ושבץ בזמנים פנויים',
     execute: async (context) => {
       const { tasks, editTask } = context;
       return balanceWorkload(tasks, editTask);
     }
   },
   'workload-high': {
-    name: 'הפחת עומס',
-    description: 'הזז משימות מימים עמוסים מדי',
+    name: 'הפחתת עומס',
+    description: 'הזז משימות מימים עמוסים ושבץ מחדש',
     execute: async (context) => {
       const { tasks, editTask } = context;
-      return balanceWorkload(tasks, editTask, 300); // 5 שעות מקסימום
+      return balanceWorkload(tasks, editTask, 300);
     }
   }
 };
