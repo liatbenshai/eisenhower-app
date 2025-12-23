@@ -4,6 +4,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import RecurringTaskForm from './RecurringTaskForm';
+import LongTaskForm from '../Tasks/LongTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
@@ -138,6 +139,7 @@ function DailyView({ initialView = 'day' }) {
   const [showScheduler, setShowScheduler] = useState(false);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [showWorkIntake, setShowWorkIntake] = useState(false);
+  const [showLongTaskForm, setShowLongTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState(initialView); // 'day', 'week', or 'analytics'
@@ -544,6 +546,13 @@ function DailyView({ initialView = 'day' }) {
             <span>משימה חוזרת</span>
           </button>
         </div>
+        <button
+          onClick={() => setShowLongTaskForm(true)}
+          className="w-full py-2.5 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-orange-900/30 dark:to-amber-900/30 text-orange-700 dark:text-orange-300 hover:from-orange-200 hover:to-amber-200 dark:hover:from-orange-900/50 dark:hover:to-amber-900/50 rounded-lg transition-all flex items-center justify-center gap-2 font-medium border border-orange-200 dark:border-orange-800"
+        >
+          <span>📋</span>
+          <span>משימה ארוכה (שיבוץ אוטומטי)</span>
+        </button>
       </motion.div>
       )}
 
@@ -649,6 +658,17 @@ function DailyView({ initialView = 'day' }) {
         <SmartWorkIntake
           onClose={() => setShowWorkIntake(false)}
           onCreated={loadTasks}
+        />
+      </Modal>
+
+      {/* מודל משימה ארוכה */}
+      <Modal
+        isOpen={showLongTaskForm}
+        onClose={() => setShowLongTaskForm(false)}
+        title="📋 משימה ארוכה - שיבוץ אוטומטי"
+      >
+        <LongTaskForm
+          onClose={() => setShowLongTaskForm(false)}
         />
       </Modal>
     </div>
