@@ -11,7 +11,7 @@ import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
 import SmartScheduler from '../Scheduler/SmartScheduler';
 import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
 import SmartWorkIntake from '../Scheduler/SmartWorkIntake';
-import SmartNotifications from '../Notifications/SmartNotifications';
+import AlertsManager from '../Notifications/AlertsManager';
 import { getTodayIdleStats, formatIdleTime, isIdleTrackingActive, getCurrentIdleMinutes } from '../../utils/idleTimeTracker';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
@@ -506,7 +506,7 @@ function DailyView({ initialView = 'day' }) {
 
       {/* התראות חכמות - רק בתצוגה יומית */}
       {viewMode === 'day' && (
-        <SmartNotifications onTaskClick={handleEditTask} />
+        <AlertsManager onTaskClick={handleEditTask} />
       )}
 
       {/* כפתורי פעולה */}
