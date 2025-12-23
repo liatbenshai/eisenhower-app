@@ -99,7 +99,8 @@ function SmartNotifications({ onTaskClick }) {
         }
 
         // משימה שהגיע זמנה (איחור - יותר מ-2 דקות)
-        if (diff < -2 && diff > -60) {
+        // רק אם לא התחילו לעבוד עליה (time_spent = 0)
+        if (diff < -2 && diff > -60 && (!task.time_spent || task.time_spent === 0)) {
           alerts.push({
             id: `overdue-${task.id}`,
             taskId: task.id,
