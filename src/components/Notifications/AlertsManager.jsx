@@ -57,7 +57,6 @@ function AlertsManager({ onTaskClick }) {
   const [alertsState, setAlertsState] = useState(loadState);
   const [showMorningSummary, setShowMorningSummary] = useState(false);
   const [showEveningSummary, setShowEveningSummary] = useState(false);
-  const [pageOpenTime] = useState(Date.now()); // זמן פתיחת הדף
   const [lastBreakTime, setLastBreakTime] = useState(Date.now());
 
   // רענון כל 30 שניות

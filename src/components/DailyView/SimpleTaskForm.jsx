@@ -20,7 +20,7 @@ const TYPE_PREFERRED_HOURS = {
 /**
  * טופס משימה פשוט - מותאם לניהול זמן
  */
-function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks = [] }) {
+function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, existingTasks = [] }) {
   const { addTask, editTask } = useTasks();
   const { user } = useAuth();
   const isEditing = !!task;
@@ -31,7 +31,7 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
     taskType: 'other',
     estimatedDuration: '',
     dueDate: defaultDate || new Date().toISOString().split('T')[0],
-    dueTime: '',
+    dueTime: defaultTime || '',
     description: '',
     priority: 'normal' // normal, high, urgent, low
   });
@@ -40,7 +40,7 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
   const [learningData, setLearningData] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState(null);
   const [overlapWarning, setOverlapWarning] = useState(null);
-  const [manualTimeSet, setManualTimeSet] = useState(false); // האם המשתמשת שינתה ידנית
+  const [manualTimeSet, setManualTimeSet] = useState(!!defaultTime); // אם יש שעה מברירת מחדל - לא לדרוס
 
   // מילוי נתונים בעריכה
   useEffect(() => {

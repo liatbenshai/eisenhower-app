@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import RecurringTaskForm from './RecurringTaskForm';
 import LongTaskForm from '../Tasks/LongTaskForm';
-import DailyTaskCard from './DailyTaskCard';
+import DiaryView from './DiaryView';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
 import SmartScheduler from '../Scheduler/SmartScheduler';
@@ -241,9 +241,17 @@ function DailyView({ initialView = 'day' }) {
     };
   }, [selectedDateTasks]);
 
+  // שעת ברירת מחדל להוספת משימה
+  const [defaultTaskTime, setDefaultTaskTime] = useState(null);
+
   // פתיחת טופס הוספה
-  const handleAddTask = () => {
+  const handleAddTask = (hour = null) => {
     setEditingTask(null);
+    if (hour !== null) {
+      setDefaultTaskTime(`${hour.toString().padStart(2, '0')}:00`);
+    } else {
+      setDefaultTaskTime(null);
+    }
     setShowTaskForm(true);
   };
 
@@ -509,104 +517,52 @@ function DailyView({ initialView = 'day' }) {
         <AlertsManager onTaskClick={handleEditTask} />
       )}
 
-      {/* כפתורי פעולה */}
+      {/* תצוגת יומן */}
       {viewMode === 'day' && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="mb-4 space-y-2"
-      >
-        <div className="flex gap-2">
-          <Button onClick={handleAddTask} className="flex-1 py-3 text-lg">
-            + משימה חדשה
-          </Button>
-          <Button 
-            onClick={() => setShowScheduler(true)} 
-            variant="secondary"
-            className="py-3 px-4"
-            title="שיבוץ אוטומטי"
+        <DiaryView
+          date={selectedDate}
+          tasks={tasks}
+          onEditTask={handleEditTask}
+          onAddTask={handleAddTask}
+          onUpdate={loadTasks}
+        />
+      )}
+
+      {/* פעולות נוספות - בסוף */}
+      {viewMode === 'day' && (
+      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">פעולות נוספות</p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button
+            onClick={() => setShowScheduler(true)}
+            className="py-1.5 px-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1.5 text-xs"
           >
-            🗓️ שיבוץ
-          </Button>
-        </div>
-        <div className="flex gap-2">
+            <span>🗓️</span>
+            <span>שיבוץ אוטומטי</span>
+          </button>
           <button
             onClick={() => setShowWorkIntake(true)}
-            className="flex-1 py-2.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
+            className="py-1.5 px-3 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-lg transition-colors flex items-center gap-1.5 text-xs"
           >
             <span>📥</span>
             <span>עבודה חדשה</span>
           </button>
           <button
             onClick={() => setShowRecurringForm(true)}
-            className="flex-1 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center justify-center gap-2 border border-blue-200 dark:border-blue-800"
+            className="py-1.5 px-3 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center gap-1.5 text-xs border border-blue-200 dark:border-blue-800"
           >
             <span>🔄</span>
             <span>משימה חוזרת</span>
           </button>
+          <button
+            onClick={() => setShowLongTaskForm(true)}
+            className="py-1.5 px-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 rounded-lg transition-colors flex items-center gap-1.5 text-xs"
+          >
+            <span>📋</span>
+            <span>משימה ארוכה</span>
+          </button>
         </div>
-        <button
-          onClick={() => setShowLongTaskForm(true)}
-          className="w-full py-2.5 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-orange-900/30 dark:to-amber-900/30 text-orange-700 dark:text-orange-300 hover:from-orange-200 hover:to-amber-200 dark:hover:from-orange-900/50 dark:hover:to-amber-900/50 rounded-lg transition-all flex items-center justify-center gap-2 font-medium border border-orange-200 dark:border-orange-800"
-        >
-          <span>📋</span>
-          <span>משימה ארוכה (שיבוץ אוטומטי)</span>
-        </button>
-      </motion.div>
-      )}
-
-      {/* רשימת משימות - רק בתצוגה יומית */}
-      {viewMode === 'day' && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        className="space-y-3"
-      >
-        {selectedDateTasks.length === 0 ? (
-          <div className="card p-8 text-center">
-            <span className="text-4xl mb-4 block">📝</span>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              אין משימות ל{isToday(selectedDate) ? 'היום' : 'תאריך זה'}
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400">
-              הוסיפי משימה חדשה להתחיל
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* משימות פעילות */}
-            {selectedDateTasks.filter(t => !t.is_completed).map(task => (
-              <DailyTaskCard 
-                key={task.id} 
-                task={task} 
-                onEdit={() => handleEditTask(task)}
-                onUpdate={loadTasks}
-              />
-            ))}
-            
-            {/* משימות שהושלמו */}
-            {selectedDateTasks.filter(t => t.is_completed).length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                  ✅ הושלמו ({selectedDateTasks.filter(t => t.is_completed).length})
-                </h3>
-                <div className="space-y-2 opacity-60">
-                  {selectedDateTasks.filter(t => t.is_completed).map(task => (
-                    <DailyTaskCard 
-                      key={task.id} 
-                      task={task} 
-                      onEdit={() => handleEditTask(task)}
-                      onUpdate={loadTasks}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </motion.div>
+      </div>
       )}
 
       {/* מודל טופס */}
@@ -620,6 +576,7 @@ function DailyView({ initialView = 'day' }) {
           onClose={handleCloseForm}
           taskTypes={TASK_TYPES}
           defaultDate={getDateISO(selectedDate)}
+          defaultTime={defaultTaskTime}
           existingTasks={tasks}
         />
       </Modal>
