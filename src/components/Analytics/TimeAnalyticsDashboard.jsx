@@ -3,6 +3,15 @@ import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { TASK_TYPES } from '../DailyView/DailyView';
 import { getWeeklyIdleStats, formatIdleTime, getTodayIdleStats } from '../../utils/idleTimeTracker';
+import {
+  analyzeEstimationPatterns,
+  analyzeDeadlinePatterns,
+  analyzeIdleTime,
+  analyzeWorkHours,
+  analyzeWorkload,
+  generateInsights,
+  generateSummary
+} from '../../utils/insightsEngine';
 
 /**
  * דשבורד פרודוקטיביות מקיף
@@ -179,6 +188,21 @@ function TimeAnalyticsDashboard() {
     });
   }, [completedTasks]);
 
+  // ניתוח תובנות והמלצות
+  const insightsData = useMemo(() => {
+    const estimation = analyzeEstimationPatterns(completedTasks);
+    const deadlines = analyzeDeadlinePatterns(completedTasks);
+    const idle = analyzeIdleTime(idleStats, generalStats);
+    const workHoursAnalysis = analyzeWorkHours(completedTasks);
+    const workload = analyzeWorkload(completedTasks, statsByDay);
+
+    const analysisData = { estimation, deadlines, idle, workHours: workHoursAnalysis, workload };
+    const insights = generateInsights(analysisData);
+    const summary = generateSummary(analysisData);
+
+    return { insights, summary, analysis: analysisData };
+  }, [completedTasks, idleStats, generalStats, statsByDay]);
+
   // פורמט דקות
   const formatMinutes = (minutes) => {
     if (!minutes || minutes === 0) return '0 דק\'';
@@ -241,6 +265,7 @@ function TimeAnalyticsDashboard() {
       <div className="flex gap-1 mb-6 overflow-x-auto pb-2">
         {[
           { id: 'overview', label: 'סקירה כללית', icon: '📈' },
+          { id: 'insights', label: 'תובנות והמלצות', icon: '💡' },
           { id: 'tasks', label: 'משימות', icon: '✅' },
           { id: 'deadlines', label: 'דדליינים', icon: '⏰' },
           { id: 'idle', label: 'זמן מת', icon: '⏸️' }
@@ -394,6 +419,179 @@ function TimeAnalyticsDashboard() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'insights' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-6"
+        >
+          {/* ציון כללי */}
+          <div className="card p-6 text-center">
+            <div className="mb-4">
+              <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full text-4xl font-bold ${
+                insightsData.summary.level === 'excellent' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                insightsData.summary.level === 'good' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
+                insightsData.summary.level === 'fair' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+              }`}>
+                {insightsData.summary.score}
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              ציון ניהול זמן
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              {insightsData.summary.message}
+            </p>
+            
+            {/* גורמים */}
+            {insightsData.summary.factors.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                {insightsData.summary.factors.map((factor, index) => (
+                  <span 
+                    key={index}
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      factor.positive 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                    }`}
+                  >
+                    {factor.positive ? '✓' : '✗'} {factor.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* המלצות */}
+          <div className="card p-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              💡 המלצות מותאמות אישית
+            </h2>
+            
+            {insightsData.insights.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">📊</div>
+                <div>אין מספיק נתונים להמלצות.</div>
+                <div className="text-sm mt-1">סיימי כמה משימות עם הטיימר כדי לקבל תובנות.</div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {insightsData.insights.map((insight) => (
+                  <div 
+                    key={insight.id}
+                    className={`p-4 rounded-lg border ${
+                      insight.priority === 'high' 
+                        ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' :
+                      insight.priority === 'medium' 
+                        ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800' :
+                      insight.priority === 'positive'
+                        ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' :
+                      'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{insight.icon}</span>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                          {insight.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                          {insight.description}
+                        </p>
+                        <div className={`text-sm p-2 rounded ${
+                          insight.priority === 'positive'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                        }`}>
+                          <strong>💬 המלצה:</strong> {insight.recommendation}
+                        </div>
+                        {insight.impact && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                            ✨ {insight.impact}
+                          </p>
+                        )}
+                      </div>
+                      {insight.priority !== 'positive' && (
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          insight.priority === 'high' 
+                            ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' :
+                          insight.priority === 'medium'
+                            ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' :
+                          'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200'
+                        }`}>
+                          {insight.priority === 'high' ? 'חשוב' : insight.priority === 'medium' ? 'בינוני' : 'טיפ'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* סטטיסטיקות מפורטות */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* הערכת זמן */}
+            {insightsData.analysis.estimation.hasData && (
+              <div className="card p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <span>⏱️</span> דיוק הערכת זמן
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">הערכות מדויקות</span>
+                    <span className="font-medium text-green-600">{insightsData.analysis.estimation.accurate}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">הערכות נמוכות מדי</span>
+                    <span className="font-medium text-red-600">{insightsData.analysis.estimation.underEstimated}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">הערכות גבוהות מדי</span>
+                    <span className="font-medium text-blue-600">{insightsData.analysis.estimation.overEstimated}</span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-center">
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {insightsData.analysis.estimation.accuracyRate}%
+                      </span>
+                      <span className="text-sm text-gray-500 mr-1">דיוק</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* שעות פרודוקטיביות */}
+            {insightsData.analysis.workHours.hasData && insightsData.analysis.workHours.mostProductiveHours.length > 0 && (
+              <div className="card p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <span>🌟</span> שעות הזהב שלך
+                </h3>
+                <div className="space-y-2">
+                  {insightsData.analysis.workHours.mostProductiveHours.map((hour, index) => (
+                    <div key={hour.hour} className="flex items-center gap-2">
+                      <span className={`w-8 h-8 flex items-center justify-center rounded-full ${
+                        index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                        index === 1 ? 'bg-gray-100 text-gray-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                      </span>
+                      <span className="font-medium">{hour.hour}:00</span>
+                      <span className="text-sm text-gray-500">
+                        ({hour.tasks} משימות, {Math.round(hour.avgEfficiency * 100)}% יעילות)
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
