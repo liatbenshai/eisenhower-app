@@ -14,6 +14,9 @@ const TASK_TYPES = {
   course: { id: 'course', name: 'קורס', icon: '📚', gradient: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-500' },
   client_communication: { id: 'client_communication', name: 'לקוחות', icon: '💬', gradient: 'from-pink-500 to-rose-600', bg: 'bg-pink-500' },
   unexpected: { id: 'unexpected', name: 'בלת"מ', icon: '⚡', gradient: 'from-orange-500 to-red-600', bg: 'bg-orange-500' },
+  selfcare: { id: 'selfcare', name: 'טיפוח', icon: '💅', gradient: 'from-rose-400 to-pink-500', bg: 'bg-rose-400' },
+  family: { id: 'family', name: 'משפחה', icon: '👨‍👩‍👧', gradient: 'from-red-500 to-rose-600', bg: 'bg-red-500' },
+  reminders: { id: 'reminders', name: 'תזכורות', icon: '🔔', gradient: 'from-cyan-500 to-blue-600', bg: 'bg-cyan-500' },
   other: { id: 'other', name: 'אחר', icon: '📋', gradient: 'from-gray-500 to-slate-600', bg: 'bg-gray-500' }
 };
 
@@ -260,6 +263,42 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
     );
   };
 
+  // כרטיס משימה ממשיכה (מצומצם)
+  const ContinuationCard = ({ task, onEditTask }) => {
+    const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
+    const endTime = (() => {
+      const end = timeToMinutes(task.due_time) + (task.estimated_duration || 30);
+      const h = Math.floor(end / 60);
+      const m = end % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    })();
+
+    return (
+      <div
+        onClick={() => onEditTask(task)}
+        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg 
+                   border-r-4 border-dashed opacity-70 cursor-pointer hover:opacity-100 transition-opacity"
+        style={{ borderRightColor: taskType.bg.replace('bg-', '').includes('purple') ? '#a855f7' : 
+                                   taskType.bg.replace('bg-', '').includes('blue') ? '#3b82f6' :
+                                   taskType.bg.replace('bg-', '').includes('amber') ? '#f59e0b' :
+                                   taskType.bg.replace('bg-', '').includes('emerald') ? '#10b981' :
+                                   taskType.bg.replace('bg-', '').includes('pink') ? '#ec4899' :
+                                   taskType.bg.replace('bg-', '').includes('orange') ? '#f97316' :
+                                   taskType.bg.replace('bg-', '').includes('rose') ? '#f43f5e' :
+                                   taskType.bg.replace('bg-', '').includes('red') ? '#ef4444' :
+                                   taskType.bg.replace('bg-', '').includes('cyan') ? '#06b6d4' : '#6b7280' }}
+      >
+        <span className="text-lg">{taskType.icon}</span>
+        <span className="text-sm text-gray-600 dark:text-gray-300 truncate flex-1">
+          {task.title}
+        </span>
+        <span className="text-xs text-gray-400" dir="ltr">
+          ← המשך עד {endTime}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* כרטיס סטטיסטיקות */}
@@ -314,19 +353,58 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
       {/* ציר זמן */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
         {Array.from({ length: WORK_HOURS.end - WORK_HOURS.start + 1 }, (_, i) => WORK_HOURS.start + i).map(hour => {
+          const hourStart = hour * 60; // תחילת השעה בדקות
+          const hourEnd = (hour + 1) * 60; // סוף השעה בדקות
+          
+          // סינון משימות: כולל משימות שמתחילות בשעה זו או נמשכות לתוכה
           const hourTasks = scheduledTasks.filter(t => {
-            const taskHour = parseInt(t.due_time?.split(':')[0] || 0);
-            return taskHour === hour;
+            const taskStart = timeToMinutes(t.due_time);
+            const taskEnd = taskStart + (t.estimated_duration || 30);
+            // המשימה רלוונטית אם היא חופפת עם בלוק השעה הזה
+            return taskStart < hourEnd && taskEnd > hourStart;
+          }).map(t => {
+            const taskStart = timeToMinutes(t.due_time);
+            const taskStartHour = Math.floor(taskStart / 60);
+            // סימון אם זו משימת המשך (לא מתחילה בשעה הזו)
+            return {
+              ...t,
+              isContinuation: taskStartHour < hour,
+              startsThisHour: taskStartHour === hour
+            };
           });
           
           const isCurrentHour = isTodayView && hour === currentHour;
           const isPastHour = isTodayView && hour < currentHour;
 
-          // חישוב הפסקות בין משימות באותה שעה
+          // חישוב הפסקות רק בין משימות שמתחילות בשעה זו
+          const tasksStartingThisHour = hourTasks.filter(t => t.startsThisHour);
           const tasksWithBreaks = [];
-          hourTasks.forEach((task, idx) => {
+          
+          // הוסף תחילה משימות המשך (אם יש)
+          const continuationTasks = hourTasks.filter(t => t.isContinuation);
+          continuationTasks.forEach(task => {
+            tasksWithBreaks.push({ isBreak: false, task, key: `cont-${task.id}-${hour}`, isContinuation: true });
+          });
+          
+          // אם יש משימות המשך ומשימות חדשות, בדוק הפסקה ביניהן
+          if (continuationTasks.length > 0 && tasksStartingThisHour.length > 0) {
+            const lastCont = continuationTasks[continuationTasks.length - 1];
+            const lastContEnd = timeToMinutes(lastCont.due_time) + (lastCont.estimated_duration || 30);
+            const firstNewStart = timeToMinutes(tasksStartingThisHour[0].due_time);
+            const breakMinutes = firstNewStart - lastContEnd;
+            if (breakMinutes > 0) {
+              tasksWithBreaks.push({
+                isBreak: true,
+                minutes: breakMinutes,
+                key: `break-cont-${hour}`
+              });
+            }
+          }
+          
+          // הוסף משימות שמתחילות בשעה זו עם הפסקות ביניהן
+          tasksStartingThisHour.forEach((task, idx) => {
             if (idx > 0) {
-              const prevTask = hourTasks[idx - 1];
+              const prevTask = tasksStartingThisHour[idx - 1];
               const prevEnd = timeToMinutes(prevTask.due_time) + (prevTask.estimated_duration || 30);
               const currentStart = timeToMinutes(task.due_time);
               const breakMinutes = currentStart - prevEnd;
@@ -384,6 +462,9 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                           </span>
                           <div className="flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
                         </div>
+                      ) : item.isContinuation ? (
+                        // תצוגה מצומצמת למשימה שממשיכה משעה קודמת
+                        <ContinuationCard key={item.key} task={item.task} onEditTask={onEditTask} />
                       ) : (
                         <TaskCard key={item.key} task={item.task} />
                       )

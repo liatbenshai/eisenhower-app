@@ -62,6 +62,27 @@ export const TASK_TYPES = {
     defaultDuration: 30,
     color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-700'
   },
+  selfcare: { 
+    id: 'selfcare', 
+    name: 'טיפוח', 
+    icon: '💅',
+    defaultDuration: 30,
+    color: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700'
+  },
+  family: { 
+    id: 'family', 
+    name: 'משפחה', 
+    icon: '👨‍👩‍👧',
+    defaultDuration: 60,
+    color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-700'
+  },
+  reminders: { 
+    id: 'reminders', 
+    name: 'תזכורות אישיות', 
+    icon: '🔔',
+    defaultDuration: 15,
+    color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700'
+  },
   other: { 
     id: 'other', 
     name: 'אחר', 
