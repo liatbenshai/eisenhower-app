@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import TaskTimer from '../Tasks/TaskTimer';
@@ -8,18 +8,15 @@ import toast from 'react-hot-toast';
  * סוגי משימות
  */
 const TASK_TYPES = {
-  transcription: { id: 'transcription', name: 'תמלול', icon: '🎙️', bgColor: 'bg-purple-500', borderColor: '#a855f7' },
-  proofreading: { id: 'proofreading', name: 'הגהה', icon: '📝', bgColor: 'bg-blue-500', borderColor: '#3b82f6' },
-  email: { id: 'email', name: 'מיילים', icon: '📧', bgColor: 'bg-yellow-500', borderColor: '#eab308' },
-  course: { id: 'course', name: 'קורס', icon: '📚', bgColor: 'bg-green-500', borderColor: '#22c55e' },
-  client_communication: { id: 'client_communication', name: 'לקוחות', icon: '💬', bgColor: 'bg-pink-500', borderColor: '#ec4899' },
-  unexpected: { id: 'unexpected', name: 'בלת"מ', icon: '⚡', bgColor: 'bg-orange-500', borderColor: '#f97316' },
-  other: { id: 'other', name: 'אחר', icon: '📋', bgColor: 'bg-gray-500', borderColor: '#6b7280' }
+  transcription: { id: 'transcription', name: 'תמלול', icon: '🎙️', gradient: 'from-purple-500 to-indigo-600', bg: 'bg-purple-500' },
+  proofreading: { id: 'proofreading', name: 'הגהה', icon: '📝', gradient: 'from-blue-500 to-cyan-600', bg: 'bg-blue-500' },
+  email: { id: 'email', name: 'מיילים', icon: '📧', gradient: 'from-amber-500 to-yellow-600', bg: 'bg-amber-500' },
+  course: { id: 'course', name: 'קורס', icon: '📚', gradient: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-500' },
+  client_communication: { id: 'client_communication', name: 'לקוחות', icon: '💬', gradient: 'from-pink-500 to-rose-600', bg: 'bg-pink-500' },
+  unexpected: { id: 'unexpected', name: 'בלת"מ', icon: '⚡', gradient: 'from-orange-500 to-red-600', bg: 'bg-orange-500' },
+  other: { id: 'other', name: 'אחר', icon: '📋', gradient: 'from-gray-500 to-slate-600', bg: 'bg-gray-500' }
 };
 
-/**
- * שעות עבודה
- */
 const WORK_HOURS = { start: 8, end: 17 };
 
 /**
@@ -30,7 +27,7 @@ function formatMinutes(minutes) {
   if (minutes < 60) return `${minutes} דק'`;
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${hours}ש'`;
+  return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${hours} שעות`;
 }
 
 /**
@@ -43,7 +40,16 @@ function timeToMinutes(timeStr) {
 }
 
 /**
- * תצוגת יומן יומי
+ * האם זה היום?
+ */
+function isToday(date) {
+  const today = new Date();
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toDateString() === today.toDateString();
+}
+
+/**
+ * תצוגת יומן יומי - עיצוב חדש ונקי
  */
 function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
   const { toggleComplete, removeTask } = useTasks();
@@ -69,395 +75,332 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
   }, [dayTasks]);
 
   // משימות שהושלמו
-  const completedTasks = useMemo(() => {
-    return dayTasks.filter(t => t.is_completed);
-  }, [dayTasks]);
+  const completedTasks = useMemo(() => dayTasks.filter(t => t.is_completed), [dayTasks]);
 
-  // חישוב סטטיסטיקות
+  // משימות ללא שעה
+  const unscheduledTasks = useMemo(() => activeTasks.filter(t => !t.due_time), [activeTasks]);
+
+  // משימות עם שעה
+  const scheduledTasks = useMemo(() => activeTasks.filter(t => t.due_time), [activeTasks]);
+
+  // סטטיסטיקות
   const stats = useMemo(() => {
     const totalPlanned = activeTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
     const totalCompleted = completedTasks.reduce((sum, t) => sum + (t.time_spent || t.estimated_duration || 30), 0);
     return { totalPlanned, totalCompleted, active: activeTasks.length, done: completedTasks.length };
   }, [activeTasks, completedTasks]);
 
-  // יצירת שורות שעות
-  const hourSlots = useMemo(() => {
-    const slots = [];
-    for (let hour = WORK_HOURS.start; hour <= WORK_HOURS.end; hour++) {
-      slots.push(hour);
-    }
-    return slots;
-  }, []);
+  // השעה הנוכחית
+  const currentHour = new Date().getHours();
+  const currentMinute = new Date().getMinutes();
+  const now = currentHour * 60 + currentMinute;
+  const isTodayView = isToday(date);
 
-  // מיפוי משימות לשעות - כולל חפיפות
-  const tasksByHour = useMemo(() => {
-    const map = {};
-    
-    activeTasks.forEach(task => {
-      if (task.due_time) {
-        const [startHour, startMin] = task.due_time.split(':').map(Number);
-        const startMinutes = startHour * 60 + (startMin || 0);
-        const duration = task.estimated_duration || 30;
-        const endMinutes = startMinutes + duration;
-        
-        // מצא את כל השעות שהמשימה חופפת אליהן
-        const startSlotHour = startHour;
-        const endSlotHour = Math.floor((endMinutes - 1) / 60); // -1 כי אם נגמר בדיוק ב-10:00 זה לא חלק מ-10:00
-        
-        for (let hour = startSlotHour; hour <= endSlotHour && hour <= WORK_HOURS.end; hour++) {
-          if (!map[hour]) map[hour] = [];
-          // הוסף רק פעם אחת (בשעת ההתחלה הראשית)
-          if (hour === startSlotHour) {
-            map[hour].push({ ...task, isMainSlot: true });
-          } else {
-            // בשעות המשך - סמן שזה המשך
-            map[hour].push({ ...task, isMainSlot: false, continuesFrom: startHour });
-          }
-        }
-      }
-    });
-    
-    return map;
-  }, [activeTasks]);
-
-  // משימות ללא שעה
-  const unscheduledTasks = useMemo(() => {
-    return activeTasks.filter(t => !t.due_time);
-  }, [activeTasks]);
-
-  // סימון משימה כהושלמה
-  const handleComplete = async (task) => {
+  // סימון משימה
+  const handleComplete = useCallback(async (task, e) => {
+    if (e) e.stopPropagation();
     try {
       await toggleComplete(task.id);
-      toast.success('✅ המשימה הושלמה!');
+      toast.success('✅ הושלם!', { duration: 1500 });
       if (onUpdate) onUpdate();
     } catch {
       toast.error('שגיאה');
     }
-  };
+  }, [toggleComplete, onUpdate]);
 
   // מחיקת משימה
-  const handleDelete = async (task) => {
-    if (!confirm('למחוק?')) return;
+  const handleDelete = useCallback(async (task, e) => {
+    if (e) e.stopPropagation();
+    if (!confirm('למחוק את המשימה?')) return;
     try {
       await removeTask(task.id);
       toast.success('נמחק');
     } catch {
       toast.error('שגיאה');
     }
-  };
+  }, [removeTask]);
 
   // רכיב משימה בודדת
-  const TaskItem = ({ task, compact = false }) => {
+  const TaskCard = ({ task }) => {
     const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
     const isExpanded = expandedTask === task.id;
     const duration = task.estimated_duration || 30;
     const spent = task.time_spent || 0;
     const progress = Math.min(100, Math.round((spent / duration) * 100));
     
-    // חישוב שעת סיום
+    // חישוב האם המשימה עכשיו
+    const taskStart = task.due_time ? timeToMinutes(task.due_time) : null;
+    const taskEnd = taskStart ? taskStart + duration : null;
+    const isNow = isTodayView && taskStart && now >= taskStart && now < taskEnd;
+    const isPast = isTodayView && taskEnd && now >= taskEnd;
+    
+    // שעת סיום
     const endTime = task.due_time ? 
       (() => {
-        const start = timeToMinutes(task.due_time);
-        const end = start + duration;
+        const end = timeToMinutes(task.due_time) + duration;
         const h = Math.floor(end / 60);
         const m = end % 60;
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
       })() : null;
-
-    // אם זה המשך משעה קודמת - הצג בצורה מצומצמת
-    if (task.continuesFrom !== undefined && !task.isMainSlot) {
-      return (
-        <div 
-          className="py-2 px-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 border-r-4 opacity-60"
-          style={{ borderRightColor: taskType.borderColor }}
-        >
-          <span>{taskType.icon}</span>
-          <span className="truncate">{task.title}</span>
-          <span className="text-xs mr-auto">המשך מ-{task.continuesFrom}:00</span>
-        </div>
-      );
-    }
 
     return (
       <motion.div
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
         className={`
-          group relative bg-white dark:bg-gray-800 rounded-lg border-r-4 
-          shadow-sm hover:shadow-md transition-all cursor-pointer
-          ${compact ? 'p-2' : 'p-3'}
+          relative bg-white dark:bg-gray-800 rounded-xl overflow-hidden
+          border-r-4 transition-all duration-200 cursor-pointer
+          ${isNow 
+            ? 'ring-2 ring-blue-500 shadow-lg shadow-blue-100 dark:shadow-blue-900/30' 
+            : isPast 
+              ? 'opacity-50' 
+              : 'shadow-sm hover:shadow-md'
+          }
         `}
-        style={{ borderRightColor: taskType.borderColor }}
+        style={{ borderRightColor: isNow ? '#3b82f6' : undefined }}
         onClick={() => setExpandedTask(isExpanded ? null : task.id)}
       >
-        <div className="flex items-center gap-3">
-          {/* כפתור סימון */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleComplete(task);
-            }}
-            className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 
-                       hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 
-                       flex-shrink-0 transition-all"
-          />
-
-          {/* אייקון סוג */}
-          <span className={`text-lg flex-shrink-0 ${taskType.bgColor} w-8 h-8 rounded-lg 
-                           flex items-center justify-center text-white`}>
-            {taskType.icon}
-          </span>
-
-          {/* תוכן */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white truncate">
-                {task.title}
-              </span>
-              {task.priority === 'urgent' && (
-                <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded">
-                  דחוף
-                </span>
+        <div className="p-4">
+          {/* שורה עליונה */}
+          <div className="flex items-start gap-3">
+            {/* כפתור סימון */}
+            <button
+              onClick={(e) => handleComplete(task, e)}
+              className="mt-1 w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 
+                         hover:border-green-500 hover:bg-green-500 flex-shrink-0 transition-all
+                         flex items-center justify-center group"
+            >
+              <span className="text-white text-xs opacity-0 group-hover:opacity-100">✓</span>
+            </button>
+            
+            {/* אייקון */}
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-lg flex-shrink-0 ${taskType.bg}`}>
+              {taskType.icon}
+            </div>
+            
+            {/* תוכן */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className={`font-medium text-gray-900 dark:text-white truncate ${isPast ? 'line-through' : ''}`}>
+                  {task.title}
+                </h3>
+                {isNow && (
+                  <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse flex-shrink-0">
+                    עכשיו
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {task.due_time && (
+                  <span>🕐 {task.due_time} - {endTime}</span>
+                )}
+                <span>⏱️ {formatMinutes(duration)}</span>
+                {spent > 0 && (
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">
+                    עבדת {formatMinutes(spent)}
+                  </span>
+                )}
+              </div>
+              
+              {/* פס התקדמות */}
+              {progress > 0 && (
+                <div className="mt-2 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
               )}
             </div>
             
-            {/* סרגל התקדמות קטן */}
-            {spent > 0 && (
-              <div className="mt-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden w-24">
-                <div 
-                  className={`h-full ${progress >= 100 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ width: `${Math.min(100, progress)}%` }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* זמנים */}
-          <div className="text-left flex-shrink-0">
-            {task.due_time && (
-              <div className="text-sm font-mono font-medium text-gray-900 dark:text-white">
-                {task.due_time}
-                {endTime && (
-                  <span className="text-gray-400 dark:text-gray-500"> - {endTime}</span>
-                )}
-              </div>
-            )}
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {formatMinutes(duration)}
-            </div>
-          </div>
-
-          {/* כפתורי פעולה */}
-          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditTask(task);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              title="ערוך"
-            >
-              ✏️
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(task);
-              }}
-              className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-              title="מחק"
-            >
-              🗑️
-            </button>
-          </div>
-        </div>
-
-        {/* טיימר מורחב */}
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
-                <TaskTimer
-                  task={task}
-                  onUpdate={onUpdate}
-                  onComplete={() => handleComplete(task)}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    );
-  };
-
-  return (
-    <div className="diary-view">
-      {/* כותרת עם סטטיסטיקות */}
-      <div className="mb-4 p-4 bg-gradient-to-l from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.active}</div>
-              <div className="text-xs text-gray-500">משימות</div>
-            </div>
-            <div className="w-px h-10 bg-blue-200 dark:bg-blue-700"></div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{formatMinutes(stats.totalPlanned)}</div>
-              <div className="text-xs text-gray-500">זמן מתוכנן</div>
-            </div>
-            {stats.done > 0 && (
-              <>
-                <div className="w-px h-10 bg-blue-200 dark:bg-blue-700"></div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.done}</div>
-                  <div className="text-xs text-gray-500">הושלמו ✓</div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* כפתור הוספה */}
-          <button
-            onClick={onAddTask}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <span>+</span>
-            <span>משימה</span>
-          </button>
-        </div>
-      </div>
-
-      {/* תצוגת יומן עם שעות */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {/* משימות ללא שעה */}
-        {unscheduledTasks.length > 0 && (
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
-            <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1">
-              <span>📌</span>
-              <span>ללא שעה קבועה ({unscheduledTasks.length})</span>
-            </div>
-            <div className="space-y-2">
-              {unscheduledTasks.map(task => (
-                <TaskItem key={task.id} task={task} compact />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* שעות היום */}
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {hourSlots.map(hour => {
-            const hourTasks = tasksByHour[hour] || [];
-            const now = new Date();
-            const currentHour = now.getHours();
-            const isCurrentHour = hour === currentHour && 
-              date instanceof Date && date.toDateString() === now.toDateString();
-            const isPast = hour < currentHour && 
-              date instanceof Date && date.toDateString() === now.toDateString();
-
-            return (
-              <div 
-                key={hour} 
-                className={`
-                  flex min-h-[60px] transition-colors
-                  ${isCurrentHour ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-                  ${isPast ? 'bg-gray-50 dark:bg-gray-900/50' : ''}
-                `}
+            {/* כפתורי פעולות */}
+            <div className="flex gap-1 flex-shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
               >
-                {/* עמודת שעה */}
-                <div className={`
-                  w-16 flex-shrink-0 p-2 text-left border-l border-gray-200 dark:border-gray-700
-                  ${isCurrentHour ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-50 dark:bg-gray-900/30'}
-                `}>
-                  <span className={`
-                    text-sm font-mono font-bold
-                    ${isCurrentHour ? 'text-blue-600 dark:text-blue-400' : 
-                      isPast ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-300'}
-                  `}>
-                    {hour.toString().padStart(2, '0')}:00
-                  </span>
-                  {isCurrentHour && (
-                    <div className="text-xs text-blue-500 mt-0.5">עכשיו</div>
-                  )}
-                </div>
+                ✏️
+              </button>
+              <button
+                onClick={(e) => handleDelete(task, e)}
+                className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+              >
+                🗑️
+              </button>
+            </div>
+          </div>
 
-                {/* עמודת משימות */}
-                <div className="flex-1 p-2">
-                  {hourTasks.length > 0 ? (
-                    <div className="space-y-2">
-                      {hourTasks.map(task => (
-                        <TaskItem key={`${task.id}-${hour}`} task={task} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div 
-                      className="h-full min-h-[44px] border-2 border-dashed border-gray-200 dark:border-gray-700 
-                                 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-600
-                                 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10
-                                 cursor-pointer transition-all"
-                      onClick={() => onAddTask(hour)}
-                    >
-                      <span className="text-sm">+ הוסף משימה ל-{hour}:00</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* משימות שהושלמו - מכווץ */}
-      {completedTasks.length > 0 && (
-        <div className="mt-4">
-          <button
-            onClick={() => setShowCompleted(!showCompleted)}
-            className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-          >
-            <span className={`transform transition-transform ${showCompleted ? 'rotate-90' : ''}`}>▶</span>
-            <span>✅ הושלמו היום ({completedTasks.length})</span>
-            <span className="text-xs text-gray-400">
-              {formatMinutes(stats.totalCompleted)}
-            </span>
-          </button>
-
+          {/* טיימר מורחב */}
           <AnimatePresence>
-            {showCompleted && (
+            {isExpanded && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="mt-2 space-y-2 opacity-60">
+                <div className="pt-4 mt-4 border-t border-gray-100 dark:border-gray-700">
+                  <TaskTimer
+                    task={task}
+                    onUpdate={onUpdate}
+                    onComplete={() => handleComplete(task)}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* כרטיס סטטיסטיקות */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-5 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold">{stats.active}</div>
+              <div className="text-sm opacity-80">משימות</div>
+            </div>
+            <div className="w-px h-10 bg-white/30" />
+            <div className="text-center">
+              <div className="text-3xl font-bold">{formatMinutes(stats.totalPlanned).replace(" דק'", "d").replace(" שעות", "h")}</div>
+              <div className="text-sm opacity-80">זמן</div>
+            </div>
+            {stats.done > 0 && (
+              <>
+                <div className="w-px h-10 bg-white/30" />
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-300">{stats.done} ✓</div>
+                  <div className="text-sm opacity-80">הושלמו</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={onAddTask}
+            className="px-5 py-2.5 bg-white/20 hover:bg-white/30 rounded-xl font-medium transition-all flex items-center gap-2"
+          >
+            <span className="text-xl">+</span>
+            משימה
+          </button>
+        </div>
+      </div>
+
+      {/* משימות ללא שעה */}
+      {unscheduledTasks.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-center gap-2 mb-3 text-amber-800 dark:text-amber-200">
+            <span className="text-xl">📌</span>
+            <span className="font-medium">ללא שעה ({unscheduledTasks.length})</span>
+          </div>
+          <div className="space-y-2">
+            {unscheduledTasks.map(task => (
+              <TaskCard key={task.id} task={task} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ציר זמן */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+        {Array.from({ length: WORK_HOURS.end - WORK_HOURS.start + 1 }, (_, i) => WORK_HOURS.start + i).map(hour => {
+          const hourTasks = scheduledTasks.filter(t => {
+            const taskHour = parseInt(t.due_time?.split(':')[0] || 0);
+            return taskHour === hour;
+          });
+          
+          const isCurrentHour = isTodayView && hour === currentHour;
+          const isPastHour = isTodayView && hour < currentHour;
+
+          return (
+            <div 
+              key={hour} 
+              className={`
+                flex border-b border-gray-100 dark:border-gray-700 last:border-b-0
+                ${isCurrentHour ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                ${isPastHour ? 'bg-gray-50/50 dark:bg-gray-900/30' : ''}
+              `}
+            >
+              {/* שעה */}
+              <div className={`
+                w-16 flex-shrink-0 py-3 px-2 text-center border-l border-gray-100 dark:border-gray-700
+                ${isCurrentHour ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-50 dark:bg-gray-900/50'}
+              `}>
+                <div className={`text-sm font-mono font-bold ${
+                  isCurrentHour ? 'text-blue-600 dark:text-blue-400' : 
+                  isPastHour ? 'text-gray-400' : 'text-gray-600 dark:text-gray-400'
+                }`}>
+                  {hour}:00
+                </div>
+                {isCurrentHour && (
+                  <div className="text-[10px] text-blue-500 mt-0.5">עכשיו</div>
+                )}
+              </div>
+
+              {/* משימות */}
+              <div className="flex-1 p-2 min-h-[60px]">
+                {hourTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {hourTasks.map(task => (
+                      <TaskCard key={task.id} task={task} />
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onAddTask(hour)}
+                    className="w-full h-full min-h-[48px] border-2 border-dashed border-gray-200 dark:border-gray-700 
+                               rounded-xl text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50
+                               dark:hover:bg-blue-900/20 transition-all text-sm"
+                  >
+                    + הוסף
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* הושלמו */}
+      {completedTasks.length > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 overflow-hidden">
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="w-full p-3 flex items-center justify-between hover:bg-green-100 dark:hover:bg-green-900/30"
+          >
+            <div className="flex items-center gap-2 text-green-800 dark:text-green-200">
+              <span>✅</span>
+              <span className="font-medium">הושלמו ({completedTasks.length})</span>
+              <span className="text-sm text-green-600">{formatMinutes(stats.totalCompleted)}</span>
+            </div>
+            <span className={`transform transition-transform ${showCompleted ? 'rotate-90' : ''}`}>▶</span>
+          </button>
+
+          <AnimatePresence>
+            {showCompleted && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 pt-0 space-y-1">
                   {completedTasks.map(task => {
                     const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
                     return (
-                      <div 
-                        key={task.id}
-                        className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
-                      >
+                      <div key={task.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg opacity-60">
                         <span className="text-green-500">✓</span>
                         <span>{taskType.icon}</span>
-                        <span className="line-through text-gray-500 dark:text-gray-400 flex-1">
-                          {task.title}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {formatMinutes(task.time_spent || task.estimated_duration)}
-                        </span>
-                        <button
-                          onClick={() => toggleComplete(task.id)}
-                          className="text-xs text-blue-500 hover:text-blue-700"
-                        >
-                          החזר
-                        </button>
+                        <span className="flex-1 line-through text-gray-500 text-sm">{task.title}</span>
+                        <span className="text-xs text-gray-400">{formatMinutes(task.time_spent || task.estimated_duration)}</span>
+                        <button onClick={() => toggleComplete(task.id)} className="text-xs text-blue-500 hover:underline">החזר</button>
                       </div>
                     );
                   })}

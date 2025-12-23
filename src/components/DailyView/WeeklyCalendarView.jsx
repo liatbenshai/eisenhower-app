@@ -19,34 +19,47 @@ function isToday(date) {
 }
 
 /**
- * המרה לתאריך עברי
+ * פורמט דקות
+ */
+function formatMinutes(minutes) {
+  if (!minutes) return '0';
+  if (minutes < 60) return `${minutes}ד'`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${hours}ש'`;
+}
+
+/**
+ * המרת תאריך עברי
  */
 function getHebrewDate(date) {
   try {
-    const formatter = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {
-      day: 'numeric'
-    });
+    const formatter = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric' });
     return formatter.format(date);
-  } catch (e) {
+  } catch {
     return '';
   }
 }
 
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const DAY_NAMES_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+
 /**
- * תצוגת שבוע קומפקטית
+ * תצוגת שבוע - עיצוב חדש ונקי
  */
 function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onUpdateTask }) {
   const [draggedTask, setDraggedTask] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [hoveredDay, setHoveredDay] = useState(null);
 
-  // ימות השבוע (ראשון עד חמישי)
+  // ימות השבוע (ראשון עד שבת)
   const weekDays = useMemo(() => {
     const days = [];
     const startOfWeek = new Date(selectedDate);
     const dayOfWeek = startOfWeek.getDay();
     startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
     
-    for (let i = 0; i <= 4; i++) {
+    for (let i = 0; i < 7; i++) {
       const day = new Date(startOfWeek);
       day.setDate(day.getDate() + i);
       days.push(day);
@@ -54,13 +67,38 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
     return days;
   }, [selectedDate]);
 
+  // ניווט שבועות
+  const goToPrevWeek = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 7);
+    onSelectDate(newDate);
+  };
+
+  const goToNextWeek = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 7);
+    onSelectDate(newDate);
+  };
+
+  const goToThisWeek = () => {
+    onSelectDate(new Date());
+  };
+
+  // טווח תאריכים של השבוע
+  const weekRange = useMemo(() => {
+    const first = weekDays[0];
+    const last = weekDays[6];
+    const formatDate = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
+    return `${formatDate(first)} - ${formatDate(last)}`;
+  }, [weekDays]);
+
   // משימות לפי יום
   const tasksByDay = useMemo(() => {
     const map = {};
     weekDays.forEach(day => {
       const dateISO = getDateISO(day);
       map[dateISO] = tasks
-        .filter(t => t.due_date === dateISO)
+        .filter(t => t.due_date === dateISO && !t.is_completed)
         .sort((a, b) => {
           if (!a.due_time) return 1;
           if (!b.due_time) return -1;
@@ -76,21 +114,19 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
     weekDays.forEach(day => {
       const dateISO = getDateISO(day);
       const dayTasks = tasksByDay[dateISO] || [];
-      const activeTasks = dayTasks.filter(t => !t.is_completed);
-      const completedTasks = dayTasks.filter(t => t.is_completed);
-      const totalMinutes = activeTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
+      const totalMinutes = dayTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
+      const completedTasks = tasks.filter(t => t.due_date === dateISO && t.is_completed);
       
       summary[dateISO] = {
-        total: dayTasks.length,
-        active: activeTasks.length,
+        active: dayTasks.length,
         completed: completedTasks.length,
         minutes: totalMinutes,
-        hours: Math.floor(totalMinutes / 60),
-        mins: totalMinutes % 60
+        isBusy: totalMinutes > 360, // יותר מ-6 שעות
+        isEmpty: dayTasks.length === 0
       };
     });
     return summary;
-  }, [tasksByDay, weekDays]);
+  }, [tasksByDay, tasks, weekDays]);
 
   // גרירה
   const handleDragStart = (e, task) => {
@@ -122,180 +158,253 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
           dueDate: dateISO,
           dueTime: draggedTask.due_time
         });
-        toast.success('המשימה הועברה');
+        toast.success('📅 המשימה הועברה!');
       }
-    } catch (err) {
-      toast.error('שגיאה בהעברה');
+    } catch {
+      toast.error('שגיאה');
     }
     
     setDraggedTask(null);
   };
 
-  const handleDragEnd = () => {
-    setDraggedTask(null);
-    setDropTarget(null);
-  };
-
-  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי'];
-
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      {/* כותרות ימים */}
-      <div className="grid grid-cols-5 border-b border-gray-200 dark:border-gray-700">
-        {weekDays.map((day, index) => {
-          const isTodayDay = isToday(day);
-          const isSelected = getDateISO(day) === getDateISO(selectedDate);
-          const dateISO = getDateISO(day);
-          const summary = daySummary[dateISO];
+    <div className="space-y-4">
+      {/* כותרת וניווט */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={goToPrevWeek}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-xl"
+          >
+            ◀
+          </button>
           
-          return (
-            <button
-              key={index}
-              onClick={() => onSelectDate(day)}
-              className={`
-                py-3 px-2 text-center transition-all
-                ${isTodayDay 
-                  ? 'bg-blue-50 dark:bg-blue-900/30' 
-                  : 'bg-gray-50 dark:bg-gray-800/50'}
-                ${isSelected ? 'ring-2 ring-inset ring-blue-500' : ''}
-                ${index < 4 ? 'border-l border-gray-200 dark:border-gray-700' : ''}
-                hover:bg-blue-100 dark:hover:bg-blue-900/40
-              `}
-            >
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {dayNames[index]}
-              </div>
-              <div className={`text-xl font-bold ${
-                isTodayDay ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-gray-200'
-              }`}>
-                {day.getDate()}
-              </div>
-              <div className="text-[10px] text-gray-400">{getHebrewDate(day)}</div>
-              {isTodayDay && (
-                <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded-full">
-                  היום
-                </span>
-              )}
-              {summary.active > 0 && (
-                <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                  {summary.active} משימות • {summary.hours > 0 ? `${summary.hours}:${summary.mins.toString().padStart(2,'0')}` : `${summary.mins}ד'`}
-                </div>
-              )}
-            </button>
-          );
-        })}
+          <div className="text-center">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              {weekRange}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {weekDays[0].toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          
+          <button
+            onClick={goToNextWeek}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-xl"
+          >
+            ▶
+          </button>
+        </div>
+
+        <button
+          onClick={goToThisWeek}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          השבוע
+        </button>
       </div>
 
-      {/* תוכן - משימות */}
-      <div className="grid grid-cols-5 min-h-[400px]">
-        {weekDays.map((day, dayIndex) => {
-          const dateISO = getDateISO(day);
-          const allDayTasks = tasksByDay[dateISO] || [];
-          const dayTasks = allDayTasks.filter(t => !t.is_completed); // הסתר משימות שהושלמו
-          const isTodayDay = isToday(day);
-          const isDropZone = dropTarget === dateISO;
-          
-          return (
-            <div
-              key={dayIndex}
-              onDragOver={(e) => handleDragOver(e, dateISO)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, dateISO)}
-              className={`
-                p-2 transition-all
-                ${dayIndex < 4 ? 'border-l border-gray-100 dark:border-gray-800' : ''}
-                ${isTodayDay ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}
-                ${isDropZone ? 'bg-green-50 dark:bg-green-900/20 ring-2 ring-inset ring-green-400' : ''}
-              `}
-            >
-              {/* אזור שחרור */}
-              {isDropZone && dayTasks.length === 0 && (
-                <div className="h-20 border-2 border-dashed border-green-400 rounded-lg flex items-center justify-center mb-2">
-                  <span className="text-green-600 dark:text-green-400 text-xs">📍 שחרר כאן</span>
+      {/* לוח שבועי */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+        {/* כותרות ימים */}
+        <div className="grid grid-cols-7 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+          {weekDays.map((day, index) => {
+            const isTodayDay = isToday(day);
+            const dateISO = getDateISO(day);
+            const summary = daySummary[dateISO];
+            const isWeekend = index >= 5;
+            
+            return (
+              <button
+                key={index}
+                onClick={() => onSelectDate(day)}
+                className={`
+                  py-3 px-2 text-center transition-all relative
+                  ${isTodayDay ? 'bg-blue-50 dark:bg-blue-900/30' : ''}
+                  ${isWeekend ? 'bg-gray-100/50 dark:bg-gray-800/50' : ''}
+                  hover:bg-blue-100 dark:hover:bg-blue-900/40
+                  ${index > 0 ? 'border-r border-gray-200 dark:border-gray-700' : ''}
+                `}
+              >
+                {/* שם היום */}
+                <div className={`text-xs font-medium ${
+                  isTodayDay ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'
+                }`}>
+                  {DAY_NAMES_SHORT[index]}
                 </div>
-              )}
+                
+                {/* מספר */}
+                <div className={`
+                  text-2xl font-bold mt-1
+                  ${isTodayDay 
+                    ? 'text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-800 dark:text-gray-200'
+                  }
+                `}>
+                  {day.getDate()}
+                </div>
+                
+                {/* תאריך עברי */}
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  {getHebrewDate(day)}
+                </div>
+                
+                {/* אינדיקטור היום */}
+                {isTodayDay && (
+                  <div className="absolute top-1 left-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                )}
+                
+                {/* סיכום */}
+                {summary.active > 0 && (
+                  <div className={`
+                    mt-2 text-[10px] px-2 py-0.5 rounded-full mx-auto inline-block
+                    ${summary.isBusy 
+                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' 
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                    }
+                  `}>
+                    {summary.active} • {formatMinutes(summary.minutes)}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-              {/* משימות */}
-              <div className="space-y-1.5">
-                {dayTasks.map((task) => {
-                  const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
-                  const isDragging = draggedTask?.id === task.id;
-                  const progress = task.estimated_duration 
-                    ? Math.min(100, Math.round((task.time_spent || 0) / task.estimated_duration * 100))
-                    : 0;
+        {/* תוכן - משימות */}
+        <div className="grid grid-cols-7 min-h-[350px]">
+          {weekDays.map((day, dayIndex) => {
+            const dateISO = getDateISO(day);
+            const dayTasks = tasksByDay[dateISO] || [];
+            const isTodayDay = isToday(day);
+            const isDropZone = dropTarget === dateISO;
+            const isHovered = hoveredDay === dateISO;
+            const isWeekend = dayIndex >= 5;
+            
+            return (
+              <div
+                key={dayIndex}
+                onDragOver={(e) => handleDragOver(e, dateISO)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, dateISO)}
+                onMouseEnter={() => setHoveredDay(dateISO)}
+                onMouseLeave={() => setHoveredDay(null)}
+                className={`
+                  p-2 transition-all min-h-[300px]
+                  ${dayIndex > 0 ? 'border-r border-gray-100 dark:border-gray-700' : ''}
+                  ${isTodayDay ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}
+                  ${isWeekend ? 'bg-gray-50/30 dark:bg-gray-800/30' : ''}
+                  ${isDropZone ? 'bg-green-50 dark:bg-green-900/20 ring-2 ring-inset ring-green-400' : ''}
+                `}
+              >
+                {/* אזור גרירה */}
+                {isDropZone && dayTasks.length === 0 && (
+                  <div className="h-16 border-2 border-dashed border-green-400 rounded-lg flex items-center justify-center mb-2 animate-pulse">
+                    <span className="text-green-600 text-xs">📍 שחרר כאן</span>
+                  </div>
+                )}
+
+                {/* משימות */}
+                <div className="space-y-1.5">
+                  <AnimatePresence>
+                    {dayTasks.slice(0, 6).map((task) => {
+                      const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
+                      const isDragging = draggedTask?.id === task.id;
+                      const progress = task.estimated_duration 
+                        ? Math.min(100, Math.round((task.time_spent || 0) / task.estimated_duration * 100))
+                        : 0;
+                      
+                      return (
+                        <motion.div
+                          key={task.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: isDragging ? 0.5 : 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task)}
+                          onDragEnd={() => setDraggedTask(null)}
+                          onClick={() => onEditTask(task)}
+                          className={`
+                            p-2 rounded-lg text-xs cursor-grab active:cursor-grabbing
+                            transition-all hover:shadow-md border
+                            ${taskType.color}
+                            ${isDragging ? 'shadow-lg ring-2 ring-blue-500 opacity-50' : ''}
+                          `}
+                        >
+                          {/* שורה עליונה */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex-shrink-0">{taskType.icon}</span>
+                            <span className="font-medium truncate">{task.title}</span>
+                          </div>
+                          
+                          {/* פרטים */}
+                          <div className="flex items-center justify-between mt-1 text-[10px] opacity-70">
+                            <span>{task.due_time || '---'}</span>
+                            <span>{formatMinutes(task.estimated_duration)}</span>
+                          </div>
+                          
+                          {/* התקדמות */}
+                          {progress > 0 && (
+                            <div className="mt-1.5 h-1 bg-white/30 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${progress >= 100 ? 'bg-green-400' : 'bg-white/70'}`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
                   
-                  return (
-                    <motion.div
-                      key={task.id}
-                      layout
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
-                      draggable={!task.is_completed}
-                      onDragStart={(e) => handleDragStart(e, task)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => onEditTask(task)}
-                      className={`
-                        p-2 rounded-lg text-xs cursor-pointer
-                        transition-all hover:shadow-md
-                        ${task.is_completed 
-                          ? 'bg-gray-100 dark:bg-gray-800 opacity-50 line-through' 
-                          : taskType.color}
-                        ${isDragging ? 'shadow-lg ring-2 ring-blue-500' : ''}
-                        ${!task.is_completed ? 'cursor-grab active:cursor-grabbing' : ''}
-                      `}
+                  {/* עוד משימות */}
+                  {dayTasks.length > 6 && (
+                    <button
+                      onClick={() => onSelectDate(day)}
+                      className="w-full text-center text-xs text-blue-500 hover:text-blue-700 py-1"
                     >
-                      {/* שורה עליונה */}
-                      <div className="flex items-center gap-1 mb-0.5">
-                        <span className="text-sm">{taskType.icon}</span>
-                        <span className="font-medium truncate flex-1">{task.title}</span>
-                      </div>
-                      
-                      {/* שעה וזמן */}
-                      <div className="flex items-center justify-between text-[10px] opacity-80">
-                        <span>{task.due_time || '--:--'}</span>
-                        {task.estimated_duration && (
-                          <span>{task.time_spent || 0}/{task.estimated_duration}ד'</span>
-                        )}
-                      </div>
-                      
-                      {/* סרגל התקדמות */}
-                      {task.estimated_duration && !task.is_completed && progress > 0 && (
-                        <div className="mt-1 h-1 bg-white/30 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${progress >= 100 ? 'bg-green-400' : 'bg-white/70'}`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* הודעה אם אין משימות */}
-              {dayTasks.length === 0 && !isDropZone && (
-                <div className="h-20 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs">
-                  אין משימות
+                      +{dayTasks.length - 6} עוד...
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                {/* ריק */}
+                {dayTasks.length === 0 && !isDropZone && (
+                  <div className={`
+                    h-full flex items-center justify-center transition-opacity
+                    ${isHovered ? 'opacity-100' : 'opacity-0'}
+                  `}>
+                    <button
+                      onClick={() => onSelectDate(day)}
+                      className="text-xs text-gray-400 hover:text-blue-500"
+                    >
+                      + הוסף
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* מקרא */}
-      <div className="p-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-        <div className="flex flex-wrap gap-2 justify-center">
-          {Object.values(TASK_TYPES).map(type => (
-            <div 
-              key={type.id}
-              className={`px-2 py-0.5 rounded-full text-[10px] ${type.color}`}
-            >
-              {type.icon} {type.name}
-            </div>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {Object.values(TASK_TYPES).map(type => (
+          <div 
+            key={type.id}
+            className={`px-2.5 py-1 rounded-lg text-xs border ${type.color}`}
+          >
+            {type.icon} {type.name}
+          </div>
+        ))}
       </div>
+      
+      {/* טיפ */}
+      <p className="text-center text-xs text-gray-400">
+        💡 גרור משימה ליום אחר כדי להזיז אותה
+      </p>
     </div>
   );
 }
