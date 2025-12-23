@@ -193,17 +193,17 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                 )}
               </div>
               
-              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400" dir="ltr">
                 {task.due_time && (
-                  <span className="flex items-center gap-1">
-                    🕐 
-                    <span dir="ltr">{task.due_time.substring(0, 5)} - {endTime}</span>
+                  <span className="flex items-center gap-1 font-mono">
+                    {task.due_time.substring(0, 5)} → {endTime}
                   </span>
                 )}
-                <span>⏱️ {formatMinutes(duration)}</span>
+                <span className="text-gray-400">•</span>
+                <span>{formatMinutes(duration)}</span>
                 {spent > 0 && (
                   <span className="text-blue-600 dark:text-blue-400 font-medium">
-                    עבדת {formatMinutes(spent)}
+                    (עבדת {formatMinutes(spent)})
                   </span>
                 )}
               </div>
@@ -322,6 +322,27 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
           const isCurrentHour = isTodayView && hour === currentHour;
           const isPastHour = isTodayView && hour < currentHour;
 
+          // חישוב הפסקות בין משימות באותה שעה
+          const tasksWithBreaks = [];
+          hourTasks.forEach((task, idx) => {
+            if (idx > 0) {
+              const prevTask = hourTasks[idx - 1];
+              const prevEnd = timeToMinutes(prevTask.due_time) + (prevTask.estimated_duration || 30);
+              const currentStart = timeToMinutes(task.due_time);
+              const breakMinutes = currentStart - prevEnd;
+              
+              if (breakMinutes > 0) {
+                tasksWithBreaks.push({
+                  isBreak: true,
+                  minutes: breakMinutes,
+                  startTime: prevEnd,
+                  key: `break-${prevTask.id}-${task.id}`
+                });
+              }
+            }
+            tasksWithBreaks.push({ isBreak: false, task, key: task.id });
+          });
+
           return (
             <div 
               key={hour} 
@@ -349,11 +370,24 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
 
               {/* משימות */}
               <div className="flex-1 p-2 min-h-[60px]">
-                {hourTasks.length > 0 ? (
+                {tasksWithBreaks.length > 0 ? (
                   <div className="space-y-2">
-                    {hourTasks.map(task => (
-                      <TaskCard key={task.id} task={task} />
-                    ))}
+                    {tasksWithBreaks.map(item => 
+                      item.isBreak ? (
+                        <div 
+                          key={item.key}
+                          className="flex items-center gap-2 py-1 px-3 text-xs text-gray-400"
+                        >
+                          <div className="flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
+                          <span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+                            ☕ הפסקה {item.minutes} דק'
+                          </span>
+                          <div className="flex-1 border-t border-dashed border-gray-300 dark:border-gray-600" />
+                        </div>
+                      ) : (
+                        <TaskCard key={item.key} task={item.task} />
+                      )
+                    )}
                   </div>
                 ) : (
                   <button
