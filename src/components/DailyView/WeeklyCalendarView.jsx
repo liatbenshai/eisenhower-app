@@ -190,7 +190,8 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
       <div className="grid grid-cols-5 min-h-[400px]">
         {weekDays.map((day, dayIndex) => {
           const dateISO = getDateISO(day);
-          const dayTasks = tasksByDay[dateISO] || [];
+          const allDayTasks = tasksByDay[dateISO] || [];
+          const dayTasks = allDayTasks.filter(t => !t.is_completed); // הסתר משימות שהושלמו
           const isTodayDay = isToday(day);
           const isDropZone = dropTarget === dateISO;
           
