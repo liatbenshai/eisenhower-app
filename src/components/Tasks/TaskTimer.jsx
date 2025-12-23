@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { updateSubtaskProgress } from '../../services/supabase';
 import { useTasks } from '../../hooks/useTasks';
+import { startIdleTracking, stopIdleTracking, formatIdleTime } from '../../utils/idleTimeTracker';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
 
@@ -291,6 +292,15 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   }
 
   const startTimer = () => {
+    // עצירת מעקב זמן מת (אם היה פעיל)
+    const idleMinutes = stopIdleTracking();
+    if (idleMinutes > 0) {
+      toast(`☕ ${formatIdleTime(idleMinutes)} זמן מת נרשמו`, {
+        icon: '⏸️',
+        duration: 3000
+      });
+    }
+    
     // אם הגענו ליעד, רק מסירים את הדגל - לא מאפסים זמן
     if (hasReachedTarget) {
       setHasReachedTarget(false);
@@ -324,7 +334,9 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   
   const pauseTimer = () => {
     setIsRunning(false);
-    toast.success('טיימר הושהה - יכול לעבור למשימה אחרת');
+    // התחלת מעקב זמן מת
+    startIdleTracking();
+    toast.success('טיימר הושהה - מעקב זמן מת התחיל ⏸️');
   };
   
   const stopTimer = async () => {
@@ -353,6 +365,9 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       localStorage.removeItem(timerStorageKey);
       console.log('🗑️ זמן התחלה נמחק מ-localStorage');
     }
+    
+    // התחלת מעקב זמן מת
+    startIdleTracking();
     
     setElapsedSeconds(0);
     setStartTime(null);

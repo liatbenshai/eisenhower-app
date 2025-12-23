@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
@@ -11,6 +11,7 @@ import SmartScheduler from '../Scheduler/SmartScheduler';
 import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
 import SmartWorkIntake from '../Scheduler/SmartWorkIntake';
 import SmartNotifications from '../Notifications/SmartNotifications';
+import { getTodayIdleStats, formatIdleTime, isIdleTrackingActive, getCurrentIdleMinutes } from '../../utils/idleTimeTracker';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -140,6 +141,21 @@ function DailyView({ initialView = 'day' }) {
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState(initialView); // 'day', 'week', or 'analytics'
+  const [idleStats, setIdleStats] = useState({ totalMinutes: 0, isCurrentlyIdle: false });
+
+  // עדכון סטטיסטיקות זמן מת כל 30 שניות
+  useEffect(() => {
+    const updateIdleStats = () => {
+      const stats = getTodayIdleStats();
+      setIdleStats(stats);
+    };
+    
+    updateIdleStats(); // עדכון ראשוני
+    
+    const interval = setInterval(updateIdleStats, 30000); // כל 30 שניות
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // ניווט בין ימים
   const goToPreviousDay = () => {
@@ -452,7 +468,7 @@ function DailyView({ initialView = 'day' }) {
         </div>
         
         {/* מקרא */}
-        <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-green-500 rounded"></div>
             <span>הושלם ({formatMinutes(timeStats.completed)})</span>
@@ -465,6 +481,16 @@ function DailyView({ initialView = 'day' }) {
             <div className="w-3 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
             <span>פנוי ({formatMinutes(timeStats.remaining)})</span>
           </div>
+          {/* זמן מת */}
+          {(idleStats.totalMinutes > 0 || idleStats.isCurrentlyIdle) && isToday(selectedDate) && (
+            <div className={`flex items-center gap-1 ${idleStats.isCurrentlyIdle ? 'animate-pulse' : ''}`}>
+              <div className="w-3 h-3 bg-red-400 rounded"></div>
+              <span className="text-red-600 dark:text-red-400">
+                ⏸️ זמן מת: {formatIdleTime(idleStats.totalMinutes)}
+                {idleStats.isCurrentlyIdle && ' (עכשיו)'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* אזהרה אם לא יספיק */}
