@@ -89,16 +89,34 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
     return slots;
   }, []);
 
-  // מיפוי משימות לשעות
+  // מיפוי משימות לשעות - כולל חפיפות
   const tasksByHour = useMemo(() => {
     const map = {};
+    
     activeTasks.forEach(task => {
       if (task.due_time) {
-        const hour = parseInt(task.due_time.split(':')[0]);
-        if (!map[hour]) map[hour] = [];
-        map[hour].push(task);
+        const [startHour, startMin] = task.due_time.split(':').map(Number);
+        const startMinutes = startHour * 60 + (startMin || 0);
+        const duration = task.estimated_duration || 30;
+        const endMinutes = startMinutes + duration;
+        
+        // מצא את כל השעות שהמשימה חופפת אליהן
+        const startSlotHour = startHour;
+        const endSlotHour = Math.floor((endMinutes - 1) / 60); // -1 כי אם נגמר בדיוק ב-10:00 זה לא חלק מ-10:00
+        
+        for (let hour = startSlotHour; hour <= endSlotHour && hour <= WORK_HOURS.end; hour++) {
+          if (!map[hour]) map[hour] = [];
+          // הוסף רק פעם אחת (בשעת ההתחלה הראשית)
+          if (hour === startSlotHour) {
+            map[hour].push({ ...task, isMainSlot: true });
+          } else {
+            // בשעות המשך - סמן שזה המשך
+            map[hour].push({ ...task, isMainSlot: false, continuesFrom: startHour });
+          }
+        }
       }
     });
+    
     return map;
   }, [activeTasks]);
 
@@ -136,6 +154,8 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
     const duration = task.estimated_duration || 30;
     const spent = task.time_spent || 0;
     const progress = Math.min(100, Math.round((spent / duration) * 100));
+    
+    // חישוב שעת סיום
     const endTime = task.due_time ? 
       (() => {
         const start = timeToMinutes(task.due_time);
@@ -144,6 +164,20 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
         const m = end % 60;
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
       })() : null;
+
+    // אם זה המשך משעה קודמת - הצג בצורה מצומצמת
+    if (task.continuesFrom !== undefined && !task.isMainSlot) {
+      return (
+        <div 
+          className="py-2 px-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 border-r-4 opacity-60"
+          style={{ borderRightColor: taskType.borderColor }}
+        >
+          <span>{taskType.icon}</span>
+          <span className="truncate">{task.title}</span>
+          <span className="text-xs mr-auto">המשך מ-{task.continuesFrom}:00</span>
+        </div>
+      );
+    }
 
     return (
       <motion.div
@@ -359,7 +393,7 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                   {hourTasks.length > 0 ? (
                     <div className="space-y-2">
                       {hourTasks.map(task => (
-                        <TaskItem key={task.id} task={task} />
+                        <TaskItem key={`${task.id}-${hour}`} task={task} />
                       ))}
                     </div>
                   ) : (
