@@ -17,6 +17,15 @@ const CONFIG = {
   WORK_END_HOUR: 16,           // סוף יום עבודה
   DEADLINE_END_HOUR: 12,       // משימות חייבות להסתיים עד השעה הזו ביום הדדליין
   WORK_DAYS: [0, 1, 2, 3, 4],  // ראשון עד חמישי
+  
+  // שעות מועדפות לפי סוג משימה
+  TYPE_PREFERRED_HOURS: {
+    transcription: { start: 8, end: 12 },   // תמלול: 8:00-12:00
+    proofreading: { start: 10, end: 16 },   // הגהה: 10:00-16:00
+    typing: { start: 8, end: 16 },          // הקלדה: כל היום
+    recording: { start: 9, end: 14 },       // הקלטה: בוקר
+    other: { start: 8, end: 16 }
+  }
 };
 
 // סדר עדיפויות לסוגי משימות (נמוך = קודם בבוקר)

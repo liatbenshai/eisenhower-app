@@ -1,6 +1,100 @@
 /**
  * מנוע תובנות חכם - ניתוח נתונים והמלצות מותאמות אישית
+ * עם מעקב היסטוריה והתאמה לפי שימוש
  */
+
+const INSIGHTS_STORAGE_KEY = 'eisenhower_insights_history';
+const INSIGHTS_EXPIRY_DAYS = 7; // המלצה מיושמת תופיע שוב אחרי שבוע
+
+/**
+ * שמירת היסטוריית המלצות
+ */
+export function getInsightsHistory() {
+  try {
+    const data = localStorage.getItem(INSIGHTS_STORAGE_KEY);
+    return data ? JSON.parse(data) : { applied: {}, dismissed: {} };
+  } catch {
+    return { applied: {}, dismissed: {} };
+  }
+}
+
+export function saveInsightsHistory(history) {
+  try {
+    localStorage.setItem(INSIGHTS_STORAGE_KEY, JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed to save insights history:', e);
+  }
+}
+
+/**
+ * סימון המלצה כמיושמת
+ */
+export function markInsightApplied(insightId) {
+  const history = getInsightsHistory();
+  history.applied[insightId] = {
+    timestamp: Date.now(),
+    count: (history.applied[insightId]?.count || 0) + 1
+  };
+  saveInsightsHistory(history);
+}
+
+/**
+ * סימון המלצה כנדחית
+ */
+export function markInsightDismissed(insightId) {
+  const history = getInsightsHistory();
+  history.dismissed[insightId] = {
+    timestamp: Date.now(),
+    count: (history.dismissed[insightId]?.count || 0) + 1
+  };
+  saveInsightsHistory(history);
+}
+
+/**
+ * בדיקה אם המלצה עדיין רלוונטית (לא יושמה/נדחתה לאחרונה)
+ */
+export function isInsightRelevant(insightId) {
+  const history = getInsightsHistory();
+  const now = Date.now();
+  const expiryMs = INSIGHTS_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  
+  // בדוק אם יושמה לאחרונה
+  const applied = history.applied[insightId];
+  if (applied && (now - applied.timestamp) < expiryMs) {
+    return false;
+  }
+  
+  // בדוק אם נדחתה לאחרונה
+  const dismissed = history.dismissed[insightId];
+  if (dismissed && (now - dismissed.timestamp) < expiryMs) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * ניקוי היסטוריה ישנה
+ */
+export function cleanupInsightsHistory() {
+  const history = getInsightsHistory();
+  const now = Date.now();
+  const expiryMs = INSIGHTS_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  
+  Object.keys(history.applied).forEach(key => {
+    if (now - history.applied[key].timestamp > expiryMs) {
+      delete history.applied[key];
+    }
+  });
+  
+  Object.keys(history.dismissed).forEach(key => {
+    if (now - history.dismissed[key].timestamp > expiryMs) {
+      delete history.dismissed[key];
+    }
+  });
+  
+  saveInsightsHistory(history);
+}
 
 /**
  * ניתוח דפוסי הערכת זמן
@@ -487,7 +581,10 @@ export function generateInsights(data) {
   const priorityOrder = { high: 0, medium: 1, low: 2, positive: 3 };
   insights.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
-  return insights;
+  // סינון המלצות שכבר יושמו או נדחו לאחרונה
+  const relevantInsights = insights.filter(insight => isInsightRelevant(insight.id));
+
+  return relevantInsights;
 }
 
 /**

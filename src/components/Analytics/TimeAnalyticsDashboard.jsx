@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { TASK_TYPES } from '../DailyView/DailyView';
@@ -10,7 +10,10 @@ import {
   analyzeWorkHours,
   analyzeWorkload,
   generateInsights,
-  generateSummary
+  generateSummary,
+  markInsightApplied,
+  markInsightDismissed,
+  cleanupInsightsHistory
 } from '../../utils/insightsEngine';
 import { ACTION_DEFINITIONS } from '../../utils/actionExecutor';
 import toast from 'react-hot-toast';
@@ -223,6 +226,11 @@ function TimeAnalyticsDashboard() {
 
   const maxDayMinutes = Math.max(...statsByDay.map(d => d.totalMinutes + d.idleMinutes), 1);
 
+  // ניקוי היסטוריה ישנה בטעינה
+  React.useEffect(() => {
+    cleanupInsightsHistory();
+  }, []);
+
   // ביצוע פעולה מההמלצות
   const executeAction = async (insight) => {
     if (!insight.action || executingAction) return;
@@ -244,6 +252,9 @@ function TimeAnalyticsDashboard() {
       };
 
       const result = await actionDef.execute(context);
+      
+      // סימון ההמלצה כמיושמת
+      markInsightApplied(insight.id);
       
       // שמירת התוצאה
       setActionResults(prev => ({
@@ -273,6 +284,16 @@ function TimeAnalyticsDashboard() {
     } finally {
       setExecutingAction(null);
     }
+  };
+
+  // דחיית המלצה
+  const dismissInsight = (insight) => {
+    markInsightDismissed(insight.id);
+    setActionResults(prev => ({
+      ...prev,
+      [insight.id]: { dismissed: true }
+    }));
+    toast.success('ההמלצה הוסתרה לשבוע');
   };
 
   return (
@@ -577,29 +598,48 @@ function TimeAnalyticsDashboard() {
                         
                         {/* כפתור יישום */}
                         {hasAction && (
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={() => executeAction(insight)}
+                              disabled={isExecuting || executingAction}
+                              className={`
+                                flex-1 py-2.5 px-4 rounded-lg font-medium text-sm
+                                transition-all flex items-center justify-center gap-2
+                                ${isExecuting
+                                  ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
+                                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
+                                }
+                              `}
+                            >
+                              {isExecuting ? (
+                                <>
+                                  <span className="animate-spin">⏳</span>
+                                  מעדכן...
+                                </>
+                              ) : (
+                                <>
+                                  <span>✨</span>
+                                  {insight.action.label}
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => dismissInsight(insight)}
+                              className="px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                              title="הסתר המלצה זו לשבוע"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* כפתור הסתרה להמלצות ללא פעולה */}
+                        {!hasAction && insight.priority !== 'positive' && (
                           <button
-                            onClick={() => executeAction(insight)}
-                            disabled={isExecuting || executingAction}
-                            className={`
-                              mt-3 w-full py-2.5 px-4 rounded-lg font-medium text-sm
-                              transition-all flex items-center justify-center gap-2
-                              ${isExecuting
-                                ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
-                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
-                              }
-                            `}
+                            onClick={() => dismissInsight(insight)}
+                            className="mt-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                           >
-                            {isExecuting ? (
-                              <>
-                                <span className="animate-spin">⏳</span>
-                                מעדכן משימות...
-                              </>
-                            ) : (
-                              <>
-                                <span>✨</span>
-                                {insight.action.label}
-                              </>
-                            )}
+                            הסתר המלצה זו
                           </button>
                         )}
                         
