@@ -195,7 +195,10 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
               
               <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {task.due_time && (
-                  <span>🕐 {task.due_time} - {endTime}</span>
+                  <span className="flex items-center gap-1">
+                    🕐 
+                    <span dir="ltr">{task.due_time.substring(0, 5)} - {endTime}</span>
+                  </span>
                 )}
                 <span>⏱️ {formatMinutes(duration)}</span>
                 {spent > 0 && (

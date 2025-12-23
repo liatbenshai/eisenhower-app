@@ -340,7 +340,7 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask, onU
                           
                           {/* פרטים */}
                           <div className="flex items-center justify-between mt-1 text-[10px] opacity-70">
-                            <span>{task.due_time || '---'}</span>
+                            <span dir="ltr">{task.due_time ? task.due_time.substring(0, 5) : '---'}</span>
                             <span>{formatMinutes(task.estimated_duration)}</span>
                           </div>
                           
