@@ -1,15 +1,20 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { updateSubtaskProgress } from '../../services/supabase';
 import { useTasks } from '../../hooks/useTasks';
-import { startIdleTracking, stopIdleTracking, formatIdleTime } from '../../utils/idleTimeTracker';
+import { 
+  findNextTask, 
+  checkOverlapWithNext, 
+  calculateNewTimeForNext,
+  shouldWarnAboutOverrun 
+} from '../../utils/autoReschedule';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
 
 /**
  * טיימר למשימה - פרומדורו
  */
-function TaskTimer({ task, onUpdate, onComplete }) {
-  const { updateTaskTime, tasks } = useTasks();
+function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
+  const { updateTaskTime, tasks, setActiveTask, editTask } = useTasks();
 
   // קבלת המשימה העדכנית מה-TaskContext במקום מה-prop - עם useMemo לעדכון אוטומטי
   // חשוב: כל ה-hooks חייבים להיקרא לפני ה-early return!
@@ -36,6 +41,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const [originalStartTime, setOriginalStartTime] = useState(null); // זמן התחלה מקורי שלא מתאפס
   const [targetMinutes, setTargetMinutes] = useState(30); // זמן יעד - נעדכן ב-useEffect
   const [hasReachedTarget, setHasReachedTarget] = useState(false);
+  const [overrunWarningShown, setOverrunWarningShown] = useState(false);
+  const [rescheduleOffer, setRescheduleOffer] = useState(null); // {nextTask, newTime}
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   // מניעת שמירות כפולות במקביל - עם timeout אוטומטי
@@ -55,6 +62,64 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const progress = targetMinutes > 0
     ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
     : 0;
+
+  // בדיקת חריגה והזזה אוטומטית
+  useEffect(() => {
+    if (!isRunning || !currentTask) return;
+    
+    const overrunInfo = shouldWarnAboutOverrun(currentTask, currentSessionMinutes);
+    
+    // התראה כש-80% מהזמן עבר
+    if (overrunInfo.shouldWarn && !overrunWarningShown) {
+      toast('⏰ נשארו עוד כמה דקות לסיום המשימה', {
+        icon: '⚠️',
+        duration: 4000,
+        style: { background: '#fef3c7', color: '#92400e' }
+      });
+      setOverrunWarningShown(true);
+    }
+    
+    // כשחורגים מהזמן - בדיקה אם יש משימה הבאה
+    if (overrunInfo.isOverrun && !rescheduleOffer) {
+      const nextTask = findNextTask(currentTask, tasks);
+      
+      if (nextTask) {
+        const hasOverlap = checkOverlapWithNext(currentTask, currentSessionMinutes, nextTask);
+        
+        if (hasOverlap) {
+          const newTime = calculateNewTimeForNext(currentTask, currentSessionMinutes + 10, nextTask);
+          
+          if (newTime) {
+            setRescheduleOffer({ nextTask, newTime });
+            toast(`📅 המשימה "${nextTask.title}" תתחיל ב-${newTime}?`, {
+              icon: '🔄',
+              duration: 10000
+            });
+          }
+        }
+      }
+    }
+  }, [currentSessionMinutes, isRunning, currentTask, tasks, overrunWarningShown, rescheduleOffer]);
+
+  // הזזת המשימה הבאה
+  const handleRescheduleNext = async () => {
+    if (!rescheduleOffer) return;
+    
+    try {
+      await editTask(rescheduleOffer.nextTask.id, {
+        dueTime: rescheduleOffer.newTime
+      });
+      toast.success(`✅ "${rescheduleOffer.nextTask.title}" הועברה ל-${rescheduleOffer.newTime}`);
+      setRescheduleOffer(null);
+    } catch (err) {
+      toast.error('שגיאה בהעברת המשימה');
+    }
+  };
+
+  // דחיית ההצעה להזזה
+  const dismissRescheduleOffer = () => {
+    setRescheduleOffer(null);
+  };
 
   // פונקציית saveProgress מוגדרת כאן כדי שתהיה זמינה ל-useEffect
   const saveProgressRef = useRef(null);
@@ -292,13 +357,9 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   }
 
   const startTimer = () => {
-    // עצירת מעקב זמן מת (אם היה פעיל)
-    const idleMinutes = stopIdleTracking();
-    if (idleMinutes > 0) {
-      toast(`☕ ${formatIdleTime(idleMinutes)} זמן מת נרשמו`, {
-        icon: '⏸️',
-        duration: 3000
-      });
+    // סימון משימה כפעילה (זה גם יעצור מעקב זמן מת)
+    if (currentTask?.id) {
+      setActiveTask(currentTask.id);
     }
     
     // אם הגענו ליעד, רק מסירים את הדגל - לא מאפסים זמן
@@ -334,8 +395,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   
   const pauseTimer = () => {
     setIsRunning(false);
-    // התחלת מעקב זמן מת
-    startIdleTracking();
+    // ביטול סימון משימה כפעילה (זה גם יתחיל מעקב זמן מת)
+    setActiveTask(null);
     toast.success('טיימר הושהה - מעקב זמן מת התחיל ⏸️');
   };
   
@@ -366,8 +427,8 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       console.log('🗑️ זמן התחלה נמחק מ-localStorage');
     }
     
-    // התחלת מעקב זמן מת
-    startIdleTracking();
+    // ביטול סימון משימה כפעילה (זה גם יתחיל מעקב זמן מת)
+    setActiveTask(null);
     
     setElapsedSeconds(0);
     setStartTime(null);
@@ -528,6 +589,37 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-300 dark:border-green-700 animate-pulse'
         : 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800'
     }`}>
+      {/* הצעת הזזה למשימה הבאה */}
+      {rescheduleOffer && (
+        <div className="mb-4 p-3 bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-lg">
+          <div className="flex items-start gap-2 mb-2">
+            <span className="text-xl">🔄</span>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                המשימה לוקחת יותר זמן מהצפוי
+              </p>
+              <p className="text-xs text-orange-700 dark:text-orange-300">
+                להזיז את "{rescheduleOffer.nextTask.title}" ל-{rescheduleOffer.newTime}?
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRescheduleNext}
+              className="flex-1 px-3 py-1.5 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition-colors"
+            >
+              ✅ הזז
+            </button>
+            <button
+              onClick={dismissRescheduleOffer}
+              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              לא עכשיו
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
           ⏱️ טיימר עבודה

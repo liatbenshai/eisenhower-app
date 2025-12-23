@@ -10,6 +10,7 @@ import {
   supabase
 } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { startIdleTracking, stopIdleTracking, isIdleTrackingActive } from '../utils/idleTimeTracker';
 
 // יצירת קונטקסט
 export const TaskContext = createContext(null);
@@ -23,6 +24,7 @@ export function TaskProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTaskId, setActiveTaskId] = useState(null); // משימה פעילה עם טיימר
   
   // סינון ומיון
   const [filter, setFilter] = useState('all'); // all, active, completed
@@ -34,6 +36,38 @@ export function TaskProvider({ children }) {
 
   // מניעת טעינות כפולות
   const loadingRef = useRef(false);
+
+  // מעקב אחרי משימה פעילה - התחלה/עצירה של זמן מת
+  const setActiveTask = useCallback((taskId) => {
+    if (taskId) {
+      // התחלת עבודה על משימה - עצירת מעקב זמן מת
+      const idleMinutes = stopIdleTracking();
+      if (idleMinutes > 0) {
+        console.log(`⏸️ נעצר מעקב זמן מת: ${idleMinutes} דקות`);
+      }
+    } else {
+      // סיום עבודה - התחלת מעקב זמן מת
+      if (!isIdleTrackingActive()) {
+        startIdleTracking();
+        console.log('⏸️ התחיל מעקב זמן מת');
+      }
+    }
+    setActiveTaskId(taskId);
+  }, []);
+
+  // בדיקה ראשונית - אם אין משימה פעילה, להתחיל מעקב זמן מת
+  useEffect(() => {
+    // בדיקה אם יש טיימר פעיל ב-localStorage
+    const hasActiveTimer = Object.keys(localStorage).some(key => 
+      key.startsWith('timer_') && key.endsWith('_startTime') && !key.includes('_original')
+    );
+    
+    if (!hasActiveTimer && !isIdleTrackingActive()) {
+      // אין טיימר פעיל - להתחיל מעקב זמן מת
+      startIdleTracking();
+      console.log('⏸️ אין טיימר פעיל - מתחיל מעקב זמן מת');
+    }
+  }, []);
   
   // טעינת משימות - פשוט וישיר
   const loadTasks = useCallback(async () => {
@@ -385,8 +419,10 @@ export function TaskProvider({ children }) {
     error,
     filter,
     sortBy,
+    activeTaskId,
     setFilter,
     setSortBy,
+    setActiveTask,
     loadTasks,
     addTask,
     addProjectTask,
