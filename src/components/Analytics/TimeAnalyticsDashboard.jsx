@@ -255,9 +255,15 @@ function TimeAnalyticsDashboard() {
       await loadTasks();
 
       // הודעה על הצלחה
-      const successCount = result.updated || result.moved || result.optimized || result.balanced || result.created || result.adjusted || 0;
+      const successCount = result.updated || result.moved || result.optimized || result.balanced || result.created || result.adjusted || result.scheduled || 0;
+      const createdCount = result.created || 0;
+      
       if (successCount > 0) {
-        toast.success(`${actionDef.name}: ${successCount} משימות עודכנו`);
+        let message = `${actionDef.name}: ${successCount} משימות עודכנו`;
+        if (createdCount > 0 && createdCount !== successCount) {
+          message += ` (${createdCount} חדשות נוצרו)`;
+        }
+        toast.success(message);
       } else {
         toast.success(`${actionDef.name} בוצע`);
       }
@@ -629,14 +635,17 @@ function TimeAnalyticsDashboard() {
                     <div className="space-y-2">
                       {Object.entries(actionResults).map(([id, result]) => {
                         const insight = insightsData.insights.find(i => i.id === id);
-                        const count = result.updated || result.moved || result.optimized || result.balanced || result.created || result.adjusted || 0;
+                        const scheduled = result.scheduled || 0;
+                        const created = result.created || 0;
+                        const count = result.updated || result.moved || result.optimized || result.balanced || result.adjusted || scheduled || 0;
                         return (
                           <div key={id} className="flex items-center justify-between text-sm">
                             <span className="text-green-600 dark:text-green-400">
                               {insight?.icon} {insight?.title}
                             </span>
                             <span className="text-green-700 dark:text-green-300 font-medium">
-                              {count} משימות עודכנו
+                              {count} משימות שובצו
+                              {created > 0 && ` (${created} אינטרוולים חדשים)`}
                             </span>
                           </div>
                         );

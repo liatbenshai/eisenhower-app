@@ -2,26 +2,11 @@
  * מנוע יישום המלצות - מבצע פעולות על משימות בהתאם לתובנות
  */
 
-import { scheduleLongTask, findFreeSlots } from './autoScheduler';
-
-/**
- * מציאת שעה פנויה ביום מסוים
- */
-function findFreeTimeSlot(dateISO, tasks, duration = 60) {
-  const slots = findFreeSlots(dateISO, tasks);
-  
-  // מציאת חלון מתאים
-  for (const slot of slots) {
-    if (slot.minutes >= duration) {
-      const hours = Math.floor(slot.start / 60);
-      const mins = slot.start % 60;
-      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-    }
-  }
-  
-  // אם אין חלון מתאים, שים ב-9:00
-  return '09:00';
-}
+import { 
+  smartSchedule, 
+  createTasksFromSchedule, 
+  getScheduleSummaryText
+} from './smartScheduler';
 
 /**
  * עדכון הערכות זמן במשימות עתידיות
@@ -63,211 +48,138 @@ export async function adjustFutureEstimations(tasks, editTask, adjustmentPercent
 }
 
 /**
- * הזזת משימות מיום מסוים לימים אחרים - עם שיבוץ אוטומטי
+ * שיבוץ חכם מחדש - עם 45 דקות אינטרוולים והפסקות
  */
-export async function rescheduleFromDay(tasks, editTask, fromDayIndex, targetDays = [0, 1, 2, 3, 4]) {
+export async function smartReschedule(tasks, editTask, addTask, options = {}) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // סינון משימות לשיבוץ
+  const tasksToSchedule = tasks.filter(t => 
+    !t.is_completed && 
+    t.due_date >= today &&
+    t.estimated_duration
+  );
+
+  // שיבוץ חכם
+  const { schedule, results, summary } = smartSchedule(tasksToSchedule, []);
+  
+  const actionResults = {
+    scheduled: 0,
+    created: 0,
+    failed: 0,
+    details: []
+  };
+
+  // עדכון משימות קיימות או יצירת חדשות
+  for (const result of results) {
+    if (!result.success) {
+      actionResults.failed++;
+      actionResults.details.push({
+        title: result.taskTitle,
+        error: result.reason
+      });
+      continue;
+    }
+
+    try {
+      // אם זה אינטרוול ראשון - עדכן את המשימה המקורית
+      if (result.intervalIndex === 1) {
+        await editTask(result.taskId, {
+          dueDate: result.scheduledDate,
+          dueTime: result.scheduledTime,
+          estimatedDuration: result.duration
+        });
+        actionResults.scheduled++;
+      } else {
+        // אינטרוולים נוספים - צור משימות חדשות
+        await addTask({
+          title: `${result.taskTitle} (${result.intervalIndex}/${result.totalIntervals})`,
+          description: `חלק ${result.intervalIndex} מתוך ${result.totalIntervals}`,
+          quadrant: result.quadrant,
+          dueDate: result.scheduledDate,
+          dueTime: result.scheduledTime,
+          estimatedDuration: result.duration,
+          taskType: result.taskType,
+          parentTaskId: result.taskId
+        });
+        actionResults.created++;
+      }
+
+      actionResults.details.push({
+        title: result.taskTitle,
+        interval: `${result.intervalIndex}/${result.totalIntervals}`,
+        date: result.scheduledDate,
+        time: result.scheduledTime
+      });
+    } catch (err) {
+      actionResults.failed++;
+      console.error(`Failed to schedule task ${result.taskId}:`, err);
+    }
+  }
+
+  actionResults.summary = getScheduleSummaryText(results);
+  return actionResults;
+}
+
+/**
+ * הזזת משימות מיום מסוים - עם שיבוץ חכם
+ */
+export async function rescheduleFromDay(tasks, editTask, addTask, fromDayIndex) {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0];
   
+  // סינון משימות מהיום הבעייתי
   const tasksToMove = tasks.filter(t => {
     if (t.is_completed || !t.due_date || t.due_date < todayISO) return false;
     const taskDate = new Date(t.due_date);
     return taskDate.getDay() === fromDayIndex;
   });
 
-  const validTargets = targetDays.filter(d => d !== fromDayIndex);
-  
+  // מחיקת השיבוץ הנוכחי ושיבוץ מחדש
   const results = {
     moved: 0,
+    created: 0,
     failed: 0,
     details: []
   };
 
-  // עדכון רשימת המשימות לאחר כל הזזה
-  let updatedTasks = [...tasks];
+  // שיבוץ חכם לכל המשימות
+  const allTasks = tasks.filter(t => !t.is_completed && t.due_date >= todayISO);
+  const { schedule, results: scheduleResults } = smartSchedule(allTasks, []);
 
-  let targetIndex = 0;
-  for (const task of tasksToMove) {
-    try {
-      const taskDate = new Date(task.due_date);
-      const currentDay = taskDate.getDay();
-      
-      const targetDay = validTargets[targetIndex % validTargets.length];
-      let daysToAdd = targetDay - currentDay;
-      if (daysToAdd <= 0) daysToAdd += 7;
-      
-      const newDate = new Date(taskDate);
-      newDate.setDate(newDate.getDate() + daysToAdd);
-      const newDateISO = newDate.toISOString().split('T')[0];
-      
-      // מציאת שעה פנויה ביום החדש
-      const newTime = findFreeTimeSlot(newDateISO, updatedTasks, task.estimated_duration || 60);
-      
-      await editTask(task.id, { dueDate: newDateISO, dueTime: newTime });
-      
-      // עדכון הרשימה המקומית
-      updatedTasks = updatedTasks.map(t => 
-        t.id === task.id ? { ...t, due_date: newDateISO, due_time: newTime } : t
-      );
-      
-      results.moved++;
-      results.details.push({
-        id: task.id,
-        title: task.title,
-        oldDate: task.due_date,
-        newDate: newDateISO,
-        newTime
-      });
-      
-      targetIndex++;
-    } catch (err) {
-      results.failed++;
-      console.error(`Failed to move task ${task.id}:`, err);
-    }
-  }
-
-  return results;
-}
-
-/**
- * שיבוץ מחדש לשעות פרודוקטיביות
- */
-export async function optimizeByProductiveHours(tasks, editTask, productiveHours) {
-  const today = new Date().toISOString().split('T')[0];
-  
-  const complexTasks = tasks.filter(t => {
-    if (t.is_completed || !t.due_date || t.due_date < today) return false;
-    if (!t.estimated_duration || t.estimated_duration < 45) return false;
+  for (const result of scheduleResults) {
+    if (!result.success) continue;
     
-    if (!t.due_time) return true;
-    
-    const hour = parseInt(t.due_time.split(':')[0]);
-    return !productiveHours.includes(hour);
-  });
+    const wasFromProblemDay = tasksToMove.some(t => t.id === result.taskId);
+    if (!wasFromProblemDay) continue;
 
-  const results = {
-    optimized: 0,
-    failed: 0,
-    details: []
-  };
-
-  let hourIndex = 0;
-  for (const task of complexTasks) {
     try {
-      const targetHour = productiveHours[hourIndex % productiveHours.length];
-      const newTime = `${targetHour.toString().padStart(2, '0')}:00`;
-      
-      await editTask(task.id, { dueTime: newTime });
-      results.optimized++;
-      results.details.push({
-        id: task.id,
-        title: task.title,
-        oldTime: task.due_time || 'לא נקבע',
-        newTime
-      });
-      
-      hourIndex++;
-    } catch (err) {
-      results.failed++;
-      console.error(`Failed to optimize task ${task.id}:`, err);
-    }
-  }
-
-  return results;
-}
-
-/**
- * איזון עומס בין ימים - עם שיבוץ אוטומטי
- */
-export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
-  const today = new Date();
-  const todayISO = today.toISOString().split('T')[0];
-  
-  const futureTasks = tasks.filter(t => 
-    !t.is_completed && 
-    t.due_date >= todayISO
-  );
-
-  const tasksByDay = {};
-  futureTasks.forEach(t => {
-    if (!tasksByDay[t.due_date]) {
-      tasksByDay[t.due_date] = [];
-    }
-    tasksByDay[t.due_date].push(t);
-  });
-
-  const dayLoads = {};
-  Object.entries(tasksByDay).forEach(([date, dayTasks]) => {
-    dayLoads[date] = dayTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
-  });
-
-  const overloadedDays = Object.entries(dayLoads)
-    .filter(([_, load]) => load > maxMinutesPerDay)
-    .sort((a, b) => b[1] - a[1]);
-
-  const results = {
-    balanced: 0,
-    failed: 0,
-    details: []
-  };
-
-  let updatedTasks = [...tasks];
-
-  for (const [overloadedDate, load] of overloadedDays) {
-    const excess = load - maxMinutesPerDay;
-    const dayTasks = tasksByDay[overloadedDate]
-      .filter(t => t.quadrant !== 1)
-      .sort((a, b) => (b.estimated_duration || 30) - (a.estimated_duration || 30));
-
-    let movedMinutes = 0;
-    for (const task of dayTasks) {
-      if (movedMinutes >= excess) break;
-
-      const taskDate = new Date(overloadedDate);
-      let targetDate = null;
-      let targetTime = null;
-
-      for (let i = 1; i <= 7; i++) {
-        const checkDate = new Date(taskDate);
-        checkDate.setDate(checkDate.getDate() + i);
-        const checkDateISO = checkDate.toISOString().split('T')[0];
-        const checkDay = checkDate.getDay();
-        
-        if (checkDay > 4) continue;
-        
-        const currentLoad = dayLoads[checkDateISO] || 0;
-        if (currentLoad + (task.estimated_duration || 30) <= maxMinutesPerDay) {
-          targetDate = checkDateISO;
-          targetTime = findFreeTimeSlot(checkDateISO, updatedTasks, task.estimated_duration || 30);
-          break;
-        }
+      if (result.intervalIndex === 1) {
+        await editTask(result.taskId, {
+          dueDate: result.scheduledDate,
+          dueTime: result.scheduledTime,
+          estimatedDuration: result.duration
+        });
+        results.moved++;
+      } else {
+        await addTask({
+          title: `${result.taskTitle} (${result.intervalIndex}/${result.totalIntervals})`,
+          quadrant: result.quadrant,
+          dueDate: result.scheduledDate,
+          dueTime: result.scheduledTime,
+          estimatedDuration: result.duration,
+          taskType: result.taskType
+        });
+        results.created++;
       }
 
-      if (targetDate) {
-        try {
-          await editTask(task.id, { dueDate: targetDate, dueTime: targetTime });
-          
-          updatedTasks = updatedTasks.map(t => 
-            t.id === task.id ? { ...t, due_date: targetDate, due_time: targetTime } : t
-          );
-          
-          dayLoads[overloadedDate] -= (task.estimated_duration || 30);
-          dayLoads[targetDate] = (dayLoads[targetDate] || 0) + (task.estimated_duration || 30);
-          
-          movedMinutes += (task.estimated_duration || 30);
-          results.balanced++;
-          results.details.push({
-            id: task.id,
-            title: task.title,
-            oldDate: overloadedDate,
-            newDate: targetDate,
-            newTime: targetTime
-          });
-        } catch (err) {
-          results.failed++;
-          console.error(`Failed to balance task ${task.id}:`, err);
-        }
-      }
+      results.details.push({
+        title: result.taskTitle,
+        date: result.scheduledDate,
+        time: result.scheduledTime
+      });
+    } catch (err) {
+      results.failed++;
     }
   }
 
@@ -275,7 +187,22 @@ export async function balanceWorkload(tasks, editTask, maxMinutesPerDay = 360) {
 }
 
 /**
- * הזזת דדליינים קדימה - עם שמירה על שעה
+ * איזון עומס - שיבוץ חכם מחדש
+ */
+export async function balanceWorkload(tasks, editTask, addTask, maxMinutesPerDay = 360) {
+  return smartReschedule(tasks, editTask, addTask, { maxMinutesPerDay });
+}
+
+/**
+ * שיבוץ לשעות פרודוקטיביות
+ */
+export async function optimizeByProductiveHours(tasks, editTask, addTask, productiveHours) {
+  // השיבוץ החכם כבר מתחשב בסוגי משימות ושעות
+  return smartReschedule(tasks, editTask, addTask, { productiveHours });
+}
+
+/**
+ * הקדמת דדליינים
  */
 export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
   const today = new Date();
@@ -302,10 +229,7 @@ export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
       
       const newDateISO = newDate.toISOString().split('T')[0];
       
-      // שמירה על השעה הקיימת או מציאת חדשה
-      const newTime = task.due_time || findFreeTimeSlot(newDateISO, tasks, task.estimated_duration || 60);
-      
-      await editTask(task.id, { dueDate: newDateISO, dueTime: newTime });
+      await editTask(task.id, { dueDate: newDateISO });
       results.adjusted++;
       results.details.push({
         id: task.id,
@@ -315,7 +239,6 @@ export async function addDeadlineBuffer(tasks, editTask, bufferDays = 1) {
       });
     } catch (err) {
       results.failed++;
-      console.error(`Failed to adjust deadline for task ${task.id}:`, err);
     }
   }
 
@@ -331,7 +254,7 @@ export async function createFillerTasks(addTask) {
   const fillerTasks = [
     { title: 'מיילים קצרים', duration: 15, type: 'admin' },
     { title: 'קריאת מאמר מקצועי', duration: 20, type: 'learning' },
-    { title: 'סידור שולחן/קבצים', duration: 10, type: 'admin' },
+    { title: 'סידור קבצים', duration: 10, type: 'admin' },
     { title: 'מעקב לקוחות', duration: 15, type: 'communication' },
     { title: 'תכנון מחר', duration: 10, type: 'planning' }
   ];
@@ -346,7 +269,7 @@ export async function createFillerTasks(addTask) {
     try {
       await addTask({
         title: `⚡ ${filler.title}`,
-        description: 'משימת מילוי לזמן מת - עשי אותה כשיש לך כמה דקות פנויות',
+        description: 'משימת מילוי לזמן מת',
         quadrant: 4,
         dueDate: today,
         estimatedDuration: filler.duration,
@@ -356,11 +279,21 @@ export async function createFillerTasks(addTask) {
       results.details.push(filler);
     } catch (err) {
       results.failed++;
-      console.error(`Failed to create filler task:`, err);
     }
   }
 
   return results;
+}
+
+/**
+ * שיבוץ מחדש אחרי ביטול (בתל"ם)
+ */
+export async function rescheduleAfterCancellation(tasks, editTask, addTask, cancelledTaskId) {
+  // סנן את המשימה שבוטלה
+  const remainingTasks = tasks.filter(t => t.id !== cancelledTaskId);
+  
+  // שבץ מחדש את כל השאר
+  return smartReschedule(remainingTasks, editTask, addTask);
 }
 
 /**
@@ -392,11 +325,11 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'deadlines-day': {
-    name: 'הזזת משימות',
-    description: 'הזז משימות מהיום הבעייתי ושבץ בזמנים פנויים',
+    name: 'שיבוץ חכם מיום בעייתי',
+    description: 'הזז משימות ושבץ באינטרוולים של 45 דקות',
     execute: async (context) => {
-      const { tasks, editTask, params } = context;
-      return rescheduleFromDay(tasks, editTask, params.dayIndex);
+      const { tasks, editTask, addTask, params } = context;
+      return rescheduleFromDay(tasks, editTask, addTask, params.dayIndex);
     }
   },
   'idle-high': {
@@ -408,37 +341,39 @@ export const ACTION_DEFINITIONS = {
     }
   },
   'hours-productive': {
-    name: 'שיבוץ לשעות זהב',
-    description: 'שבץ משימות מורכבות לשעות הפרודוקטיביות',
+    name: 'שיבוץ חכם',
+    description: 'שבץ משימות עם תמלולים בבוקר והגהות אחר כך',
     execute: async (context) => {
-      const { tasks, editTask, params } = context;
-      return optimizeByProductiveHours(tasks, editTask, params.productiveHours);
+      const { tasks, editTask, addTask, params } = context;
+      return optimizeByProductiveHours(tasks, editTask, addTask, params.productiveHours);
     }
   },
   'workload-unbalanced': {
-    name: 'איזון עומס',
-    description: 'פזר משימות באופן אחיד ושבץ בזמנים פנויים',
+    name: 'איזון חכם',
+    description: 'שבץ מחדש עם אינטרוולים של 45 דקות והפסקות',
     execute: async (context) => {
-      const { tasks, editTask } = context;
-      return balanceWorkload(tasks, editTask);
+      const { tasks, editTask, addTask } = context;
+      return balanceWorkload(tasks, editTask, addTask);
     }
   },
   'workload-high': {
-    name: 'הפחתת עומס',
-    description: 'הזז משימות מימים עמוסים ושבץ מחדש',
+    name: 'הפחתת עומס חכמה',
+    description: 'פזר משימות עם שיבוץ חכם',
     execute: async (context) => {
-      const { tasks, editTask } = context;
-      return balanceWorkload(tasks, editTask, 300);
+      const { tasks, editTask, addTask } = context;
+      return balanceWorkload(tasks, editTask, addTask, 300);
     }
   }
 };
 
 export default {
   adjustFutureEstimations,
+  smartReschedule,
   rescheduleFromDay,
-  optimizeByProductiveHours,
   balanceWorkload,
+  optimizeByProductiveHours,
   addDeadlineBuffer,
   createFillerTasks,
+  rescheduleAfterCancellation,
   ACTION_DEFINITIONS
 };
