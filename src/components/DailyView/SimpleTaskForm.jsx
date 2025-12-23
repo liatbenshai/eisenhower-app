@@ -22,7 +22,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
     estimatedDuration: '',
     dueDate: defaultDate || new Date().toISOString().split('T')[0],
     dueTime: '',
-    description: ''
+    description: '',
+    priority: 'normal' // normal, high, urgent, low
   });
 
   const [loading, setLoading] = useState(false);
@@ -39,7 +40,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
         estimatedDuration: task.estimated_duration || '',
         dueDate: task.due_date || defaultDate || new Date().toISOString().split('T')[0],
         dueTime: task.due_time || '',
-        description: task.description || ''
+        description: task.description || '',
+        priority: task.priority || 'normal'
       });
     }
   }, [task, defaultDate]);
@@ -144,6 +146,7 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
         estimatedDuration: parseInt(formData.estimatedDuration),
         dueDate: formData.dueDate || null,
         dueTime: formData.dueTime || null,
+        priority: formData.priority || 'normal',
         quadrant: 1
       };
 
@@ -296,6 +299,36 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
           value={formData.dueTime}
           onChange={handleChange}
         />
+      </div>
+
+      {/* עדיפות */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          עדיפות
+        </label>
+        <div className="flex gap-2">
+          {[
+            { id: 'low', name: 'נמוכה', icon: '⚪', color: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' },
+            { id: 'normal', name: 'רגילה', icon: '🔵', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+            { id: 'high', name: 'גבוהה', icon: '🟠', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
+            { id: 'urgent', name: 'דחוף!', icon: '🔴', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' }
+          ].map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, priority: p.id }))}
+              className={`
+                flex-1 py-2 rounded-lg border-2 font-medium transition-all text-sm
+                ${formData.priority === p.id
+                  ? `${p.color} border-current ring-2 ring-offset-1`
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800'
+                }
+              `}
+            >
+              {p.icon} {p.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* תיאור */}

@@ -121,6 +121,7 @@ export function TaskProvider({ children }) {
         estimated_duration: taskData.estimatedDuration ? parseInt(taskData.estimatedDuration) : null,
         task_type: taskData.taskType || 'other', // תמיד יש ערך
         task_parameter: taskData.taskParameter ? parseInt(taskData.taskParameter) : null,
+        priority: taskData.priority || 'normal', // עדיפות
         is_project: false,
         parent_task_id: null,
         is_completed: false
@@ -213,7 +214,8 @@ export function TaskProvider({ children }) {
         due_time: updates.dueTime || null,
         reminder_minutes: updates.reminderMinutes ? parseInt(updates.reminderMinutes) : null,
         task_type: updates.taskType || null,
-        task_parameter: updates.taskParameter ? parseInt(updates.taskParameter) : null
+        task_parameter: updates.taskParameter ? parseInt(updates.taskParameter) : null,
+        priority: updates.priority || null
       });
       
       setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
