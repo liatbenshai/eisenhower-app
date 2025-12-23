@@ -12,14 +12,18 @@ import {
   generateInsights,
   generateSummary
 } from '../../utils/insightsEngine';
+import { ACTION_DEFINITIONS } from '../../utils/actionExecutor';
+import toast from 'react-hot-toast';
 
 /**
  * דשבורד פרודוקטיביות מקיף
  */
 function TimeAnalyticsDashboard() {
-  const { tasks } = useTasks();
+  const { tasks, editTask, addTask, loadTasks } = useTasks();
   const [timeRange, setTimeRange] = useState('week');
-  const [activeTab, setActiveTab] = useState('overview'); // overview, tasks, deadlines, idle
+  const [activeTab, setActiveTab] = useState('overview');
+  const [executingAction, setExecutingAction] = useState(null);
+  const [actionResults, setActionResults] = useState({});
 
   // חישוב תאריכי הטווח
   const dateRange = useMemo(() => {
@@ -218,6 +222,52 @@ function TimeAnalyticsDashboard() {
   };
 
   const maxDayMinutes = Math.max(...statsByDay.map(d => d.totalMinutes + d.idleMinutes), 1);
+
+  // ביצוע פעולה מההמלצות
+  const executeAction = async (insight) => {
+    if (!insight.action || executingAction) return;
+
+    const actionDef = ACTION_DEFINITIONS[insight.action.id];
+    if (!actionDef) {
+      toast.error('פעולה לא נמצאה');
+      return;
+    }
+
+    setExecutingAction(insight.id);
+
+    try {
+      const context = {
+        tasks,
+        editTask,
+        addTask,
+        params: insight.action.params
+      };
+
+      const result = await actionDef.execute(context);
+      
+      // שמירת התוצאה
+      setActionResults(prev => ({
+        ...prev,
+        [insight.id]: result
+      }));
+
+      // רענון המשימות
+      await loadTasks();
+
+      // הודעה על הצלחה
+      const successCount = result.updated || result.moved || result.optimized || result.balanced || result.created || result.adjusted || 0;
+      if (successCount > 0) {
+        toast.success(`${actionDef.name}: ${successCount} משימות עודכנו`);
+      } else {
+        toast.success(`${actionDef.name} בוצע`);
+      }
+    } catch (err) {
+      console.error('Error executing action:', err);
+      toast.error('שגיאה בביצוע הפעולה');
+    } finally {
+      setExecutingAction(null);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl">
@@ -483,7 +533,12 @@ function TimeAnalyticsDashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {insightsData.insights.map((insight) => (
+                {insightsData.insights.map((insight) => {
+                  const hasAction = insight.action && ACTION_DEFINITIONS[insight.action.id];
+                  const isExecuting = executingAction === insight.id;
+                  const result = actionResults[insight.id];
+                  
+                  return (
                   <div 
                     key={insight.id}
                     className={`p-4 rounded-lg border ${
@@ -512,7 +567,56 @@ function TimeAnalyticsDashboard() {
                         }`}>
                           <strong>💬 המלצה:</strong> {insight.recommendation}
                         </div>
-                        {insight.impact && (
+                        
+                        {/* כפתור יישום */}
+                        {hasAction && !result && (
+                          <button
+                            onClick={() => executeAction(insight)}
+                            disabled={isExecuting || executingAction}
+                            className={`
+                              mt-3 w-full py-2 px-4 rounded-lg font-medium text-sm
+                              transition-all flex items-center justify-center gap-2
+                              ${isExecuting
+                                ? 'bg-gray-300 dark:bg-gray-600 cursor-wait'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg'
+                              }
+                            `}
+                          >
+                            {isExecuting ? (
+                              <>
+                                <span className="animate-spin">⏳</span>
+                                מבצע...
+                              </>
+                            ) : (
+                              <>
+                                <span>✨</span>
+                                {insight.action.label}
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        {/* תוצאת ביצוע */}
+                        {result && (
+                          <div className="mt-3 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg text-sm">
+                            <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium">
+                              <span>✅</span>
+                              הפעולה בוצעה בהצלחה!
+                            </div>
+                            {result.details && result.details.length > 0 && (
+                              <div className="mt-2 text-xs text-green-600 dark:text-green-400">
+                                {result.updated && `${result.updated} הערכות עודכנו`}
+                                {result.moved && `${result.moved} משימות הוזזו`}
+                                {result.optimized && `${result.optimized} משימות שובצו מחדש`}
+                                {result.balanced && `${result.balanced} משימות אוזנו`}
+                                {result.created && `${result.created} משימות מילוי נוצרו`}
+                                {result.adjusted && `${result.adjusted} דדליינים הוקדמו`}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {insight.impact && !result && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                             ✨ {insight.impact}
                           </p>
@@ -531,7 +635,8 @@ function TimeAnalyticsDashboard() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

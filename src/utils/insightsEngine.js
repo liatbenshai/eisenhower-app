@@ -252,29 +252,41 @@ export function generateInsights(data) {
   // המלצות הערכת זמן
   if (estimation.hasData) {
     if (estimation.tendency === 'underestimate') {
+      const adjustPercent = Math.round((estimation.avgRatio - 1) * 100);
       insights.push({
         id: 'estimation-low',
         category: 'estimation',
         priority: 'high',
         icon: '⏱️',
         title: 'הערכות זמן נמוכות מדי',
-        description: `בממוצע את לוקחת ${Math.round((estimation.avgRatio - 1) * 100)}% יותר זמן ממה שהערכת.`,
-        recommendation: `נסי להוסיף ${Math.round((estimation.avgRatio - 1) * 100)}% לכל הערכה. לדוגמה: אם חשבת שעה - תכנני שעה ורבע.`,
-        impact: 'שיפור דיוק ההערכות יעזור לך לתכנן טוב יותר ולהפחית לחץ'
+        description: `בממוצע את לוקחת ${adjustPercent}% יותר זמן ממה שהערכת.`,
+        recommendation: `נסי להוסיף ${adjustPercent}% לכל הערכה. לדוגמה: אם חשבת שעה - תכנני שעה ורבע.`,
+        impact: 'שיפור דיוק ההערכות יעזור לך לתכנן טוב יותר ולהפחית לחץ',
+        action: {
+          id: 'estimation-low',
+          label: `הוסף ${adjustPercent}% להערכות עתידיות`,
+          params: { adjustmentPercent: adjustPercent }
+        }
       });
     }
 
     if (estimation.problematicTypes.length > 0) {
       const worstType = estimation.problematicTypes[0];
+      const adjustPercent = Math.round((worstType.avgRatio - 1) * 100);
       insights.push({
         id: 'estimation-type',
         category: 'estimation',
         priority: 'medium',
         icon: '📊',
         title: `הערכה בעייתית: ${worstType.type}`,
-        description: `משימות מסוג זה לוקחות בממוצע ${Math.round((worstType.avgRatio - 1) * 100)}% יותר מההערכה.`,
+        description: `משימות מסוג זה לוקחות בממוצע ${adjustPercent}% יותר מההערכה.`,
         recommendation: `כשמדובר ב${worstType.type}, הכפילי את ההערכה הראשונית.`,
-        impact: 'התאמה ספציפית לסוג משימה תשפר את התכנון הכללי'
+        impact: 'התאמה ספציפית לסוג משימה תשפר את התכנון הכללי',
+        action: {
+          id: 'estimation-type',
+          label: `הוסף ${adjustPercent}% להערכות ${worstType.type}`,
+          params: { adjustmentPercent: adjustPercent, taskType: worstType.type }
+        }
       });
     }
 
@@ -303,13 +315,19 @@ export function generateInsights(data) {
         title: 'קושי בעמידה בדדליינים',
         description: `רק ${deadlines.onTimeRate}% מהמשימות הסתיימו בזמן. איחור ממוצע: ${deadlines.avgDaysLate} ימים.`,
         recommendation: 'נסי להתחיל משימות יום-יומיים לפני הדדליין, או לקבוע דדליינים מוקדמים יותר.',
-        impact: 'עמידה בדדליינים מפחיתה לחץ ומשפרת אמון עצמי'
+        impact: 'עמידה בדדליינים מפחיתה לחץ ומשפרת אמון עצמי',
+        action: {
+          id: 'deadlines-low',
+          label: 'הקדם את כל הדדליינים ביום',
+          params: { bufferDays: 1 }
+        }
       });
     }
 
     if (deadlines.problematicDays.length > 0) {
       const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי'];
-      const problemDay = dayNames[deadlines.problematicDays[0].day];
+      const problemDayIndex = deadlines.problematicDays[0].day;
+      const problemDay = dayNames[problemDayIndex];
       insights.push({
         id: 'deadlines-day',
         category: 'deadlines',
@@ -318,7 +336,12 @@ export function generateInsights(data) {
         title: `יום ${problemDay} בעייתי`,
         description: `יש לך יותר איחורים בדדליינים שנקבעו ליום ${problemDay}.`,
         recommendation: `נסי לא לקבוע דדליינים קריטיים ליום ${problemDay}, או להתחיל במשימות האלה מוקדם יותר.`,
-        impact: 'התאמה ללוח הזמנים האישי שלך'
+        impact: 'התאמה ללוח הזמנים האישי שלך',
+        action: {
+          id: 'deadlines-day',
+          label: `הזז משימות מיום ${problemDay}`,
+          params: { dayIndex: problemDayIndex }
+        }
       });
     }
 
@@ -347,7 +370,12 @@ export function generateInsights(data) {
         title: 'זמן מת גבוה',
         description: `בממוצע ${idle.avgIdlePerDay} דקות זמן מת ביום (${idle.idleToWorkRatio}% מזמן העבודה).`,
         recommendation: 'הכיני רשימת "משימות מילוי" קצרות (5-15 דקות) שאפשר לעשות בין משימות: מיילים, קריאה, סידור.',
-        impact: 'ניצול זמן מת יכול להוסיף שעות פרודוקטיביות בשבוע'
+        impact: 'ניצול זמן מת יכול להוסיף שעות פרודוקטיביות בשבוע',
+        action: {
+          id: 'idle-high',
+          label: 'צור משימות מילוי',
+          params: {}
+        }
       });
     }
 
@@ -383,6 +411,7 @@ export function generateInsights(data) {
   if (workHours.hasData) {
     if (workHours.mostProductiveHours.length > 0) {
       const bestHours = workHours.mostProductiveHours.map(h => `${h.hour}:00`).join(', ');
+      const productiveHoursList = workHours.mostProductiveHours.map(h => h.hour);
       insights.push({
         id: 'hours-productive',
         category: 'productivity',
@@ -391,7 +420,12 @@ export function generateInsights(data) {
         title: 'שעות הזהב שלך',
         description: `את הכי פרודוקטיבית בשעות: ${bestHours}`,
         recommendation: 'תכנני משימות מורכבות וחשובות לשעות האלה. שמרי אותן למשימות שדורשות ריכוז.',
-        impact: 'עבודה בשעות אופטימליות יכולה להגדיל יעילות ב-20-30%'
+        impact: 'עבודה בשעות אופטימליות יכולה להגדיל יעילות ב-20-30%',
+        action: {
+          id: 'hours-productive',
+          label: 'שבץ משימות מורכבות לשעות אלה',
+          params: { productiveHours: productiveHoursList }
+        }
       });
     }
 
@@ -421,7 +455,12 @@ export function generateInsights(data) {
         title: 'עומס לא מאוזן',
         description: `יש הפרש של ${Math.round(workload.variance / 60)} שעות בין הימים העמוסים לריקים.`,
         recommendation: 'נסי לפזר משימות באופן אחיד יותר על פני השבוע. השתמשי בשיבוץ אוטומטי.',
-        impact: 'עומס מאוזן מפחית שחיקה ומשפר איכות עבודה'
+        impact: 'עומס מאוזן מפחית שחיקה ומשפר איכות עבודה',
+        action: {
+          id: 'workload-unbalanced',
+          label: 'אזן עומס אוטומטית',
+          params: {}
+        }
       });
     }
 
@@ -434,7 +473,12 @@ export function generateInsights(data) {
         title: 'ימים עמוסים מדי',
         description: `יש לך ${workload.overloadedDays} ימים עם יותר מ-6 שעות עבודה.`,
         recommendation: 'נסי להגביל את עצמך ל-5-6 שעות עבודה אפקטיבית ביום. יותר מזה פוגע ביעילות.',
-        impact: 'מניעת שחיקה ושמירה על פרודוקטיביות ארוכת טווח'
+        impact: 'מניעת שחיקה ושמירה על פרודוקטיביות ארוכת טווח',
+        action: {
+          id: 'workload-high',
+          label: 'הפחת עומס מימים עמוסים',
+          params: {}
+        }
       });
     }
   }
