@@ -3,9 +3,19 @@ import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { getTaskTypeLearning } from '../../services/supabase';
 import { findOverlappingTasks, findNextFreeSlot, timeToMinutes, minutesToTime, formatMinutes } from '../../utils/timeOverlap';
+import { findFreeSlots } from '../../utils/autoScheduler';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
+
+// שעות מועדפות לפי סוג משימה
+const TYPE_PREFERRED_HOURS = {
+  transcription: { start: 8, end: 12 },   // תמלול: בוקר
+  proofreading: { start: 10, end: 16 },   // הגהה: אחרי תמלולים
+  typing: { start: 8, end: 16 },
+  recording: { start: 9, end: 14 },
+  other: { start: 8, end: 16 }
+};
 
 /**
  * טופס משימה פשוט - מותאם לניהול זמן
@@ -29,7 +39,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
   const [loading, setLoading] = useState(false);
   const [learningData, setLearningData] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState(null);
-  const [overlapWarning, setOverlapWarning] = useState(null); // {overlappingTasks, suggestedTime}
+  const [overlapWarning, setOverlapWarning] = useState(null);
+  const [manualTimeSet, setManualTimeSet] = useState(false); // האם המשתמשת שינתה ידנית
 
   // מילוי נתונים בעריכה
   useEffect(() => {
@@ -43,6 +54,10 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
         description: task.description || '',
         priority: task.priority || 'normal'
       });
+      // בעריכה - לא לשנות את השעה הקיימת
+      if (task.due_time) {
+        setManualTimeSet(true);
+      }
     }
   }, [task, defaultDate]);
 
@@ -77,6 +92,57 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
 
     setSuggestedTime(suggested);
   }, [formData.taskType, learningData, taskTypes]);
+
+  // שיבוץ אוטומטי של שעה כשנקבע משך הזמן או סוג משימה
+  useEffect(() => {
+    // אל תדרוס אם המשתמשת שינתה ידנית או זו עריכה
+    if (isEditing || manualTimeSet) return;
+    if (!formData.dueDate || !formData.estimatedDuration) return;
+
+    const duration = parseInt(formData.estimatedDuration) || 45;
+    const preferredHours = TYPE_PREFERRED_HOURS[formData.taskType] || TYPE_PREFERRED_HOURS.other;
+    
+    // מצא חלונות פנויים ביום הזה
+    const freeSlots = findFreeSlots(formData.dueDate, existingTasks);
+    
+    // חפש חלון בשעות המועדפות
+    let bestSlot = null;
+    const prefStartMin = preferredHours.start * 60;
+    const prefEndMin = preferredHours.end * 60;
+    
+    for (const slot of freeSlots) {
+      // האם החלון בטווח השעות המועדפות?
+      if (slot.start >= prefStartMin && slot.start < prefEndMin) {
+        if (slot.minutes >= duration + 15) { // +15 להפסקה
+          bestSlot = slot;
+          break;
+        }
+      }
+    }
+    
+    // אם לא מצאנו בשעות מועדפות - חפש בכל שעה
+    if (!bestSlot) {
+      for (const slot of freeSlots) {
+        if (slot.minutes >= duration + 15) {
+          bestSlot = slot;
+          break;
+        }
+      }
+    }
+    
+    if (bestSlot) {
+      const hours = Math.floor(bestSlot.start / 60);
+      const mins = bestSlot.start % 60;
+      const timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+      setFormData(prev => ({ ...prev, dueTime: timeStr }));
+    }
+  }, [formData.dueDate, formData.taskType, formData.estimatedDuration, existingTasks, isEditing, manualTimeSet]);
+
+  // כשהמשתמשת משנה את השעה ידנית - סמן שזה ידני
+  const handleTimeChange = (e) => {
+    setManualTimeSet(true);
+    handleChange(e);
+  };
 
   // טיפול בשינוי שדה
   const handleChange = (e) => {
@@ -292,13 +358,31 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, existingTasks =
           value={formData.dueDate}
           onChange={handleChange}
         />
-        <Input
-          label="שעה (אופציונלי)"
-          type="time"
-          name="dueTime"
-          value={formData.dueTime}
-          onChange={handleChange}
-        />
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              שעה
+            </label>
+            {!manualTimeSet && formData.dueTime && (
+              <span className="text-xs text-green-600 dark:text-green-400">
+                ✓ שובץ אוטומטית
+              </span>
+            )}
+          </div>
+          <Input
+            type="time"
+            name="dueTime"
+            value={formData.dueTime}
+            onChange={handleTimeChange}
+          />
+          {!manualTimeSet && formData.dueTime && formData.taskType && (
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.taskType === 'transcription' ? '🎤 תמלול בשעות הבוקר' :
+               formData.taskType === 'proofreading' ? '📝 הגהה אחרי התמלולים' :
+               '📍 חלון פנוי ראשון'}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* עדיפות */}
