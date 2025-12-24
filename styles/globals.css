@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === סגנונות בסיסיים === */
+@layer base {
+  html {
+    direction: rtl;
+    font-family: Arial, Tahoma, sans-serif;
+  }
+
+  body {
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    @apply transition-colors duration-300;
+    /* שיפורים לנייד */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  
+  /* אפשר בחירת טקסט בשדות קלט */
+  input, textarea, [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+  }
+
+  /* כותרות */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+  }
+
+  /* שדות קלט */
+  input, textarea, select {
+    @apply text-right;
+  }
+
+  /* קישורים */
+  a {
+    @apply transition-colors duration-200;
+  }
+
+  /* פוקוס נגיש */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900;
+  }
+}
+
+/* === רכיבים מותאמים === */
+@layer components {
+  /* כפתור ראשי */
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white;
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply transition-all duration-200;
+    @apply focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* כפתור משני */
+  .btn-secondary {
+    @apply bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600;
+    @apply text-gray-900 dark:text-gray-100;
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply transition-all duration-200;
+  }
+
+  /* כפתור סכנה */
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white;
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply transition-all duration-200;
+  }
+
+  /* שדה קלט */
+  .input-field {
+    @apply w-full px-4 py-2 rounded-lg border;
+    @apply border-gray-300 dark:border-gray-600;
+    @apply bg-white dark:bg-gray-800;
+    @apply text-gray-900 dark:text-gray-100;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply transition-all duration-200;
+    @apply placeholder:text-gray-400 dark:placeholder:text-gray-500;
+  }
+
+  /* כרטיס */
+  .card {
+    @apply bg-white dark:bg-gray-800;
+    @apply rounded-xl shadow-sm;
+    @apply border border-gray-200 dark:border-gray-700;
+    @apply p-4;
+  }
+
+  /* סקלטון לטעינה */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 dark:bg-gray-700 rounded;
+  }
+}
+
+/* === עזרים === */
+@layer utilities {
+  /* הסתרה ויזואלית (נגישות) */
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  /* גלילה חלקה */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.400') transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  }
+
+  /* אפקט זכוכית */
+  .glass {
+    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg;
+  }
+}
+
+/* === אנימציות גרירה === */
+@layer utilities {
+  .dragging {
+    @apply opacity-50 scale-105;
+  }
+
+  .drop-target {
+    @apply ring-2 ring-blue-500;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    border: 2px dashed rgb(59, 130, 246);
+  }
+}
+
+/* === צבעי רבעים === */
+.quadrant-1 {
+  @apply bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800;
+}
+
+.quadrant-2 {
+  @apply bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800;
+}
+
+.quadrant-3 {
+  @apply bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800;
+}
+
+.quadrant-4 {
+  @apply bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700;
+}
+
