@@ -85,11 +85,16 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
   const [overrunWarningShown, setOverrunWarningShown] = useState(false);
   const [rescheduleOffer, setRescheduleOffer] = useState(null);
   
+  // מצב הפרעה
+  const [interruption, setInterruption] = useState(null); // { type: 'call'|'distraction', startTime, seconds }
+  
   const intervalRef = useRef(null);
+  const interruptionIntervalRef = useRef(null);
   const lastSaveRef = useRef(0); // timestamp של השמירה האחרונה
   const isSavingRef = useRef(false);
   const hasRestoredRef = useRef(false); // האם כבר שוחזר הטיימר?
   const restoredTaskIdRef = useRef(null); // איזו משימה שוחזרה
+  const savedMinutesThisSessionRef = useRef(0); // כמה דקות כבר נשמרו מהסשן הנוכחי
 
   // חישובים בסיסיים
   const timeSpent = currentTask?.time_spent ? parseInt(currentTask.time_spent) : 0;
@@ -319,6 +324,81 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     }
   }, []);
 
+  // טיימר להפרעה
+  useEffect(() => {
+    if (interruption) {
+      interruptionIntervalRef.current = setInterval(() => {
+        setInterruption(prev => {
+          if (!prev) return null;
+          const now = new Date();
+          const elapsed = Math.floor((now - new Date(prev.startTime)) / 1000);
+          return { ...prev, seconds: elapsed };
+        });
+      }, 1000);
+    } else {
+      if (interruptionIntervalRef.current) {
+        clearInterval(interruptionIntervalRef.current);
+        interruptionIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (interruptionIntervalRef.current) {
+        clearInterval(interruptionIntervalRef.current);
+      }
+    };
+  }, [interruption?.startTime]);
+
+  // התחלת הפרעה
+  const startInterruption = useCallback((type) => {
+    // עוצר את הטיימר הראשי
+    setIsRunning(false);
+    
+    const now = new Date();
+    setInterruption({
+      type,
+      startTime: now.toISOString(),
+      seconds: 0,
+      pausedTaskTime: sessionSeconds // שומר את הזמן לפני ההפרעה
+    });
+    
+    toast(`⏸️ ${type === 'call' ? 'שיחת לקוח' : 'הפרעה'} - הטיימר הושהה`, {
+      icon: type === 'call' ? '📞' : '🔔'
+    });
+  }, [sessionSeconds]);
+
+  // סיום הפרעה וחזרה לעבודה
+  const endInterruption = useCallback(() => {
+    if (!interruption) return;
+    
+    const interruptionMinutes = Math.floor(interruption.seconds / 60);
+    const typeLabel = interruption.type === 'call' ? 'שיחת לקוח' : 'הפרעה';
+    
+    // TODO: אפשר לשמור את ההפרעות ב-DB בעתיד
+    console.log('📝 הפרעה הסתיימה:', {
+      type: interruption.type,
+      duration: interruptionMinutes,
+      startTime: interruption.startTime
+    });
+    
+    // חזרה לעבודה
+    const now = new Date();
+    setSessionStartTime(now);
+    // ממשיכים מאיפה שעצרנו
+    setSessionSeconds(interruption.pausedTaskTime || sessionSeconds);
+    setIsRunning(true);
+    setInterruption(null);
+    
+    toast.success(`✅ חזרת לעבודה! ${typeLabel} לקחה ${interruptionMinutes} דקות`, {
+      duration: 3000
+    });
+  }, [interruption, sessionSeconds]);
+
+  // ביטול הפרעה (לא חוזר לעבודה)
+  const cancelInterruption = useCallback(() => {
+    setInterruption(null);
+    toast('❌ הפרעה בוטלה', { duration: 2000 });
+  }, []);
+
   // שמירת התקדמות - פנימית (לשימוש auto-save)
   const saveProgressInternal = useCallback(async (resetAfterSave = false) => {
     if (isSavingRef.current) {
@@ -337,12 +417,14 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
         actualSessionSeconds = Math.floor((now - sessionStartTime) / 1000);
       }
       
-      const minutesToAdd = Math.floor(actualSessionSeconds / 60);
+      const totalSessionMinutes = Math.floor(actualSessionSeconds / 60);
+      // רק הדקות שעדיין לא נשמרו
+      const minutesToAdd = totalSessionMinutes - savedMinutesThisSessionRef.current;
       
-      if (minutesToAdd === 0) {
-        console.log('⏱️ פחות מדקה - לא שומר');
+      if (minutesToAdd <= 0) {
+        console.log('⏱️ אין דקות חדשות לשמור');
         isSavingRef.current = false;
-        return { success: false, reason: 'less_than_minute' };
+        return { success: false, reason: 'no_new_minutes' };
       }
       
       if (!currentTask?.id) {
@@ -356,6 +438,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       const newTimeSpent = currentTimeSpent + minutesToAdd;
       
       console.log('💾 שומר התקדמות:', {
+        totalSessionMinutes,
+        alreadySaved: savedMinutesThisSessionRef.current,
         minutesToAdd,
         currentTimeSpent,
         newTimeSpent,
@@ -371,22 +455,15 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       }
       
       if (resetAfterSave) {
-        // איפוס מלא
+        // איפוס מלא - סוף עבודה
         setSessionSeconds(0);
         setSessionStartTime(null);
         setIsRunning(false);
+        savedMinutesThisSessionRef.current = 0;
         clearTimerState(currentTask.id);
       } else {
-        // המשך עבודה - מתחילים סשן חדש מעכשיו
-        // חשוב: לא מאפסים isRunning! הטיימר ממשיך לרוץ
-        const now = new Date();
-        setSessionStartTime(now);
-        setSessionSeconds(0);
-        saveTimerState(currentTask.id, {
-          isRunning: true,
-          sessionStartTime: now.toISOString(),
-          sessionSeconds: 0
-        });
+        // המשך עבודה - לא מאפסים כלום! רק מעדכנים כמה שמרנו בסה"כ
+        savedMinutesThisSessionRef.current = totalSessionMinutes;
         
         toast.success(`💾 נשמרו ${minutesToAdd} דקות. סה"כ: ${newTimeSpent}`, {
           duration: 2000
@@ -424,13 +501,14 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       // לא מאפסים sessionSeconds אם כבר יש זמן צבור (מושהה)
       if (sessionSeconds === 0) {
         setSessionSeconds(0);
+        savedMinutesThisSessionRef.current = 0; // סשן חדש - אפס את השמור
       }
       setIsRunning(true);
       
       saveTimerState(currentTask?.id, {
         isRunning: true,
         sessionStartTime: now.toISOString(),
-        sessionSeconds: 0
+        sessionSeconds: sessionSeconds
       });
       
       toast.success('▶ טיימר הופעל');
@@ -659,6 +737,39 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
         </div>
       </div>
 
+      {/* פאנל הפרעה פעילה */}
+      {interruption && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/30 dark:to-red-900/30 rounded-xl border-2 border-orange-300 dark:border-orange-700">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl animate-pulse">
+                {interruption.type === 'call' ? '📞' : '🔔'}
+              </span>
+              <span className="font-bold text-orange-800 dark:text-orange-200">
+                {interruption.type === 'call' ? 'שיחת לקוח' : 'הפרעה'}
+              </span>
+            </div>
+            <div className="text-2xl font-mono font-bold text-orange-600 dark:text-orange-400">
+              {formatTime(interruption.seconds)}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={endInterruption}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+            >
+              ✅ חזרה לעבודה
+            </Button>
+            <Button
+              onClick={cancelInterruption}
+              className="bg-gray-400 hover:bg-gray-500 text-white"
+            >
+              ❌
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* סטטיסטיקות */}
       <div className="grid grid-cols-3 gap-2 mb-4 text-center text-xs">
         <div className="bg-white dark:bg-gray-800 rounded p-2">
@@ -731,6 +842,24 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
               </>
             )}
           </div>
+          
+          {/* כפתורי הפרעה - רק כשטיימר רץ */}
+          {isRunning && !interruption && (
+            <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => startInterruption('call')}
+                className="flex-1 py-2 px-3 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg text-sm font-medium hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors flex items-center justify-center gap-1"
+              >
+                📞 שיחת לקוח
+              </button>
+              <button
+                onClick={() => startInterruption('distraction')}
+                className="flex-1 py-2 px-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center justify-center gap-1"
+              >
+                🔔 הפרעה
+              </button>
+            </div>
+          )}
           
           {sessionSeconds > 0 && !isRunning && (
             <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
