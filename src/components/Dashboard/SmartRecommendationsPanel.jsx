@@ -1,22 +1,128 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TASK_TYPES } from '../../config/taskTypes';
 import { suggestWeeklyBalance, suggestDailyReschedule } from '../../utils/urgentRescheduler';
-import { getSplitRecommendation } from '../../utils/smartTaskSplitter';
+import { getSplitRecommendation, splitTask } from '../../utils/smartTaskSplitter';
+import toast from 'react-hot-toast';
 
 /**
  * פאנל המלצות חכמות
- * מנתח את דפוסי העבודה ומציע שיפורים
+ * מנתח את דפוסי העבודה ומציע שיפורים - עם כפתורי פעולה!
  */
-function SmartRecommendationsPanel({ tasks }) {
+function SmartRecommendationsPanel({ tasks, onUpdateTask, onAddTask, onRefresh }) {
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const [dismissedRecs, setDismissedRecs] = useState(() => {
+    // שמירת המלצות שנדחו ב-localStorage
+    const saved = localStorage.getItem('dismissed_recommendations');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [processingRec, setProcessingRec] = useState(null);
 
-  // יצירת המלצות
+  // דחיית המלצה
+  const dismissRecommendation = useCallback((recId) => {
+    const newDismissed = [...dismissedRecs, { id: recId, dismissedAt: new Date().toISOString() }];
+    setDismissedRecs(newDismissed);
+    localStorage.setItem('dismissed_recommendations', JSON.stringify(newDismissed));
+    toast('ההמלצה הוסתרה', { icon: '👋' });
+  }, [dismissedRecs]);
+
+  // ביצוע פעולה על המלצה
+  const executeRecommendation = useCallback(async (rec) => {
+    setProcessingRec(rec.id);
+    
+    try {
+      switch (rec.action) {
+        case 'split': {
+          // פיצול משימה
+          const task = tasks.find(t => t.id === rec.taskId);
+          if (task && onAddTask) {
+            const splitResult = splitTask(task);
+            if (splitResult.parts && splitResult.parts.length > 0) {
+              // יצירת משימות-בנות
+              for (const part of splitResult.parts) {
+                await onAddTask({
+                  title: part.title,
+                  estimated_duration: part.estimatedDuration,
+                  quadrant: task.quadrant,
+                  due_date: part.suggestedDate || task.due_date,
+                  parent_task_id: task.id,
+                  task_type: task.task_type
+                });
+              }
+              // עדכון המשימה המקורית כפרויקט
+              if (onUpdateTask) {
+                await onUpdateTask(task.id, { is_project: true });
+              }
+              toast.success(`המשימה פוצלה ל-${splitResult.parts.length} חלקים!`);
+              dismissRecommendation(rec.id);
+              if (onRefresh) onRefresh();
+            }
+          }
+          break;
+        }
+        
+        case 'reschedule': {
+          // שיבוץ מחדש - העברה למחר
+          if (rec.taskId && onUpdateTask) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            await onUpdateTask(rec.taskId, { 
+              due_date: tomorrow.toISOString().split('T')[0] 
+            });
+            toast.success('המשימה הועברה למחר');
+            dismissRecommendation(rec.id);
+            if (onRefresh) onRefresh();
+          }
+          break;
+        }
+
+        case 'balance': {
+          // איזון עומס - הצעה לפעולה
+          toast('פתחי את תצוגת השבוע כדי לגרור משימות בין ימים', { 
+            icon: '📅',
+            duration: 4000 
+          });
+          break;
+        }
+
+        case 'adjust':
+        case 'adjust-type': {
+          // התאמת הערכות - הצעה לפעולה
+          toast('המערכת תתחשב בזה בהערכות העתידיות', { 
+            icon: '🎯',
+            duration: 3000 
+          });
+          dismissRecommendation(rec.id);
+          break;
+        }
+
+        default:
+          toast('המלצה התקבלה', { icon: '✅' });
+          dismissRecommendation(rec.id);
+      }
+    } catch (error) {
+      console.error('שגיאה בביצוע המלצה:', error);
+      toast.error('שגיאה בביצוע הפעולה');
+    } finally {
+      setProcessingRec(null);
+    }
+  }, [tasks, onAddTask, onUpdateTask, onRefresh, dismissRecommendation]);
+
+  // יצירת המלצות (עם סינון נדחות)
   const recommendations = useMemo(() => {
     const allRecommendations = [];
     const today = new Date().toISOString().split('T')[0];
     const activeTasks = tasks.filter(t => !t.is_completed);
     const completedTasks = tasks.filter(t => t.is_completed);
+    
+    // סינון המלצות שנדחו (רק ב-24 שעות האחרונות)
+    const recentDismissed = dismissedRecs
+      .filter(d => {
+        const dismissedTime = new Date(d.dismissedAt);
+        const hoursSince = (Date.now() - dismissedTime) / (1000 * 60 * 60);
+        return hoursSince < 24;
+      })
+      .map(d => d.id);
 
     // --- 1. המלצות על איזון עומס ---
     const weekBalance = suggestWeeklyBalance(tasks);
@@ -203,12 +309,14 @@ function SmartRecommendationsPanel({ tasks }) {
       });
     }
 
-    // מיון לפי עדיפות
+    // מיון לפי עדיפות וסינון נדחות
     const priorityOrder = { high: 0, medium: 1, low: 2, info: 3 };
-    return allRecommendations.sort((a, b) => 
-      (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3)
-    );
-  }, [tasks]);
+    return allRecommendations
+      .filter(rec => !recentDismissed.includes(rec.id))
+      .sort((a, b) => 
+        (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3)
+      );
+  }, [tasks, dismissedRecs]);
 
   // קיבוץ לפי קטגוריה
   const byCategory = useMemo(() => {
@@ -266,7 +374,7 @@ function SmartRecommendationsPanel({ tasks }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* המלצות חשובות ראשונות */}
+          {/* המלצות חשובות ראשונות - עם כפתורי פעולה */}
           {recommendations.filter(r => r.priority === 'high').map(rec => (
             <motion.div
               key={rec.id}
@@ -292,6 +400,30 @@ function SmartRecommendationsPanel({ tasks }) {
                       ))}
                     </ul>
                   )}
+                  
+                  {/* כפתורי פעולה */}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => executeRecommendation(rec)}
+                      disabled={processingRec === rec.id}
+                      className={`
+                        flex-1 px-3 py-2 rounded-lg text-sm font-medium
+                        transition-colors
+                        ${processingRec === rec.id 
+                          ? 'bg-gray-200 text-gray-500 cursor-wait'
+                          : 'bg-green-500 hover:bg-green-600 text-white'
+                        }
+                      `}
+                    >
+                      {processingRec === rec.id ? '⏳ מבצע...' : '✅ קבל'}
+                    </button>
+                    <button
+                      onClick={() => dismissRecommendation(rec.id)}
+                      className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors"
+                    >
+                      ❌ דחה
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -340,13 +472,32 @@ function SmartRecommendationsPanel({ tasks }) {
                           >
                             <div className="flex items-start gap-2">
                               <span>{rec.icon}</span>
-                              <div>
+                              <div className="flex-1">
                                 <div className={`text-sm font-medium ${priorityTextColors[rec.priority]}`}>
                                   {rec.title}
                                 </div>
                                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                                   {rec.message}
                                 </p>
+                                
+                                {/* כפתורי פעולה קומפקטיים */}
+                                {rec.action !== 'info' && (
+                                  <div className="flex gap-2 mt-2">
+                                    <button
+                                      onClick={() => executeRecommendation(rec)}
+                                      disabled={processingRec === rec.id}
+                                      className="px-2 py-1 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/40 text-green-700 dark:text-green-300 transition-colors"
+                                    >
+                                      {processingRec === rec.id ? '⏳' : '✅ בצע'}
+                                    </button>
+                                    <button
+                                      onClick={() => dismissRecommendation(rec.id)}
+                                      className="px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 transition-colors"
+                                    >
+                                      הסתר
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -14,9 +14,24 @@ import SmartRecommendationsPanel from './SmartRecommendationsPanel';
  * מציג סיכום יומי, שבועי, תובנות ומשימות קרובות
  */
 function ComprehensiveDashboard() {
-  const { tasks, loading } = useTasks();
+  const { tasks, loading, addTask, editTask, loadTasks } = useTasks();
   const [activeTab, setActiveTab] = useState('today'); // today, week, insights, interruptions
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // פונקציות לטיפול במשימות מההמלצות
+  const handleUpdateTask = async (taskId, updates) => {
+    await editTask(taskId, updates);
+    await loadTasks();
+  };
+
+  const handleAddTask = async (taskData) => {
+    await addTask(taskData);
+    await loadTasks();
+  };
+
+  const handleRefresh = async () => {
+    await loadTasks();
+  };
 
   // חישוב תאריכים
   const today = new Date();
@@ -289,7 +304,12 @@ function ComprehensiveDashboard() {
           {activeTab === 'insights' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <WorkPaceInsights tasks={tasks} />
-              <SmartRecommendationsPanel tasks={tasks} />
+              <SmartRecommendationsPanel 
+                tasks={tasks}
+                onUpdateTask={handleUpdateTask}
+                onAddTask={handleAddTask}
+                onRefresh={handleRefresh}
+              />
             </div>
           )}
 

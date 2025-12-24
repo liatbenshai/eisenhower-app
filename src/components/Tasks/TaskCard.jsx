@@ -5,7 +5,7 @@ import { getRelativeDate, formatTime } from '../../utils/dateHelpers';
 import { isTaskOverdue, isTaskDueToday } from '../../utils/taskHelpers';
 import { detectTaskCategory } from '../../utils/taskCategories';
 import toast from 'react-hot-toast';
-import TaskTimer from './TaskTimer';
+import TaskTimerWithInterruptions from './TaskTimerWithInterruptions';
 
 // פונקציה לבדיקה אם שלב באיחור או היום
 const isSubtaskOverdue = (subtask) => {
@@ -342,13 +342,13 @@ function TaskCard({
         </div>
       </div>
       
-      {/* טיימר - לכל משימה */}
+      {/* טיימר - עם תמיכה בהפרעות */}
       {showTimer && !currentTask.is_completed && (
         <div 
           onClick={(e) => e.stopPropagation()} 
           className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
         >
-          <TaskTimer
+          <TaskTimerWithInterruptions
             task={currentTask}
             onUpdate={async () => {
               // עדכון המשימה ברשימה בלי לפתוח את הטופס
