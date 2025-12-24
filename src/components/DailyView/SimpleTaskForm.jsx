@@ -21,7 +21,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
     estimatedDuration: '',
     dueDate: defaultDate || new Date().toISOString().split('T')[0],
     dueTime: '',
-    description: ''
+    description: '',
+    priority: 'normal' // דחיפות: urgent, high, normal
   });
 
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         estimatedDuration: task.estimated_duration || '',
         dueDate: task.due_date || defaultDate || new Date().toISOString().split('T')[0],
         dueTime: task.due_time || '',
-        description: task.description || ''
+        description: task.description || '',
+        priority: task.priority || 'normal'
       });
     }
   }, [task, defaultDate]);
@@ -113,6 +115,7 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         estimatedDuration: parseInt(formData.estimatedDuration),
         dueDate: formData.dueDate || null,
         dueTime: formData.dueTime || null,
+        priority: formData.priority || 'normal',
         quadrant: 1
       };
 
@@ -146,6 +149,57 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         placeholder="מה צריך לעשות?"
         autoFocus
       />
+
+      {/* דחיפות */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          🚦 דחיפות
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'urgent' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'urgent'
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/30'
+                : 'border-gray-200 dark:border-gray-700 hover:border-red-300'
+              }
+            `}
+          >
+            <span className="text-2xl">🔴</span>
+            <span className="text-sm font-medium">דחוף</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'high' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'high'
+                ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30'
+                : 'border-gray-200 dark:border-gray-700 hover:border-yellow-300'
+              }
+            `}
+          >
+            <span className="text-2xl">🟡</span>
+            <span className="text-sm font-medium">בינוני</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'normal' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'normal'
+                ? 'border-green-500 bg-green-50 dark:bg-green-900/30'
+                : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
+              }
+            `}
+          >
+            <span className="text-2xl">🟢</span>
+            <span className="text-sm font-medium">לא דחוף</span>
+          </button>
+        </div>
+      </div>
 
       {/* סוג משימה */}
       <div>

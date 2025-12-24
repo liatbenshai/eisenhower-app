@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
-import TaskTimer from '../Tasks/TaskTimer';
+import TaskTimerWithInterruptions from '../Tasks/TaskTimerWithInterruptions';
 import toast from 'react-hot-toast';
 import { TASK_TYPES, getTaskType } from '../../config/taskTypes';
 
@@ -462,9 +462,9 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                   )}
                 </div>
                 
-                {/* טיימר */}
+                {/* טיימר עם הפרעות */}
                 <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
-                  <TaskTimer
+                  <TaskTimerWithInterruptions
                     task={task}
                     onUpdate={onUpdate}
                     onComplete={() => handleComplete(task)}

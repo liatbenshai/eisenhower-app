@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import toast from 'react-hot-toast';
-import TaskTimer from '../Tasks/TaskTimer';
+import TaskTimerWithInterruptions from '../Tasks/TaskTimerWithInterruptions';
 import { TASK_TYPES } from './DailyView';
 
 /**
@@ -100,6 +100,17 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
             `}>
               {currentTask.title}
             </h3>
+            {/* תגית דחיפות */}
+            {currentTask.priority === 'urgent' && (
+              <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
+                🔴 דחוף
+              </span>
+            )}
+            {currentTask.priority === 'high' && (
+              <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full">
+                🟡 בינוני
+              </span>
+            )}
             {currentTask.due_time && (
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 {currentTask.due_time}
@@ -207,10 +218,10 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
         </div>
       </div>
 
-      {/* טיימר */}
+      {/* טיימר עם הפרעות */}
       {showTimer && !currentTask.is_completed && (
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <TaskTimer
+          <TaskTimerWithInterruptions
             task={currentTask}
             onUpdate={onUpdate}
             onComplete={handleToggleComplete}

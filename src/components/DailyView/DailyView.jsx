@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
+import DiaryView from './DiaryView';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -279,7 +280,17 @@ function DailyView() {
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              📅 יום
+              📋 רשימה
+            </button>
+            <button
+              onClick={() => setViewMode('diary')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'diary' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              📅 יומן שעות
             </button>
             <button
               onClick={() => setViewMode('week')}
@@ -356,6 +367,17 @@ function DailyView() {
             onEditTask={handleEditTask}
           />
         </motion.div>
+      )}
+
+      {/* תצוגת יומן שעות - עם גרירה */}
+      {viewMode === 'diary' && (
+        <DiaryView
+          date={selectedDate}
+          tasks={selectedDateTasks}
+          onEditTask={handleEditTask}
+          onAddTask={handleAddTask}
+          onUpdate={loadTasks}
+        />
       )}
 
       {/* סרגל זמן - רק בתצוגה יומית */}
