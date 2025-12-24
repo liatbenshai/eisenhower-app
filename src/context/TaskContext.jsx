@@ -10,7 +10,6 @@ import {
   supabase
 } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { startIdleTracking, stopIdleTracking, isIdleTrackingActive } from '../utils/idleTimeTracker';
 
 // יצירת קונטקסט
 export const TaskContext = createContext(null);
@@ -24,7 +23,6 @@ export function TaskProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTaskId, setActiveTaskId] = useState(null); // משימה פעילה עם טיימר
   
   // סינון ומיון
   const [filter, setFilter] = useState('all'); // all, active, completed
@@ -36,51 +34,6 @@ export function TaskProvider({ children }) {
 
   // מניעת טעינות כפולות
   const loadingRef = useRef(false);
-  
-  // שמירת user ID קודם - למניעת טעינה מחדש כשהאובייקט user משתנה אבל ה-id נשאר אותו דבר
-  const previousUserIdRef = useRef(null);
-
-  // מעקב אחרי משימה פעילה - התחלה/עצירה של זמן מת
-  const setActiveTask = useCallback((taskId) => {
-    if (taskId) {
-      // התחלת עבודה על משימה - עצירת מעקב זמן מת
-      const idleMinutes = stopIdleTracking();
-      if (idleMinutes > 0) {
-        console.log(`⏸️ נעצר מעקב זמן מת: ${idleMinutes} דקות`);
-      }
-    } else {
-      // סיום עבודה - התחלת מעקב זמן מת
-      if (!isIdleTrackingActive()) {
-        startIdleTracking();
-        console.log('⏸️ התחיל מעקב זמן מת');
-      }
-    }
-    setActiveTaskId(taskId);
-  }, []);
-
-  // בדיקה ראשונית - אם אין משימה פעילה, להתחיל מעקב זמן מת
-  useEffect(() => {
-    // בדיקה אם יש טיימר פעיל ב-localStorage (תומך בשני הפורמטים)
-    const hasActiveTimer = Object.keys(localStorage).some(key => {
-      // פורמט חדש: timer_state_*
-      if (key.startsWith('timer_state_')) {
-        try {
-          const state = JSON.parse(localStorage.getItem(key));
-          return state && state.isRunning;
-        } catch {
-          return false;
-        }
-      }
-      // פורמט ישן: timer_*_startTime
-      return key.startsWith('timer_') && key.endsWith('_startTime') && !key.includes('_original');
-    });
-    
-    if (!hasActiveTimer && !isIdleTrackingActive()) {
-      // אין טיימר פעיל - להתחיל מעקב זמן מת
-      startIdleTracking();
-      console.log('⏸️ אין טיימר פעיל - מתחיל מעקב זמן מת');
-    }
-  }, []);
   
   // טעינת משימות - פשוט וישיר
   const loadTasks = useCallback(async () => {
@@ -118,24 +71,9 @@ export function TaskProvider({ children }) {
   }, [user?.id, authLoading]);
 
   // טעינה ראשונית - רק אחרי שהאותנטיקציה נטענה
-  // חשוב: בודקים רק אם ה-id עצמו השתנה, לא אם האובייקט user השתנה
   useEffect(() => {
-    const currentUserId = user?.id;
-    const previousUserId = previousUserIdRef.current;
-    
-    // טעינה רק אם:
-    // 1. האותנטיקציה נטענה
-    // 2. יש משתמש
-    // 3. ה-id השתנה (לא רק האובייקט)
-    if (!authLoading && currentUserId && currentUserId !== previousUserId) {
-      console.log('🔄 טעינת משימות - user ID השתנה:', { previous: previousUserId, current: currentUserId });
-      previousUserIdRef.current = currentUserId;
+    if (!authLoading && user?.id) {
       loadTasks();
-    } else if (!authLoading && !currentUserId && previousUserId) {
-      // המשתמש התנתק - מנקים
-      console.log('🔄 המשתמש התנתק - מנקה משימות');
-      previousUserIdRef.current = null;
-      setTasks([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]); // לא loadTasks כדי למנוע לולאה
@@ -182,8 +120,6 @@ export function TaskProvider({ children }) {
         reminder_minutes: taskData.reminderMinutes ? parseInt(taskData.reminderMinutes) : null,
         estimated_duration: taskData.estimatedDuration ? parseInt(taskData.estimatedDuration) : null,
         task_type: taskData.taskType || 'other', // תמיד יש ערך
-        task_parameter: taskData.taskParameter ? parseInt(taskData.taskParameter) : null,
-        priority: taskData.priority || 'normal', // עדיפות
         is_project: false,
         parent_task_id: null,
         is_completed: false
@@ -269,16 +205,13 @@ export function TaskProvider({ children }) {
       const updatedTask = await updateTask(taskId, {
         title: updates.title,
         description: updates.description || null,
-        notes: updates.notes !== undefined ? updates.notes : undefined,
         estimated_duration: updates.estimatedDuration ? parseInt(updates.estimatedDuration) : null,
         quadrant: updates.quadrant,
         start_date: updates.startDate || null,
         due_date: updates.dueDate || null,
         due_time: updates.dueTime || null,
         reminder_minutes: updates.reminderMinutes ? parseInt(updates.reminderMinutes) : null,
-        task_type: updates.taskType || null,
-        task_parameter: updates.taskParameter ? parseInt(updates.taskParameter) : null,
-        priority: updates.priority || null
+        task_type: updates.taskType || null
       });
       
       setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
@@ -448,10 +381,8 @@ export function TaskProvider({ children }) {
     error,
     filter,
     sortBy,
-    activeTaskId,
     setFilter,
     setSortBy,
-    setActiveTask,
     loadTasks,
     addTask,
     addProjectTask,
