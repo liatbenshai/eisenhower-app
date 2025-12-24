@@ -57,20 +57,10 @@ export function TaskProvider({ children }) {
 
   // בדיקה ראשונית - אם אין משימה פעילה, להתחיל מעקב זמן מת
   useEffect(() => {
-    // בדיקה אם יש טיימר פעיל ב-localStorage (תומך בשני הפורמטים)
-    const hasActiveTimer = Object.keys(localStorage).some(key => {
-      // פורמט חדש: timer_state_*
-      if (key.startsWith('timer_state_')) {
-        try {
-          const state = JSON.parse(localStorage.getItem(key));
-          return state && state.isRunning;
-        } catch {
-          return false;
-        }
-      }
-      // פורמט ישן: timer_*_startTime
-      return key.startsWith('timer_') && key.endsWith('_startTime') && !key.includes('_original');
-    });
+    // בדיקה אם יש טיימר פעיל ב-localStorage
+    const hasActiveTimer = Object.keys(localStorage).some(key => 
+      key.startsWith('timer_') && key.endsWith('_startTime') && !key.includes('_original')
+    );
     
     if (!hasActiveTimer && !isIdleTrackingActive()) {
       // אין טיימר פעיל - להתחיל מעקב זמן מת
@@ -251,7 +241,6 @@ export function TaskProvider({ children }) {
       const updatedTask = await updateTask(taskId, {
         title: updates.title,
         description: updates.description || null,
-        notes: updates.notes !== undefined ? updates.notes : undefined,
         estimated_duration: updates.estimatedDuration ? parseInt(updates.estimatedDuration) : null,
         quadrant: updates.quadrant,
         start_date: updates.startDate || null,
