@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getTaskTypeLearning } from '../../services/supabase';
 import { findOverlappingTasks, findNextFreeSlot, timeToMinutes, minutesToTime, formatMinutes } from '../../utils/timeOverlap';
 import { findFreeSlots } from '../../utils/autoScheduler';
-import { checkDayOverload, getSmartEstimation } from '../../utils/smartTimeInsights';
+import { checkDayOverload, getSmartEstimation } from '../../utils/smartTimeInsights'; 
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
