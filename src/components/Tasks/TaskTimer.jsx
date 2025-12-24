@@ -16,11 +16,6 @@ import Button from '../UI/Button';
 const getStorageKey = (taskId) => `timer_state_${taskId}`;
 
 /**
- * מפתח לסימון שהטיימר שוחזר (ב-sessionStorage)
- */
-const getRestoredKey = (taskId) => `timer_restored_${taskId}`;
-
-/**
  * שמירת מצב טיימר ב-localStorage
  */
 const saveTimerState = (taskId, state) => {
@@ -58,34 +53,8 @@ const clearTimerState = (taskId) => {
   if (!taskId) return;
   try {
     localStorage.removeItem(getStorageKey(taskId));
-    // גם מנקים את סימון השחזור
-    sessionStorage.removeItem(getRestoredKey(taskId));
   } catch (e) {
     console.warn('Failed to clear timer state:', e);
-  }
-};
-
-/**
- * בדיקה אם הטיימר כבר שוחזר בסשן הנוכחי
- */
-const wasRestoredThisSession = (taskId) => {
-  if (!taskId) return false;
-  try {
-    return sessionStorage.getItem(getRestoredKey(taskId)) === 'true';
-  } catch (e) {
-    return false;
-  }
-};
-
-/**
- * סימון שהטיימר שוחזר
- */
-const markAsRestored = (taskId) => {
-  if (!taskId) return;
-  try {
-    sessionStorage.setItem(getRestoredKey(taskId), 'true');
-  } catch (e) {
-    console.warn('Failed to mark as restored:', e);
   }
 };
 
@@ -167,19 +136,18 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
   useEffect(() => {
     if (!currentTask?.id) return;
     
-    // אם כבר שוחזר לאותה משימה - לא לשחזר שוב (בודקים ב-ref וב-sessionStorage)
-    if (restoredTaskIdRef.current === currentTask.id || wasRestoredThisSession(currentTask.id)) {
+    // אם כבר שוחזר לאותה משימה - לא לשחזר שוב
+    if (restoredTaskIdRef.current === currentTask.id) {
       return;
     }
     
     // סימון ששוחזר (לפני כל בדיקה אחרת!)
     restoredTaskIdRef.current = currentTask.id;
-    markAsRestored(currentTask.id);
 
     const savedState = loadTimerState(currentTask.id);
     
-    // אם אין מצב שמור או שהוא לא רץ - לא לשחזר
-    if (!savedState || !savedState.isRunning || !savedState.sessionStartTime) {
+    // אם אין מצב שמור או שהוא לא רץ או שכבר שוחזר - לא לשחזר
+    if (!savedState || !savedState.isRunning || !savedState.sessionStartTime || savedState.restored) {
       return;
     }
     
@@ -194,6 +162,9 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
         elapsedSinceStart,
         minutes: Math.floor(elapsedSinceStart / 60)
       });
+      
+      // סימון ב-localStorage שכבר שוחזר
+      saveTimerState(currentTask.id, { ...savedState, restored: true });
       
       setSessionStartTime(startTime);
       setSessionSeconds(elapsedSinceStart);
@@ -436,11 +407,11 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     
     // סימון שהטיימר פעיל ועדכון localStorage
     if (currentTask?.id) {
-      markAsRestored(currentTask.id);
       saveTimerState(currentTask.id, {
         isRunning: true,
         sessionStartTime: adjustedStartTime.toISOString(),
-        sessionSeconds: pausedTime
+        sessionSeconds: pausedTime,
+        restored: true // מונע שחזור כפול
       });
     }
     
@@ -545,8 +516,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
   const startTimer = useCallback(() => {
     if (currentTask?.id) {
       setActiveTask(currentTask.id);
-      // סימון שהטיימר פעיל (למנוע שחזור כפול)
-      markAsRestored(currentTask.id);
     }
     
     if (hasReachedTarget) {
@@ -566,7 +535,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       saveTimerState(currentTask?.id, {
         isRunning: true,
         sessionStartTime: now.toISOString(),
-        sessionSeconds: sessionSeconds
+        sessionSeconds: sessionSeconds,
+        restored: true // מונע שחזור כפול
       });
       
       toast.success('▶ טיימר הופעל');
@@ -640,15 +610,11 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       setSessionStartTime(adjustedStartTime);
       setIsRunning(true);
       
-      // סימון שהטיימר פעיל (למנוע שחזור כפול)
-      if (currentTask?.id) {
-        markAsRestored(currentTask.id);
-      }
-      
       saveTimerState(currentTask?.id, {
         isRunning: true,
         sessionStartTime: adjustedStartTime.toISOString(),
-        sessionSeconds
+        sessionSeconds,
+        restored: true // מונע שחזור כפול
       });
       
       toast.success('▶ ממשיכים לעבוד');
