@@ -843,25 +843,23 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
             )}
           </div>
           
-          {/* כפתורי הפרעה - תמיד גלויים כשיש טיימר פעיל */}
-          {!interruption && !hasReachedTarget && (
-            <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => startInterruption('call')}
-                className="flex-1 py-2 px-3 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg text-sm font-medium hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors flex items-center justify-center gap-1"
-              >
-                📞 שיחת לקוח
-              </button>
-              <button
-                onClick={() => startInterruption('distraction')}
-                className="flex-1 py-2 px-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center justify-center gap-1"
-              >
-                🔔 הפרעה
-              </button>
-            </div>
-          )}
+          {/* כפתורי הפרעה */}
+          <div className="flex gap-2 mt-3 pt-3 border-t-2 border-dashed border-orange-300 dark:border-orange-700">
+            <button
+              onClick={() => startInterruption('call')}
+              className="flex-1 py-3 px-3 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+            >
+              📞 שיחת לקוח
+            </button>
+            <button
+              onClick={() => startInterruption('distraction')}
+              className="flex-1 py-3 px-3 bg-pink-500 text-white rounded-lg text-sm font-bold hover:bg-pink-600 transition-colors flex items-center justify-center gap-2"
+            >
+              🔔 הפרעה
+            </button>
+          </div>
           
-          {sessionSeconds > 0 && !isRunning && (
+          {sessionSeconds > 0 && !isRunning && !interruption && (
             <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
               <Button
                 onClick={async () => {
