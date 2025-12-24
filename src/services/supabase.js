@@ -351,8 +351,10 @@ export async function createTask(task) {
     reminder_minutes: task.reminder_minutes ? parseInt(task.reminder_minutes) : null,
     estimated_duration: task.estimated_duration ? parseInt(task.estimated_duration) : null,
     task_type: task.task_type || 'other', // תמיד יש ערך
+    task_parameter: task.task_parameter ? parseInt(task.task_parameter) : null,
     is_project: task.is_project || false,
     parent_task_id: task.parent_task_id || null,
+    priority: task.priority || 'normal', // עדיפות: low, normal, high, urgent
     // לא נוסיף time_spent - העמודה לא קיימת בטבלה
     is_completed: task.is_completed || false
   };
@@ -553,6 +555,12 @@ export async function updateTask(taskId, updates) {
   if (updates.time_spent !== undefined) {
     updateData.time_spent = updates.time_spent ? parseInt(updates.time_spent) : 0;
   }
+  if (updates.priority !== undefined) {
+    updateData.priority = updates.priority;
+  }
+  if (updates.notes !== undefined) {
+    updateData.notes = updates.notes;
+  }
   
   console.log('📤 מעדכן משימה:', { taskId, updateData });
   
@@ -561,7 +569,7 @@ export async function updateTask(taskId, updates) {
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .select('id, title, description, quadrant, start_date, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id, time_spent')
+    .select('id, title, description, notes, quadrant, start_date, due_date, due_time, reminder_minutes, estimated_duration, task_type, is_project, parent_task_id, is_completed, completed_at, created_at, updated_at, user_id, time_spent, priority')
     .single();
   
   if (error) {
@@ -1197,6 +1205,58 @@ export async function completeTimeBlock(blockId, actualStartTime = null, actualE
   };
 
   return await updateTimeBlock(blockId, updates);
+}
+
+// === פונקציות למידת זמן ===
+
+/**
+ * קבלת נתוני למידה לסוג משימה מסוים
+ */
+export async function getTaskTypeLearning(userId, taskType) {
+  const { data, error } = await supabase
+    .from('task_type_learning')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('task_type', taskType)
+    .maybeSingle();
+
+  if (error) {
+    console.error('שגיאה בטעינת נתוני למידה:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * קבלת כל נתוני הלמידה של משתמש
+ */
+export async function getAllTaskTypeLearning(userId) {
+  const { data, error } = await supabase
+    .from('task_type_learning')
+    .select('*')
+    .eq('user_id', userId)
+    .order('total_tasks', { ascending: false });
+
+  if (error) {
+    console.error('שגיאה בטעינת נתוני למידה:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * חישוב זמן מוצע לפי נתוני למידה
+ */
+export function calculateSuggestedTime(learningData, baseEstimate) {
+  if (!learningData || !learningData.average_ratio || learningData.total_tasks < 2) {
+    // אין מספיק נתונים - החזר את ההערכה המקורית
+    return baseEstimate;
+  }
+
+  // הכפל את ההערכה ביחס הממוצע
+  return Math.round(baseEstimate * learningData.average_ratio);
 }
 
 export default supabase;
