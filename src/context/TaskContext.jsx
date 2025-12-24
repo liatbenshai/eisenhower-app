@@ -251,6 +251,7 @@ export function TaskProvider({ children }) {
       const updatedTask = await updateTask(taskId, {
         title: updates.title,
         description: updates.description || null,
+        notes: updates.notes !== undefined ? updates.notes : undefined,
         estimated_duration: updates.estimatedDuration ? parseInt(updates.estimatedDuration) : null,
         quadrant: updates.quadrant,
         start_date: updates.startDate || null,
