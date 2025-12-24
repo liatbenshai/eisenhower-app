@@ -843,8 +843,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
             )}
           </div>
           
-          {/* כפתורי הפרעה - רק כשטיימר רץ */}
-          {isRunning && !interruption && (
+          {/* כפתורי הפרעה - תמיד גלויים כשיש טיימר פעיל */}
+          {!interruption && !hasReachedTarget && (
             <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => startInterruption('call')}
