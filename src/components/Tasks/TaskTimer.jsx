@@ -88,6 +88,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
   const intervalRef = useRef(null);
   const lastSaveRef = useRef(0); // timestamp של השמירה האחרונה
   const isSavingRef = useRef(false);
+  const hasRestoredRef = useRef(false); // האם כבר שוחזר הטיימר?
+  const restoredTaskIdRef = useRef(null); // איזו משימה שוחזרה
 
   // חישובים בסיסיים
   const timeSpent = currentTask?.time_spent ? parseInt(currentTask.time_spent) : 0;
@@ -125,9 +127,14 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     return `${sign}${minutes}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // טעינת מצב שמור מ-localStorage
+  // טעינת מצב שמור מ-localStorage - רק פעם אחת למשימה!
   useEffect(() => {
     if (!currentTask?.id) return;
+    
+    // אם כבר שוחזר לאותה משימה - לא לשחזר שוב
+    if (restoredTaskIdRef.current === currentTask.id) {
+      return;
+    }
 
     const savedState = loadTimerState(currentTask.id);
     if (savedState && savedState.isRunning && savedState.sessionStartTime) {
@@ -142,6 +149,9 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
           elapsedSinceStart,
           minutes: Math.floor(elapsedSinceStart / 60)
         });
+        
+        // סימון ששוחזר
+        restoredTaskIdRef.current = currentTask.id;
         
         setSessionStartTime(startTime);
         setSessionSeconds(elapsedSinceStart);
@@ -158,6 +168,9 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
         clearTimerState(currentTask.id);
       }
     }
+    
+    // סימון ששוחזר (גם אם לא היה מה לשחזר)
+    restoredTaskIdRef.current = currentTask.id;
   }, [currentTask?.id]);
 
   // עדכון שניות כל שנייה
