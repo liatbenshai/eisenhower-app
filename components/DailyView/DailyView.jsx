@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import SimpleTaskForm from './SimpleTaskForm';
 import RecurringTaskForm from './RecurringTaskForm';
+import LongTaskForm from '../Tasks/LongTaskForm';
 import DailyTaskCard from './DailyTaskCard';
 import WeeklyCalendarView from './WeeklyCalendarView';
 import TimeAnalyticsDashboard from '../Analytics/TimeAnalyticsDashboard';
@@ -11,6 +12,7 @@ import SmartScheduler from '../Scheduler/SmartScheduler';
 import UnfinishedTasksHandler from '../Scheduler/UnfinishedTasksHandler';
 import SmartWorkIntake from '../Scheduler/SmartWorkIntake';
 import SmartNotifications from '../Notifications/SmartNotifications';
+import { getTodayIdleStats, formatIdleTime, isIdleTrackingActive, getCurrentIdleMinutes } from '../../utils/idleTimeTracker';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
@@ -137,9 +139,25 @@ function DailyView({ initialView = 'day' }) {
   const [showScheduler, setShowScheduler] = useState(false);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [showWorkIntake, setShowWorkIntake] = useState(false);
+  const [showLongTaskForm, setShowLongTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState(initialView); // 'day', 'week', or 'analytics'
+  const [idleStats, setIdleStats] = useState({ totalMinutes: 0, isCurrentlyIdle: false });
+
+  // עדכון סטטיסטיקות זמן מת כל 30 שניות
+  useEffect(() => {
+    const updateIdleStats = () => {
+      const stats = getTodayIdleStats();
+      setIdleStats(stats);
+    };
+    
+    updateIdleStats(); // עדכון ראשוני
+    
+    const interval = setInterval(updateIdleStats, 30000); // כל 30 שניות
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // ניווט בין ימים
   const goToPreviousDay = () => {
@@ -452,7 +470,7 @@ function DailyView({ initialView = 'day' }) {
         </div>
         
         {/* מקרא */}
-        <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-green-500 rounded"></div>
             <span>הושלם ({formatMinutes(timeStats.completed)})</span>
@@ -465,6 +483,16 @@ function DailyView({ initialView = 'day' }) {
             <div className="w-3 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
             <span>פנוי ({formatMinutes(timeStats.remaining)})</span>
           </div>
+          {/* זמן מת */}
+          {(idleStats.totalMinutes > 0 || idleStats.isCurrentlyIdle) && isToday(selectedDate) && (
+            <div className={`flex items-center gap-1 ${idleStats.isCurrentlyIdle ? 'animate-pulse' : ''}`}>
+              <div className="w-3 h-3 bg-red-400 rounded"></div>
+              <span className="text-red-600 dark:text-red-400">
+                ⏸️ זמן מת: {formatIdleTime(idleStats.totalMinutes)}
+                {idleStats.isCurrentlyIdle && ' (עכשיו)'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* אזהרה אם לא יספיק */}
@@ -518,6 +546,13 @@ function DailyView({ initialView = 'day' }) {
             <span>משימה חוזרת</span>
           </button>
         </div>
+        <button
+          onClick={() => setShowLongTaskForm(true)}
+          className="w-full py-2.5 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-orange-900/30 dark:to-amber-900/30 text-orange-700 dark:text-orange-300 hover:from-orange-200 hover:to-amber-200 dark:hover:from-orange-900/50 dark:hover:to-amber-900/50 rounded-lg transition-all flex items-center justify-center gap-2 font-medium border border-orange-200 dark:border-orange-800"
+        >
+          <span>📋</span>
+          <span>משימה ארוכה (שיבוץ אוטומטי)</span>
+        </button>
       </motion.div>
       )}
 
@@ -623,6 +658,17 @@ function DailyView({ initialView = 'day' }) {
         <SmartWorkIntake
           onClose={() => setShowWorkIntake(false)}
           onCreated={loadTasks}
+        />
+      </Modal>
+
+      {/* מודל משימה ארוכה */}
+      <Modal
+        isOpen={showLongTaskForm}
+        onClose={() => setShowLongTaskForm(false)}
+        title="📋 משימה ארוכה - שיבוץ אוטומטי"
+      >
+        <LongTaskForm
+          onClose={() => setShowLongTaskForm(false)}
         />
       </Modal>
     </div>

@@ -100,6 +100,19 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
             <span className={`text-lg px-2 py-0.5 rounded-full ${taskType.color.split(' ').slice(0, 4).join(' ')}`}>
               {taskType.icon}
             </span>
+            {/* אינדיקטור עדיפות */}
+            {currentTask.priority && currentTask.priority !== 'normal' && (
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                currentTask.priority === 'urgent' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                currentTask.priority === 'high' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                currentTask.priority === 'low' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' :
+                ''
+              }`}>
+                {currentTask.priority === 'urgent' ? '🔴 דחוף' : 
+                 currentTask.priority === 'high' ? '🟠 גבוה' : 
+                 currentTask.priority === 'low' ? '⚪ נמוך' : ''}
+              </span>
+            )}
             <h3 className={`
               font-medium text-gray-900 dark:text-white
               ${currentTask.is_completed ? 'line-through text-gray-500' : ''}

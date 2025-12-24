@@ -3,115 +3,86 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { TASK_TYPES } from '../DailyView/DailyView';
-import { timeToMinutes, minutesToTime } from '../../utils/timeOverlap';
-import { getTaskTypeLearning, calculateSuggestedTime } from '../../services/supabase';
+import { getTaskTypeLearning, getAllTaskTypeLearning } from '../../services/supabase';
+import {
+  analyzeCapacity,
+  splitAndScheduleWork,
+  findMovableTasks,
+  proposeTaskMoves,
+  formatMinutes,
+  getDateISO,
+  getDayName,
+  getAdjustedDuration,
+  PRIORITY_ORDER,
+  MIN_BLOCK_SIZE,
+  MAX_BLOCK_SIZE
+} from '../../utils/smartScheduling';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
 
 /**
- * שעות העבודה
- */
-const WORK_HOURS = {
-  start: 8,
-  end: 16
-};
-
-/**
- * ימי עבודה (0 = ראשון)
- */
-const WORK_DAYS = [0, 1, 2, 3, 4];
-
-/**
- * גודל בלוק מקסימלי (בדקות)
- */
-const MAX_BLOCK_SIZE = 60; // שעה - לא יותר ברצף
-
-/**
- * גודל בלוק מינימלי (בדקות)
- */
-const MIN_BLOCK_SIZE = 30;
-
-/**
- * קבלת תאריך בפורמט ISO
- */
-function getDateISO(date) {
-  return date.toISOString().split('T')[0];
-}
-
-/**
- * שמות ימים בעברית
- */
-const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-
-/**
- * פורמט דקות לתצוגה
- */
-function formatMinutes(minutes) {
-  if (minutes < 60) return `${minutes} דק'`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (mins === 0) return `${hours} שעות`;
-  return `${hours}:${mins.toString().padStart(2, '0')}`;
-}
-
-/**
- * מערכת קליטת עבודה חכמה
+ * מערכת קליטת עבודה חכמה - משופרת
+ * 
+ * יכולות:
+ * - פירוק עבודה לבלוקים ושיבוץ אוטומטי
+ * - למידה מהיסטוריה להתאמת זמנים
+ * - הזזת משימות פחות חשובות במידת הצורך
+ * - תמיכה בתאריך התחלה ודדליין
  */
 function SmartWorkIntake({ onClose, onCreated }) {
   const { tasks, addTask, editTask, loadTasks } = useTasks();
   const { user } = useAuth();
   
   // שלב בתהליך
-  const [step, setStep] = useState(1); // 1: פרטים, 2: ניתוח, 3: שיבוץ
+  const [step, setStep] = useState(1); // 1: פרטים, 2: ניתוח ושיבוץ
   
   // פרטי העבודה
   const [formData, setFormData] = useState({
     title: '',
     taskType: 'transcription',
     totalHours: '',
+    startDate: getDateISO(new Date()), // ברירת מחדל: היום
     deadline: '',
-    blockSize: 45, // גודל בלוק ברירת מחדל
-    priority: 'normal', // normal, high, urgent
+    blockSize: 45,
+    priority: 'normal',
     description: ''
   });
 
   // נתוני למידה
   const [learningData, setLearningData] = useState(null);
-  const [adjustedHours, setAdjustedHours] = useState(null);
+  const [allLearningData, setAllLearningData] = useState({});
 
   // תוצאות הניתוח
   const [analysis, setAnalysis] = useState(null);
-  
-  // משימות שאפשר להזיז
+  const [proposedBlocks, setProposedBlocks] = useState([]);
   const [tasksToMove, setTasksToMove] = useState([]);
-  
-  // שיבוץ מוצע
-  const [proposedSchedule, setProposedSchedule] = useState([]);
+  const [selectedToMove, setSelectedToMove] = useState([]);
+  const [proposedMoves, setProposedMoves] = useState([]);
   
   const [loading, setLoading] = useState(false);
 
-  // טעינת נתוני למידה כשמשתנה סוג המשימה
+  // טעינת נתוני למידה
+  useEffect(() => {
+    if (user?.id) {
+      // טעינת כל נתוני הלמידה
+      getAllTaskTypeLearning(user.id)
+        .then(data => {
+          const byType = {};
+          data.forEach(d => { byType[d.task_type] = d; });
+          setAllLearningData(byType);
+        })
+        .catch(console.error);
+    }
+  }, [user?.id]);
+
+  // טעינת נתוני למידה לסוג הנבחר
   useEffect(() => {
     if (user?.id && formData.taskType) {
-      getTaskTypeLearning(user.id, formData.taskType)
-        .then(data => {
-          setLearningData(data);
-          // חישוב זמן מותאם אם יש מספיק נתונים
-          if (data && data.total_tasks >= 3 && formData.totalHours) {
-            const baseMinutes = parseFloat(formData.totalHours) * 60;
-            const adjusted = calculateSuggestedTime(data, baseMinutes);
-            setAdjustedHours(adjusted / 60);
-          } else {
-            setAdjustedHours(null);
-          }
-        })
-        .catch(err => {
-          console.error('שגיאה בטעינת נתוני למידה:', err);
-          setLearningData(null);
-        });
+      const data = allLearningData[formData.taskType];
+      setLearningData(data || null);
     }
-  }, [user?.id, formData.taskType, formData.totalHours]);
+  }, [user?.id, formData.taskType, allLearningData]);
 
   // עדכון שדה
   const handleChange = (e) => {
@@ -119,106 +90,24 @@ function SmartWorkIntake({ onClose, onCreated }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // חישוב קיבולת לימים הבאים
-  const capacityByDay = useMemo(() => {
-    const days = [];
-    const today = new Date();
-    const deadlineDate = formData.deadline ? new Date(formData.deadline) : null;
-    
-    // חישוב ל-14 ימים קדימה או עד הדדליין
-    const daysToCheck = deadlineDate 
-      ? Math.min(Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24)) + 1, 30)
-      : 14;
-    
-    for (let i = 0; i < daysToCheck; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() + i);
-      
-      // רק ימי עבודה
-      if (!WORK_DAYS.includes(date.getDay())) continue;
-      
-      const dateISO = getDateISO(date);
-      const dayTasks = tasks.filter(t => 
-        t.due_date === dateISO && 
-        t.due_time && 
-        !t.is_completed
-      );
-      
-      // חישוב זמן תפוס
-      let occupiedMinutes = 0;
-      const occupiedSlots = [];
-      
-      dayTasks.forEach(task => {
-        const start = timeToMinutes(task.due_time);
-        const duration = task.estimated_duration || 30;
-        occupiedMinutes += duration;
-        occupiedSlots.push({
-          start,
-          end: start + duration,
-          task
-        });
-      });
-      
-      // זמן פנוי
-      const totalWorkMinutes = (WORK_HOURS.end - WORK_HOURS.start) * 60;
-      const freeMinutes = totalWorkMinutes - occupiedMinutes;
-      
-      // מציאת חלונות פנויים
-      const freeSlots = findFreeSlots(occupiedSlots);
-      
-      days.push({
-        date,
-        dateISO,
-        dayName: DAY_NAMES[date.getDay()],
-        occupiedMinutes,
-        freeMinutes,
-        totalMinutes: totalWorkMinutes,
-        occupiedSlots,
-        freeSlots,
-        tasks: dayTasks,
-        isToday: i === 0
-      });
-    }
-    
-    return days;
-  }, [tasks, formData.deadline]);
+  // ניתוח קיבולת
+  const capacityDays = useMemo(() => {
+    const startDate = formData.startDate ? new Date(formData.startDate) : new Date();
+    const endDate = formData.deadline ? new Date(formData.deadline) : null;
+    return analyzeCapacity(tasks, startDate, endDate, 30);
+  }, [tasks, formData.startDate, formData.deadline]);
 
-  // מציאת חלונות פנויים ביום
-  function findFreeSlots(occupiedSlots) {
-    const slots = [];
-    const sorted = [...occupiedSlots].sort((a, b) => a.start - b.start);
-    
-    let currentTime = WORK_HOURS.start * 60;
-    const dayEnd = WORK_HOURS.end * 60;
-    
-    for (const occupied of sorted) {
-      if (currentTime < occupied.start) {
-        const duration = occupied.start - currentTime;
-        if (duration >= MIN_BLOCK_SIZE) {
-          slots.push({
-            start: currentTime,
-            end: occupied.start,
-            duration
-          });
-        }
-      }
-      currentTime = Math.max(currentTime, occupied.end);
-    }
-    
-    // חלון אחרון
-    if (currentTime < dayEnd) {
-      const duration = dayEnd - currentTime;
-      if (duration >= MIN_BLOCK_SIZE) {
-        slots.push({
-          start: currentTime,
-          end: dayEnd,
-          duration
-        });
-      }
-    }
-    
-    return slots;
-  }
+  // סוג המשימה הנבחר
+  const selectedType = TASK_TYPES[formData.taskType] || TASK_TYPES.other;
+
+  // חישוב זמן מותאם
+  const adjustedHours = useMemo(() => {
+    if (!formData.totalHours || !learningData) return null;
+    const baseMinutes = parseFloat(formData.totalHours) * 60;
+    const adjusted = getAdjustedDuration(baseMinutes, learningData);
+    if (adjusted === baseMinutes) return null;
+    return adjusted / 60;
+  }, [formData.totalHours, learningData]);
 
   // ניתוח והצעת שיבוץ
   const analyzeAndPropose = () => {
@@ -233,115 +122,105 @@ function SmartWorkIntake({ onClose, onCreated }) {
     }
 
     const totalMinutes = parseFloat(formData.totalHours) * 60;
-    const blockSize = Math.min(formData.blockSize, MAX_BLOCK_SIZE);
-    const deadlineDate = formData.deadline ? new Date(formData.deadline) : null;
     
-    // חישוב כמה בלוקים צריך
-    const numBlocks = Math.ceil(totalMinutes / blockSize);
-    
-    // סה"כ זמן פנוי עד הדדליין
-    const relevantDays = deadlineDate 
-      ? capacityByDay.filter(d => d.date <= deadlineDate)
-      : capacityByDay;
-    
-    const totalFreeTime = relevantDays.reduce((sum, d) => sum + d.freeMinutes, 0);
-    
-    // האם יש מספיק זמן?
-    const hasEnoughTime = totalFreeTime >= totalMinutes;
-    
-    // ניסיון שיבוץ
-    const schedule = [];
-    let remainingMinutes = totalMinutes;
-    let blockIndex = 1;
-    
-    // עותק של החלונות הפנויים
-    const availableDays = relevantDays.map(d => ({
-      ...d,
-      freeSlots: d.freeSlots.map(s => ({ ...s }))
-    }));
-    
-    for (const day of availableDays) {
-      if (remainingMinutes <= 0) break;
+    // שימוש בלוגיקה החדשה
+    const { blocks, analysis: scheduleAnalysis } = splitAndScheduleWork(
+      {
+        title: formData.title,
+        totalMinutes,
+        taskType: formData.taskType,
+        priority: formData.priority,
+        startDate: formData.startDate,
+        deadline: formData.deadline,
+        preferredBlockSize: parseInt(formData.blockSize),
+        description: formData.description
+      },
+      capacityDays,
+      learningData
+    );
+
+    setAnalysis(scheduleAnalysis);
+    setProposedBlocks(blocks);
+
+    // אם לא הצלחנו לשבץ הכל - מצא משימות להזזה
+    if (!scheduleAnalysis.hasEnoughTime) {
+      const allDayTasks = capacityDays.flatMap(d => d.tasks);
+      const { tasks: movable } = findMovableTasks(
+        allDayTasks,
+        scheduleAnalysis.remainingMinutes,
+        formData.priority
+      );
       
-      for (const slot of day.freeSlots) {
-        if (remainingMinutes <= 0) break;
-        if (slot.duration < MIN_BLOCK_SIZE) continue;
-        
-        // כמה אפשר לקחת מהחלון הזה
-        const maxFromSlot = Math.min(slot.duration, remainingMinutes);
-        
-        // פירוק לבלוקים
-        let slotRemaining = maxFromSlot;
-        let slotStart = slot.start;
-        
-        while (slotRemaining >= MIN_BLOCK_SIZE && remainingMinutes > 0) {
-          const thisBlockSize = Math.min(blockSize, slotRemaining, remainingMinutes);
-          
-          if (thisBlockSize >= MIN_BLOCK_SIZE) {
-            schedule.push({
-              blockIndex,
-              date: day.date,
-              dateISO: day.dateISO,
-              dayName: day.dayName,
-              startTime: minutesToTime(slotStart),
-              endTime: minutesToTime(slotStart + thisBlockSize),
-              duration: thisBlockSize
-            });
-            
-            blockIndex++;
-            remainingMinutes -= thisBlockSize;
-            slotRemaining -= thisBlockSize;
-            slotStart += thisBlockSize;
-          } else {
-            break;
-          }
-        }
-      }
+      // הוסף מידע על היום
+      const movableWithDays = movable.map(task => {
+        const day = capacityDays.find(d => d.dateISO === task.due_date);
+        return {
+          ...task,
+          dayName: day?.dayName || ''
+        };
+      });
+      
+      setTasksToMove(movableWithDays);
+    } else {
+      setTasksToMove([]);
     }
-    
-    // אם לא הצלחנו לשבץ הכל - מציאת משימות להזזה
-    const movableTasks = [];
-    if (remainingMinutes > 0 && deadlineDate) {
-      // מציאת משימות פחות דחופות שאפשר להזיז
-      for (const day of relevantDays) {
-        for (const task of day.tasks) {
-          // לא להזיז משימות דחופות
-          if (task.priority === 'urgent') continue;
-          
-          // בדיקה אם הדדליין של המשימה הזו גמיש
-          const taskDeadline = task.deadline ? new Date(task.deadline) : null;
-          const canMove = !taskDeadline || taskDeadline > deadlineDate;
-          
-          if (canMove) {
-            movableTasks.push({
-              ...task,
-              dayName: day.dayName,
-              potentialFreeTime: task.estimated_duration || 30
-            });
-          }
-        }
-      }
-    }
-    
-    setAnalysis({
-      totalMinutes,
-      numBlocks,
-      blockSize,
-      totalFreeTime,
-      hasEnoughTime,
-      remainingMinutes: Math.max(0, remainingMinutes),
-      deadline: deadlineDate,
-      relevantDays
-    });
-    
-    setProposedSchedule(schedule);
-    setTasksToMove(movableTasks);
+
     setStep(2);
+  };
+
+  // בחירת משימה להזזה
+  const toggleTaskToMove = (taskId) => {
+    setSelectedToMove(prev => 
+      prev.includes(taskId) 
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  };
+
+  // חישוב מחדש עם הזזת משימות
+  const recalculateWithMoves = () => {
+    if (selectedToMove.length === 0) return;
+
+    // סנן משימות שייעזו
+    const tasksToMoveObjs = tasksToMove.filter(t => selectedToMove.includes(t.id));
+    
+    // חשב קיבולת חדשה בלי המשימות שיוזזו
+    const filteredTasks = tasks.filter(t => !selectedToMove.includes(t.id));
+    const startDate = formData.startDate ? new Date(formData.startDate) : new Date();
+    const endDate = formData.deadline ? new Date(formData.deadline) : null;
+    const newCapacity = analyzeCapacity(filteredTasks, startDate, endDate, 30);
+
+    // שבץ מחדש
+    const totalMinutes = parseFloat(formData.totalHours) * 60;
+    const { blocks, analysis: newAnalysis } = splitAndScheduleWork(
+      {
+        title: formData.title,
+        totalMinutes,
+        taskType: formData.taskType,
+        priority: formData.priority,
+        startDate: formData.startDate,
+        deadline: formData.deadline,
+        preferredBlockSize: parseInt(formData.blockSize),
+        description: formData.description
+      },
+      newCapacity,
+      learningData
+    );
+
+    // הצע לאן להזיז את המשימות
+    const deadlineDate = formData.deadline ? new Date(formData.deadline) : new Date();
+    const moves = proposeTaskMoves(tasksToMoveObjs, newCapacity, deadlineDate);
+
+    setAnalysis(newAnalysis);
+    setProposedBlocks(blocks);
+    setProposedMoves(moves);
+
+    toast.success(`חושב מחדש - ${moves.length} משימות יוזזו`);
   };
 
   // ביצוע השיבוץ
   const executeSchedule = async () => {
-    if (proposedSchedule.length === 0) {
+    if (proposedBlocks.length === 0) {
       toast.error('אין שיבוץ לביצוע');
       return;
     }
@@ -349,25 +228,37 @@ function SmartWorkIntake({ onClose, onCreated }) {
     setLoading(true);
     
     try {
+      // הזזת משימות קודם
+      for (const move of proposedMoves) {
+        await editTask(move.task.id, {
+          dueDate: move.newDate,
+          dueTime: move.newTime
+        });
+      }
+
       // יצירת הבלוקים כמשימות
-      for (const block of proposedSchedule) {
+      for (const block of proposedBlocks) {
         await addTask({
-          title: `${formData.title} (${block.blockIndex}/${proposedSchedule.length})`,
+          title: block.title,
           description: formData.description || null,
-          taskType: formData.taskType,
+          taskType: block.taskType,
           estimatedDuration: block.duration,
           dueDate: block.dateISO,
           dueTime: block.startTime,
-          quadrant: 1,
-          priority: formData.priority,
-          parentJob: formData.title, // קישור לעבודה המקורית
+          priority: block.priority,
+          parentJob: block.parentJob,
           blockIndex: block.blockIndex,
-          totalBlocks: proposedSchedule.length
+          totalBlocks: block.totalBlocks
         });
       }
       
       await loadTasks();
-      toast.success(`נוצרו ${proposedSchedule.length} בלוקים של "${formData.title}"`);
+      
+      const message = proposedMoves.length > 0
+        ? `נוצרו ${proposedBlocks.length} בלוקים, ${proposedMoves.length} משימות הוזזו`
+        : `נוצרו ${proposedBlocks.length} בלוקים של "${formData.title}"`;
+      
+      toast.success(message);
       
       if (onCreated) onCreated();
       if (onClose) onClose();
@@ -379,61 +270,36 @@ function SmartWorkIntake({ onClose, onCreated }) {
     }
   };
 
-  // הזזת משימות נבחרות
-  const [selectedToMove, setSelectedToMove] = useState([]);
-  
-  const toggleTaskToMove = (taskId) => {
-    setSelectedToMove(prev => 
-      prev.includes(taskId) 
-        ? prev.filter(id => id !== taskId)
-        : [...prev, taskId]
-    );
-  };
-
-  // חישוב מחדש אחרי בחירת משימות להזזה
-  const recalculateWithMovedTasks = () => {
-    // TODO: לוגיקה מורכבת יותר - להזיז את המשימות הנבחרות ולחשב מחדש
-    toast.success('המשימות יוזזו אחרי הדדליין');
-    // בינתיים - פשוט מוסיפים את הזמן שהתפנה
-    const freedTime = selectedToMove.reduce((sum, taskId) => {
-      const task = tasksToMove.find(t => t.id === taskId);
-      return sum + (task?.estimated_duration || 30);
-    }, 0);
-    
-    setAnalysis(prev => ({
-      ...prev,
-      totalFreeTime: prev.totalFreeTime + freedTime,
-      hasEnoughTime: prev.totalFreeTime + freedTime >= prev.totalMinutes
-    }));
-  };
-
-  const selectedType = TASK_TYPES[formData.taskType];
-
   return (
     <div className="space-y-4">
-      {/* שלב 1: פרטי העבודה */}
+      {/* שלב 1: הזנת פרטים */}
       {step === 1 && (
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="space-y-4"
         >
-          <Input
-            label="שם העבודה *"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            placeholder="למשל: תמלול ישיבת דירקטוריון"
-            autoFocus
-          />
+          {/* שם העבודה */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              שם העבודה *
+            </label>
+            <Input
+              name="title"
+              value={formData.title}
+              onChange={handleChange}
+              placeholder="לדוגמה: תמלול ישיבת דירקטוריון"
+              autoFocus
+            />
+          </div>
 
           {/* סוג משימה */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               סוג עבודה
             </label>
-            <div className="grid grid-cols-4 gap-2">
-              {Object.values(TASK_TYPES).slice(0, 4).map(type => (
+            <div className="grid grid-cols-3 gap-2">
+              {Object.values(TASK_TYPES).map(type => (
                 <button
                   key={type.id}
                   type="button"
@@ -446,138 +312,116 @@ function SmartWorkIntake({ onClose, onCreated }) {
                     }
                   `}
                 >
-                  <span className="text-xl">{type.icon}</span>
-                  <div className="text-xs mt-1">{type.name}</div>
+                  <span className="text-xl block mb-1">{type.icon}</span>
+                  <span className="text-xs">{type.name}</span>
+                </button>
+              ))}
+            </div>
+            {learningData && learningData.total_tasks >= 2 && (
+              <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded text-xs text-yellow-700 dark:text-yellow-300">
+                📈 יש נתוני למידה: ממוצע {Math.round(learningData.average_ratio * 100)}% מההערכה ({learningData.total_tasks} משימות)
+              </div>
+            )}
+          </div>
+
+          {/* שעות עבודה */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              סה"כ שעות עבודה *
+            </label>
+            <Input
+              name="totalHours"
+              type="number"
+              step="0.5"
+              min="0.5"
+              value={formData.totalHours}
+              onChange={handleChange}
+              placeholder="לדוגמה: 3"
+            />
+            {adjustedHours && (
+              <div className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                📈 לפי ההיסטוריה שלך, כנראה ייקח {adjustedHours.toFixed(1)} שעות
+              </div>
+            )}
+          </div>
+
+          {/* תאריכים */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                תאריך התחלה
+              </label>
+              <Input
+                name="startDate"
+                type="date"
+                value={formData.startDate}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                דדליין (אופציונלי)
+              </label>
+              <Input
+                name="deadline"
+                type="date"
+                value={formData.deadline}
+                onChange={handleChange}
+                min={formData.startDate}
+              />
+            </div>
+          </div>
+
+          {/* גודל בלוק */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              גודל בלוק (דקות)
+            </label>
+            <div className="flex gap-2">
+              {[30, 45, 60, 90].map(size => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, blockSize: size }))}
+                  className={`
+                    flex-1 py-2 rounded-lg font-medium transition-all
+                    ${formData.blockSize === size
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }
+                  `}
+                >
+                  {size} דק'
                 </button>
               ))}
             </div>
           </div>
 
-          {/* שעות ודדליין */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                סה"כ שעות עבודה *
-              </label>
-              <input
-                type="number"
-                name="totalHours"
-                value={formData.totalHours}
-                onChange={handleChange}
-                step="0.5"
-                min="0.5"
-                placeholder="למשל: 3"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                           bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                דדליין *
-              </label>
-              <input
-                type="date"
-                name="deadline"
-                value={formData.deadline}
-                onChange={handleChange}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                           bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-
-          {/* המלצת למידה */}
-          {learningData && learningData.total_tasks >= 3 && formData.totalHours && (
-            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-              <div className="flex items-start gap-2">
-                <span className="text-xl">🧠</span>
-                <div className="flex-1">
-                  <div className="font-medium text-purple-800 dark:text-purple-200 text-sm">
-                    המערכת למדה מ-{learningData.total_tasks} משימות קודמות:
-                  </div>
-                  <div className="text-sm text-purple-700 dark:text-purple-300 mt-1">
-                    {learningData.average_ratio > 1.1 ? (
-                      <>
-                        {TASK_TYPES[formData.taskType]?.name} בד"כ לוקח לך <strong>{Math.round((learningData.average_ratio - 1) * 100)}% יותר</strong> מההערכה.
-                        <br />
-                        💡 מומלץ לתכנן <strong>{adjustedHours?.toFixed(1)} שעות</strong> במקום {formData.totalHours}.
-                      </>
-                    ) : learningData.average_ratio < 0.9 ? (
-                      <>
-                        {TASK_TYPES[formData.taskType]?.name} בד"כ לוקח לך <strong>{Math.round((1 - learningData.average_ratio) * 100)}% פחות</strong> מההערכה.
-                        <br />
-                        💡 את יעילה! אפשר לתכנן <strong>{adjustedHours?.toFixed(1)} שעות</strong>.
-                      </>
-                    ) : (
-                      <>
-                        ההערכות שלך מדויקות! 🎯
-                      </>
-                    )}
-                  </div>
-                  {adjustedHours && Math.abs(adjustedHours - parseFloat(formData.totalHours)) > 0.25 && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, totalHours: adjustedHours.toFixed(1) }))}
-                      className="mt-2 px-3 py-1 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      עדכן ל-{adjustedHours.toFixed(1)} שעות
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* גודל בלוק */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              גודל בלוק עבודה: {formData.blockSize} דקות
-            </label>
-            <input
-              type="range"
-              min="30"
-              max="90"
-              step="15"
-              value={formData.blockSize}
-              onChange={(e) => setFormData(prev => ({ ...prev, blockSize: parseInt(e.target.value) }))}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>30 דק' (קצר)</span>
-              <span>60 דק'</span>
-              <span>90 דק' (ארוך)</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              💡 עבודה של {formData.totalHours || '?'} שעות תפורק ל-
-              {formData.totalHours ? Math.ceil((parseFloat(formData.totalHours) * 60) / formData.blockSize) : '?'} בלוקים
-            </p>
-          </div>
-
           {/* עדיפות */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               עדיפות
             </label>
             <div className="flex gap-2">
               {[
-                { id: 'normal', name: 'רגילה', color: 'bg-gray-100 dark:bg-gray-700' },
-                { id: 'high', name: 'גבוהה', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
-                { id: 'urgent', name: 'דחופה!', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' }
+                { id: 'low', name: 'נמוכה', color: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400', icon: '⚪' },
+                { id: 'normal', name: 'רגילה', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', icon: '🔵' },
+                { id: 'high', name: 'גבוהה', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300', icon: '🟠' },
+                { id: 'urgent', name: 'דחופה!', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', icon: '🔴' }
               ].map(p => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, priority: p.id }))}
                   className={`
-                    flex-1 py-2 rounded-lg border-2 font-medium transition-all
+                    flex-1 py-2 rounded-lg border-2 font-medium transition-all text-sm
                     ${formData.priority === p.id
                       ? `${p.color} border-current ring-2 ring-offset-1`
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                     }
                   `}
                 >
-                  {p.name}
+                  {p.icon} {p.name}
                 </button>
               ))}
             </div>
@@ -595,25 +439,25 @@ function SmartWorkIntake({ onClose, onCreated }) {
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
                          bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              placeholder="פרטים על הלקוח, דגשים מיוחדים..."
+              placeholder="פרטים נוספים..."
             />
           </div>
 
           {/* תצוגה מקדימה של קיבולת */}
-          {capacityByDay.length > 0 && (
+          {capacityDays.length > 0 && (
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                📊 הקיבולת שלך לימים הקרובים:
+                📊 קיבולת זמינה:
               </h4>
               <div className="flex gap-1 overflow-x-auto pb-2">
-                {capacityByDay.slice(0, 7).map(day => {
+                {capacityDays.slice(0, 10).map(day => {
                   const pct = Math.round((day.occupiedMinutes / day.totalMinutes) * 100);
                   const isFull = pct >= 80;
                   return (
                     <div 
                       key={day.dateISO}
                       className={`
-                        flex-shrink-0 w-16 p-2 rounded text-center text-xs
+                        flex-shrink-0 w-14 p-2 rounded text-center text-xs
                         ${day.isToday ? 'ring-2 ring-blue-500' : ''}
                         ${isFull ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}
                       `}
@@ -622,7 +466,6 @@ function SmartWorkIntake({ onClose, onCreated }) {
                       <div className={`text-lg ${isFull ? 'text-red-600' : 'text-green-600'}`}>
                         {Math.round(day.freeMinutes / 60)}h
                       </div>
-                      <div className="text-gray-500">פנוי</div>
                     </div>
                   );
                 })}
@@ -631,7 +474,7 @@ function SmartWorkIntake({ onClose, onCreated }) {
           )}
 
           <Button onClick={analyzeAndPropose} className="w-full py-3">
-            📊 נתח ושבץ
+            📊 נתח ושבץ אוטומטית
           </Button>
         </motion.div>
       )}
@@ -652,18 +495,23 @@ function SmartWorkIntake({ onClose, onCreated }) {
               <span className="text-3xl">{analysis.hasEnoughTime ? '✅' : '⚠️'}</span>
               <div>
                 <h3 className="font-bold text-lg">
-                  {analysis.hasEnoughTime ? 'אפשר לעמוד בדדליין!' : 'צריך לפנות זמן'}
+                  {analysis.hasEnoughTime ? 'אפשר לעמוד בזמן!' : 'צריך לפנות זמן'}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {formData.title} • {formData.totalHours} שעות • {proposedSchedule.length} בלוקים
+                  {formData.title} • {proposedBlocks.length} בלוקים
                 </p>
               </div>
             </div>
             
             <div className="grid grid-cols-3 gap-2 text-center mt-3">
               <div className="p-2 bg-white dark:bg-gray-800 rounded">
-                <div className="text-xl font-bold text-blue-600">{formatMinutes(analysis.totalMinutes)}</div>
-                <div className="text-xs text-gray-500">נדרש</div>
+                <div className="text-xl font-bold text-blue-600">
+                  {formatMinutes(analysis.adjustedMinutes)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  נדרש
+                  {analysis.wasAdjusted && <span className="text-yellow-600"> (מותאם)</span>}
+                </div>
               </div>
               <div className="p-2 bg-white dark:bg-gray-800 rounded">
                 <div className="text-xl font-bold text-green-600">{formatMinutes(analysis.totalFreeTime)}</div>
@@ -679,18 +527,18 @@ function SmartWorkIntake({ onClose, onCreated }) {
           </div>
 
           {/* שיבוץ מוצע */}
-          {proposedSchedule.length > 0 && (
+          {proposedBlocks.length > 0 && (
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <div className="p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <h4 className="font-medium flex items-center gap-2">
-                  <span className={selectedType?.color + ' px-2 py-0.5 rounded'}>
-                    {selectedType?.icon}
+                  <span className={`${selectedType.color} px-2 py-0.5 rounded`}>
+                    {selectedType.icon}
                   </span>
-                  שיבוץ מוצע - {proposedSchedule.length} בלוקים
+                  שיבוץ מוצע - {proposedBlocks.length} בלוקים
                 </h4>
               </div>
               <div className="max-h-48 overflow-y-auto">
-                {proposedSchedule.map((block, index) => (
+                {proposedBlocks.map((block, index) => (
                   <div 
                     key={index}
                     className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between"
@@ -757,7 +605,7 @@ function SmartWorkIntake({ onClose, onCreated }) {
               </div>
               {selectedToMove.length > 0 && (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800">
-                  <Button onClick={recalculateWithMovedTasks} variant="secondary" className="w-full">
+                  <Button onClick={recalculateWithMoves} variant="secondary" className="w-full">
                     🔄 חשב מחדש עם הזזת {selectedToMove.length} משימות
                   </Button>
                 </div>
@@ -765,18 +613,54 @@ function SmartWorkIntake({ onClose, onCreated }) {
             </div>
           )}
 
+          {/* הזזות מוצעות */}
+          {proposedMoves.length > 0 && (
+            <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+                <h4 className="font-medium text-blue-800 dark:text-blue-200">
+                  📅 משימות שיוזזו:
+                </h4>
+              </div>
+              <div className="max-h-32 overflow-y-auto">
+                {proposedMoves.map((move, index) => {
+                  const taskType = TASK_TYPES[move.task.task_type] || TASK_TYPES.other;
+                  return (
+                    <div key={index} className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 text-sm">
+                      <span className={`px-1.5 py-0.5 rounded ${taskType.color}`}>
+                        {taskType.icon}
+                      </span>
+                      <span className="font-medium">{move.task.title}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="text-blue-600 dark:text-blue-400">
+                        {move.newDayName} {move.newTime}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* כפתורים */}
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setStep(1)} className="flex-1">
+            <Button variant="secondary" onClick={() => {
+              setStep(1);
+              setAnalysis(null);
+              setProposedBlocks([]);
+              setTasksToMove([]);
+              setSelectedToMove([]);
+              setProposedMoves([]);
+            }} className="flex-1">
               ← חזרה
             </Button>
             <Button 
               onClick={executeSchedule} 
               loading={loading}
-              disabled={proposedSchedule.length === 0}
+              disabled={proposedBlocks.length === 0}
               className="flex-1"
             >
-              ✅ צור {proposedSchedule.length} בלוקים
+              ✅ צור {proposedBlocks.length} בלוקים
+              {proposedMoves.length > 0 && ` + הזז ${proposedMoves.length}`}
             </Button>
           </div>
         </motion.div>
