@@ -141,11 +141,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       return;
     }
     
-    // אם הטיימר כבר רץ או יש הפרעה - לא לשחזר
-    if (isRunning || interruption) {
-      restoredTaskIdRef.current = currentTask.id;
-      return;
-    }
+    // סימון ששוחזר (לפני כל בדיקה אחרת!)
+    restoredTaskIdRef.current = currentTask.id;
 
     const savedState = loadTimerState(currentTask.id);
     if (savedState && savedState.isRunning && savedState.sessionStartTime) {
@@ -160,9 +157,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
           elapsedSinceStart,
           minutes: Math.floor(elapsedSinceStart / 60)
         });
-        
-        // סימון ששוחזר
-        restoredTaskIdRef.current = currentTask.id;
         
         setSessionStartTime(startTime);
         setSessionSeconds(elapsedSinceStart);
@@ -180,10 +174,7 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
         clearTimerState(currentTask.id);
       }
     }
-    
-    // סימון ששוחזר (גם אם לא היה מה לשחזר)
-    restoredTaskIdRef.current = currentTask.id;
-  }, [currentTask?.id, isRunning, interruption]);
+  }, [currentTask?.id]); // רק כשה-task משתנה!
 
   // עדכון שניות כל שנייה
   useEffect(() => {
@@ -360,6 +351,16 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     // עוצר את הטיימר הראשי
     setIsRunning(false);
     
+    // עדכון localStorage שהטיימר לא רץ (למנוע שחזור בטעות)
+    if (currentTask?.id) {
+      saveTimerState(currentTask.id, {
+        isRunning: false,
+        sessionStartTime: sessionStartTime?.toISOString(),
+        sessionSeconds,
+        interrupted: true
+      });
+    }
+    
     const now = new Date();
     setInterruption({
       type,
@@ -371,7 +372,7 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     toast(`⏸️ ${type === 'call' ? 'שיחת לקוח' : 'הפרעה'} - הטיימר הושהה`, {
       icon: type === 'call' ? '📞' : '🔔'
     });
-  }, [sessionSeconds]);
+  }, [sessionSeconds, currentTask?.id, sessionStartTime]);
 
   // סיום הפרעה וחזרה לעבודה
   const endInterruption = useCallback(() => {
