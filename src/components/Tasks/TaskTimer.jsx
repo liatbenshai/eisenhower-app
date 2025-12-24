@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { updateSubtaskProgress } from '../../services/supabase';
 import { useTasks } from '../../hooks/useTasks';
-import { startIdleTracking, stopIdleTracking, formatIdleTime } from '../../utils/idleTimeTracker';
 import toast from 'react-hot-toast';
 import Button from '../UI/Button';
 
@@ -42,7 +41,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   const savingRef = useRef(null); // Promise של השמירה הנוכחית
   const savingTimeoutRef = useRef(null);
 
-  // מפתח ב/localStorage לשמירת זמן התחלה
+  // מפתח ב-localStorage לשמירת זמן התחלה
   const timerStorageKey = currentTask ? `timer_${currentTask.id}_startTime` : null;
 
   // חישובים - יכולים להיות גם כשאין משימה (יחזירו 0)
@@ -56,7 +55,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
     : 0;
 
-  // פונקציית saveProgress מוגדרת כאן כדי שתהיה זמינה ל/useEffect
+  // פונקציית saveProgress מוגדרת כאן כדי שתהיה זמינה ל-useEffect
   const saveProgressRef = useRef(null);
 
   // צפצוף/התראה
@@ -112,7 +111,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     }
   }, [currentTask?.estimated_duration]);
 
-  // טעינת זמן התחלה מ/localStorage כשהטיימר נטען
+  // טעינת זמן התחלה מ-localStorage כשהטיימר נטען
   useEffect(() => {
     if (currentTask?.id && timerStorageKey) {
       const savedStartTime = localStorage.getItem(timerStorageKey);
@@ -124,7 +123,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         const elapsed = Math.floor((now - start) / 1000);
 
         if (elapsed > 0) {
-          console.log('⏰ נמצא טיימר פעיל ב/localStorage:', {
+          console.log('⏰ נמצא טיימר פעיל ב-localStorage:', {
             startTime: start.toISOString(),
             elapsedSeconds: elapsed,
             elapsedMinutes: Math.floor(elapsed / 60)
@@ -140,7 +139,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
             setOriginalStartTime(originalStart);
             console.log('⏰ זמן התחלה מקורי נטען:', originalStart.toISOString());
           } else {
-            // אם אין, נשתמש ב/startTime כ/originalStartTime
+            // אם אין, נשתמש ב-startTime כ-originalStartTime
             setOriginalStartTime(start);
           }
 
@@ -195,7 +194,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     };
   }, [isRunning, startTime]);
 
-  // טיפול ב/visibility change
+  // טיפול ב-visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isRunning && startTime) {
@@ -247,7 +246,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       
       // חישוב הזמן הכולל: time_spent + הזמן מהסשן הנוכחי
       // אם יש originalStartTime, נשתמש בו (זמן התחלה מקורי שלא מתאפס)
-      // אחרת נשתמש ב/startTime (שמתאפס אחרי שמירה אוטומטית)
+      // אחרת נשתמש ב-startTime (שמתאפס אחרי שמירה אוטומטית)
       let totalMinutes = timeSpent; // הזמן שכבר נשמר
       
       if (originalStartTime) {
@@ -256,7 +255,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
         const totalSecondsFromStart = Math.floor((now - originalStartTime) / 1000);
         totalMinutes = Math.floor(totalSecondsFromStart / 60);
       } else if (startTime) {
-        // אם אין originalStartTime, נשתמש ב/startTime + timeSpent
+        // אם אין originalStartTime, נשתמש ב-startTime + timeSpent
         const now = new Date();
         const sessionSeconds = Math.floor((now - startTime) / 1000);
         totalMinutes = timeSpent + Math.floor(sessionSeconds / 60);
@@ -292,15 +291,6 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   }
 
   const startTimer = () => {
-    // עצירת מעקב זמן מת (אם היה פעיל)
-    const idleMinutes = stopIdleTracking();
-    if (idleMinutes > 0) {
-      toast(`☕ ${formatIdleTime(idleMinutes)} זמן מת נרשמו`, {
-        icon: '⏸️',
-        duration: 3000
-      });
-    }
-    
     // אם הגענו ליעד, רק מסירים את הדגל - לא מאפסים זמן
     if (hasReachedTarget) {
       setHasReachedTarget(false);
@@ -312,16 +302,16 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       // אם יש startTime קיים, נשתמש בו (למקרה שהטיימר היה מושהה)
       if (!startTime) {
         setStartTime(now);
-        // שמירת זמן התחלה ב/localStorage
+        // שמירת זמן התחלה ב-localStorage
         if (currentTask?.id) {
           localStorage.setItem(timerStorageKey, now.toISOString());
-          console.log('💾 זמן התחלה נשמר ב/localStorage:', now.toISOString());
+          console.log('💾 זמן התחלה נשמר ב-localStorage:', now.toISOString());
         }
       }
       // שמירת זמן התחלה מקורי (אם עדיין לא נשמר)
       if (!originalStartTime) {
         setOriginalStartTime(now);
-        // שמירה ב/localStorage
+        // שמירה ב-localStorage
         if (currentTask?.id) {
           localStorage.setItem(`${timerStorageKey}_original`, now.toISOString());
           console.log('⏰ זמן התחלה מקורי נשמר:', now.toISOString());
@@ -334,9 +324,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
   
   const pauseTimer = () => {
     setIsRunning(false);
-    // התחלת מעקב זמן מת
-    startIdleTracking();
-    toast.success('טיימר הושהה - מעקב זמן מת התחיל ⏸️');
+    toast.success('טיימר הושהה - יכול לעבור למשימה אחרת');
   };
   
   const stopTimer = async () => {
@@ -360,14 +348,11 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       }
     }
     
-    // ניקוי מ/localStorage
+    // ניקוי מ-localStorage
     if (currentTask?.id) {
       localStorage.removeItem(timerStorageKey);
-      console.log('🗑️ זמן התחלה נמחק מ/localStorage');
+      console.log('🗑️ זמן התחלה נמחק מ-localStorage');
     }
-    
-    // התחלת מעקב זמן מת
-    startIdleTracking();
     
     setElapsedSeconds(0);
     setStartTime(null);
@@ -380,11 +365,11 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     setStartTime(null);
     setOriginalStartTime(null); // גם מאפסים את הזמן המקורי
     
-    // ניקוי מ/localStorage
+    // ניקוי מ-localStorage
     if (currentTask?.id) {
       localStorage.removeItem(timerStorageKey);
       localStorage.removeItem(`${timerStorageKey}_original`);
-      console.log('🗑️ זמן התחלה נמחק מ/localStorage (reset)');
+      console.log('🗑️ זמן התחלה נמחק מ-localStorage (reset)');
     }
   };
 
@@ -475,7 +460,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
     return await savePromise;
   };
 
-  // שמירת הפונקציה ב/ref כדי שה/useEffect יוכל לקרוא לה
+  // שמירת הפונקציה ב-ref כדי שה-useEffect יוכל לקרוא לה
   saveProgressRef.current = saveProgress;
   
   // שמירה אוטומטית לפני שהדף נסגר
@@ -484,7 +469,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
       // אם יש זמן שצבר, נשמור אותו
       if (isRunning && elapsedSeconds > 0 && saveProgressRef.current) {
         console.log('💾 שומר זמן לפני סגירת הדף...');
-        // נשתמש ב/sendBeacon אם אפשר, אחרת ננסה לשמור רגיל
+        // נשתמש ב-sendBeacon אם אפשר, אחרת ננסה לשמור רגיל
         const minutesToSave = Math.floor(elapsedSeconds / 60);
         if (minutesToSave > 0) {
           // ננסה לשמור - אבל לא נחכה כי הדף עומד להיסגר
@@ -625,7 +610,7 @@ function TaskTimer({ task, onUpdate, onComplete }) {
                   : progress >= 50 
                   ? 'bg-yellow-500' 
                   : 'bg-orange-500'
-              }`
+              }`}
               style={{ width: `${Math.min(100, progress)}%` }}
             />
           </div>
@@ -842,3 +827,4 @@ function TaskTimer({ task, onUpdate, onComplete }) {
 }
 
 export default TaskTimer;
+
