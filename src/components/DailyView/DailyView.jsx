@@ -161,13 +161,36 @@ function DailyView() {
   // משימות לתאריך מסוים
   const getTasksForDate = (date) => {
     const dateISO = getDateISO(date);
+    const dateObj = new Date(dateISO);
+    
     return tasks.filter(task => {
-      if (task.due_date === dateISO) return true;
-      if (task.start_date === dateISO) return true;
+      // משימה רגילה - לפי due_date
+      if (task.due_date === dateISO && !task.start_date) return true;
+      if (task.start_date === dateISO && !task.due_date) return true;
+      
+      // משימה ארוכה - בין start_date ל-due_date
+      if (task.start_date && task.due_date && task.start_date !== task.due_date) {
+        const startDate = new Date(task.start_date);
+        const dueDate = new Date(task.due_date);
+        // אם התאריך הנבחר בין תאריך ההתחלה לדדליין (כולל)
+        if (dateObj >= startDate && dateObj <= dueDate) {
+          return true;
+        }
+      }
+      
+      // משימה פשוטה עם start_date = due_date
+      if (task.start_date === dateISO || task.due_date === dateISO) return true;
+      
       // משימות בלי תאריך מופיעות רק ביום הנוכחי
-      if (!task.due_date && !task.is_completed && isToday(date)) return true;
+      if (!task.due_date && !task.start_date && !task.is_completed && isToday(date)) return true;
       return false;
     }).sort((a, b) => {
+      // דחופים קודם
+      const priorityOrder = { urgent: 0, high: 1, normal: 2 };
+      const aPriority = priorityOrder[a.priority] ?? 2;
+      const bPriority = priorityOrder[b.priority] ?? 2;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      
       if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
       if (a.due_time && b.due_time) return a.due_time.localeCompare(b.due_time);
       if (a.due_time) return -1;

@@ -51,6 +51,23 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
   const progress = estimated > 0 ? Math.min(100, Math.round((spent / estimated) * 100)) : 0;
   const isOverTime = spent > estimated && estimated > 0;
 
+  // חישובים למשימות ארוכות
+  const isLongTask = currentTask.start_date && currentTask.due_date && 
+                     currentTask.start_date !== currentTask.due_date;
+  
+  let daysRemaining = 0;
+  let dailyTarget = 0;
+  let remainingTime = estimated - spent;
+  
+  if (isLongTask && !currentTask.is_completed) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(currentTask.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    daysRemaining = Math.max(1, Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)) + 1);
+    dailyTarget = Math.ceil(remainingTime / daysRemaining);
+  }
+
   // פורמט דקות
   const formatMinutes = (minutes) => {
     if (minutes < 60) return `${minutes} דק'`;
@@ -116,7 +133,30 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
                 {currentTask.due_time}
               </span>
             )}
+            {/* תגית משימה ארוכה */}
+            {isLongTask && !currentTask.is_completed && (
+              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+                📅 {daysRemaining} ימים
+              </span>
+            )}
           </div>
+
+          {/* המלצה יומית למשימות ארוכות */}
+          {isLongTask && !currentTask.is_completed && dailyTarget > 0 && (
+            <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-purple-700 dark:text-purple-300">
+                  💡 יעד להיום: <strong>{formatMinutes(dailyTarget)}</strong>
+                </span>
+                <span className="text-purple-600 dark:text-purple-400 text-xs">
+                  (נותרו {formatMinutes(remainingTime)} סה"כ)
+                </span>
+              </div>
+              <div className="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                דדליין: {new Date(currentTask.due_date).toLocaleDateString('he-IL')}
+              </div>
+            </div>
+          )}
 
           {/* שורה שנייה: זמנים */}
           {!currentTask.is_completed && (
