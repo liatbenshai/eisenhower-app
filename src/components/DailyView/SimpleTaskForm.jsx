@@ -2,26 +2,14 @@ import { useState, useEffect } from 'react';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 import { getTaskTypeLearning } from '../../services/supabase';
-import { findOverlappingTasks, findNextFreeSlot, timeToMinutes, minutesToTime, formatMinutes } from '../../utils/timeOverlap';
-import { findFreeSlots } from '../../utils/autoScheduler';
-import { checkDayOverload, getSmartEstimation } from '../../utils/smartTimeInsights';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
 
-// שעות מועדפות לפי סוג משימה
-const TYPE_PREFERRED_HOURS = {
-  transcription: { start: 8, end: 12 },   // תמלול: בוקר
-  proofreading: { start: 10, end: 16 },   // הגהה: אחרי תמלולים
-  typing: { start: 8, end: 16 },
-  recording: { start: 9, end: 14 },
-  other: { start: 8, end: 16 }
-};
-
 /**
  * טופס משימה פשוט - מותאם לניהול זמן
  */
-function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, existingTasks = [] }) {
+function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
   const { addTask, editTask } = useTasks();
   const { user } = useAuth();
   const isEditing = !!task;
@@ -32,18 +20,13 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
     taskType: 'other',
     estimatedDuration: '',
     dueDate: defaultDate || new Date().toISOString().split('T')[0],
-    dueTime: defaultTime || '',
-    description: '',
-    priority: 'normal' // normal, high, urgent, low
+    dueTime: '',
+    description: ''
   });
 
   const [loading, setLoading] = useState(false);
   const [learningData, setLearningData] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState(null);
-  const [overlapWarning, setOverlapWarning] = useState(null);
-  const [overloadWarning, setOverloadWarning] = useState(null);
-  const [smartEstimation, setSmartEstimation] = useState(null);
-  const [manualTimeSet, setManualTimeSet] = useState(!!defaultTime); // אם יש שעה מברירת מחדל - לא לדרוס
 
   // מילוי נתונים בעריכה
   useEffect(() => {
@@ -54,13 +37,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
         estimatedDuration: task.estimated_duration || '',
         dueDate: task.due_date || defaultDate || new Date().toISOString().split('T')[0],
         dueTime: task.due_time || '',
-        description: task.description || '',
-        priority: task.priority || 'normal'
+        description: task.description || ''
       });
-      // בעריכה - לא לשנות את השעה הקיימת
-      if (task.due_time) {
-        setManualTimeSet(true);
-      }
     }
   }, [task, defaultDate]);
 
@@ -96,79 +74,6 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
     setSuggestedTime(suggested);
   }, [formData.taskType, learningData, taskTypes]);
 
-  // הערכה חכמה מהיסטוריה
-  useEffect(() => {
-    if (!formData.taskType || !existingTasks.length) return;
-    
-    const estimation = getSmartEstimation(formData.taskType, existingTasks);
-    setSmartEstimation(estimation);
-  }, [formData.taskType, existingTasks]);
-
-  // בדיקת עומס יום כשמשתנה תאריך או משך
-  useEffect(() => {
-    if (!formData.dueDate) return;
-    
-    const duration = parseInt(formData.estimatedDuration) || 0;
-    const overload = checkDayOverload(formData.dueDate, existingTasks, duration);
-    
-    if (overload.riskLevel !== 'ok') {
-      setOverloadWarning(overload);
-    } else {
-      setOverloadWarning(null);
-    }
-  }, [formData.dueDate, formData.estimatedDuration, existingTasks]);
-
-  // שיבוץ אוטומטי של שעה כשנקבע משך הזמן או סוג משימה
-  useEffect(() => {
-    // אל תדרוס אם המשתמשת שינתה ידנית או זו עריכה
-    if (isEditing || manualTimeSet) return;
-    if (!formData.dueDate || !formData.estimatedDuration) return;
-
-    const duration = parseInt(formData.estimatedDuration) || 45;
-    const preferredHours = TYPE_PREFERRED_HOURS[formData.taskType] || TYPE_PREFERRED_HOURS.other;
-    
-    // מצא חלונות פנויים ביום הזה
-    const freeSlots = findFreeSlots(formData.dueDate, existingTasks);
-    
-    // חפש חלון בשעות המועדפות
-    let bestSlot = null;
-    const prefStartMin = preferredHours.start * 60;
-    const prefEndMin = preferredHours.end * 60;
-    
-    for (const slot of freeSlots) {
-      // האם החלון בטווח השעות המועדפות?
-      if (slot.start >= prefStartMin && slot.start < prefEndMin) {
-        if (slot.minutes >= duration + 15) { // +15 להפסקה
-          bestSlot = slot;
-          break;
-        }
-      }
-    }
-    
-    // אם לא מצאנו בשעות מועדפות - חפש בכל שעה
-    if (!bestSlot) {
-      for (const slot of freeSlots) {
-        if (slot.minutes >= duration + 15) {
-          bestSlot = slot;
-          break;
-        }
-      }
-    }
-    
-    if (bestSlot) {
-      const hours = Math.floor(bestSlot.start / 60);
-      const mins = bestSlot.start % 60;
-      const timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-      setFormData(prev => ({ ...prev, dueTime: timeStr }));
-    }
-  }, [formData.dueDate, formData.taskType, formData.estimatedDuration, existingTasks, isEditing, manualTimeSet]);
-
-  // כשהמשתמשת משנה את השעה ידנית - סמן שזה ידני
-  const handleTimeChange = (e) => {
-    setManualTimeSet(true);
-    handleChange(e);
-  };
-
   // טיפול בשינוי שדה
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -184,8 +89,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
   };
 
   // שליחת הטופס
-  const handleSubmit = async (e, forceSubmit = false) => {
-    e?.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
     // וידוא
     if (!formData.title.trim()) {
@@ -198,35 +103,6 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
       return;
     }
 
-    // בדיקת חפיפות (רק אם יש תאריך ושעה, ולא מדלגים על הבדיקה)
-    if (!forceSubmit && formData.dueDate && formData.dueTime) {
-      const newTaskData = {
-        id: task?.id,
-        dueDate: formData.dueDate,
-        dueTime: formData.dueTime,
-        estimatedDuration: parseInt(formData.estimatedDuration)
-      };
-
-      const overlapping = findOverlappingTasks(newTaskData, existingTasks);
-      
-      if (overlapping.length > 0) {
-        // מציאת זמן פנוי חלופי
-        const nextFree = findNextFreeSlot(
-          formData.dueDate,
-          parseInt(formData.estimatedDuration),
-          existingTasks
-        );
-
-        setOverlapWarning({
-          overlappingTasks: overlapping,
-          suggestedTime: nextFree
-        });
-        return; // לא שולחים - מחכים להחלטה
-      }
-    }
-
-    // ניקוי אזהרה
-    setOverlapWarning(null);
     setLoading(true);
 
     try {
@@ -237,7 +113,6 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
         estimatedDuration: parseInt(formData.estimatedDuration),
         dueDate: formData.dueDate || null,
         dueTime: formData.dueTime || null,
-        priority: formData.priority || 'normal',
         quadrant: 1
       };
 
@@ -256,39 +131,6 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
     } finally {
       setLoading(false);
     }
-  };
-
-  // קבלת הזמן המוצע מאזהרת החפיפה
-  const handleAcceptAlternativeTime = () => {
-    if (overlapWarning?.suggestedTime) {
-      const suggested = overlapWarning.suggestedTime;
-      
-      // בדיקה אם ההצעה היא למחר
-      if (suggested.startsWith('מחר ')) {
-        const time = suggested.replace('מחר ', '');
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
-        
-        setFormData(prev => ({ 
-          ...prev, 
-          dueTime: time,
-          dueDate: tomorrowStr 
-        }));
-        toast.success(`המשימה הועברה למחר ב-${time}`);
-      } else {
-        setFormData(prev => ({ ...prev, dueTime: suggested }));
-        toast.success(`השעה שונתה ל-${suggested}`);
-      }
-      
-      setOverlapWarning(null);
-    }
-  };
-
-  // שמירה למרות החפיפה
-  const handleForceSubmit = () => {
-    setOverlapWarning(null);
-    handleSubmit(null, true);
   };
 
   const selectedType = taskTypes[formData.taskType];
@@ -319,8 +161,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
               className={`
                 p-3 rounded-lg border-2 text-center transition-all
                 ${formData.taskType === type.id
-                  ? type.color + ' border-current ring-2 ring-offset-2 ring-current'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                 }
               `}
             >
@@ -401,128 +243,13 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
           value={formData.dueDate}
           onChange={handleChange}
         />
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              שעה
-            </label>
-            {!manualTimeSet && formData.dueTime && (
-              <span className="text-xs text-green-600 dark:text-green-400">
-                ✓ שובץ אוטומטית
-              </span>
-            )}
-          </div>
-          <Input
-            type="time"
-            name="dueTime"
-            value={formData.dueTime}
-            onChange={handleTimeChange}
-          />
-          {!manualTimeSet && formData.dueTime && formData.taskType && (
-            <p className="text-xs text-gray-500 mt-1">
-              {formData.taskType === 'transcription' ? '🎤 תמלול בשעות הבוקר' :
-               formData.taskType === 'proofreading' ? '📝 הגהה אחרי התמלולים' :
-               '📍 חלון פנוי ראשון'}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* אזהרת עומס יום */}
-      {overloadWarning && (
-        <div className={`p-4 rounded-xl border-2 ${
-          overloadWarning.riskLevel === 'critical' 
-            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
-            : overloadWarning.riskLevel === 'high'
-            ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
-            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-        }`}>
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">
-              {overloadWarning.riskLevel === 'critical' ? '🚨' : 
-               overloadWarning.riskLevel === 'high' ? '⚠️' : '💡'}
-            </span>
-            <div className="flex-1">
-              <h4 className={`font-bold ${
-                overloadWarning.riskLevel === 'critical' ? 'text-red-800 dark:text-red-200' :
-                overloadWarning.riskLevel === 'high' ? 'text-orange-800 dark:text-orange-200' :
-                'text-yellow-800 dark:text-yellow-200'
-              }`}>
-                {overloadWarning.message}
-              </h4>
-              <p className="text-sm mt-1 opacity-80">
-                מתוכנן: {Math.round(overloadWarning.totalPlanned / 60)} שעות מתוך {Math.round(overloadWarning.availableTime / 60)} אפשריות
-                ({overloadWarning.tasksCount} משימות)
-              </p>
-              {overloadWarning.suggestion && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const tomorrow = new Date(formData.dueDate);
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      dueDate: tomorrow.toISOString().split('T')[0] 
-                    }));
-                    toast.success('הועבר למחר');
-                  }}
-                  className="mt-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  📅 העבר למחר במקום
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* הצעת זמן מלמידה */}
-      {smartEstimation?.message && !formData.estimatedDuration && (
-        <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
-          <p className="text-sm text-indigo-700 dark:text-indigo-300">
-            {smartEstimation.message}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setFormData(prev => ({ ...prev, estimatedDuration: smartEstimation.suggested.toString() }));
-              toast.success(`נקבע ל-${smartEstimation.suggested} דקות`);
-            }}
-            className="mt-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-          >
-            ← קבע {smartEstimation.suggested} דק' (מבוסס על {smartEstimation.basedOn})
-          </button>
-        </div>
-      )}
-
-      {/* עדיפות */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          עדיפות
-        </label>
-        <div className="flex gap-2">
-          {[
-            { id: 'low', name: 'נמוכה', icon: '⚪', color: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' },
-            { id: 'normal', name: 'רגילה', icon: '🔵', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
-            { id: 'high', name: 'גבוהה', icon: '🟠', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
-            { id: 'urgent', name: 'דחוף!', icon: '🔴', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' }
-          ].map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, priority: p.id }))}
-              className={`
-                flex-1 py-2 rounded-lg border-2 font-medium transition-all text-sm
-                ${formData.priority === p.id
-                  ? `${p.color} border-current ring-2 ring-offset-1`
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800'
-                }
-              `}
-            >
-              {p.icon} {p.name}
-            </button>
-          ))}
-        </div>
+        <Input
+          label="שעה (אופציונלי)"
+          type="time"
+          name="dueTime"
+          value={formData.dueTime}
+          onChange={handleChange}
+        />
       </div>
 
       {/* תיאור */}
@@ -542,67 +269,7 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
         />
       </div>
 
-      {/* אזהרת חפיפה */}
-      {overlapWarning && (
-        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-300 dark:border-orange-700 rounded-lg">
-          <div className="flex items-start gap-2 mb-3">
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <h4 className="font-bold text-orange-800 dark:text-orange-200">
-                יש חפיפה בזמנים!
-              </h4>
-              <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                המשימה חופפת עם:
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-2 mb-4">
-            {overlapWarning.overlappingTasks.map(t => {
-              const taskType = taskTypes[t.task_type] || taskTypes.other;
-              const endTime = timeToMinutes(t.due_time) + (t.estimated_duration || 30);
-              return (
-                <div key={t.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded">
-                  <span>{taskType?.icon}</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{t.title}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-auto">
-                    {t.due_time} - {minutesToTime(endTime)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {overlapWarning.suggestedTime && (
-              <button
-                type="button"
-                onClick={handleAcceptAlternativeTime}
-                className="w-full py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
-              >
-                ✅ העבר ל-{overlapWarning.suggestedTime} (זמן פנוי)
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleForceSubmit}
-              className="w-full py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-            >
-              ⚡ שמור בכל זאת (חפיפה)
-            </button>
-            <button
-              type="button"
-              onClick={() => setOverlapWarning(null)}
-              className="w-full py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              ← חזרה לעריכה
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* כפתורים */}
-      {!overlapWarning && (
       <div className="flex gap-3 pt-2">
         <Button type="submit" loading={loading} className="flex-1">
           {isEditing ? 'שמור שינויים' : 'הוסף משימה'}
@@ -611,7 +278,6 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
           ביטול
         </Button>
       </div>
-      )}
     </form>
   );
 }
