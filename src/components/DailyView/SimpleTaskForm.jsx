@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getTaskTypeLearning } from '../../services/supabase';
 import { findOverlappingTasks, findNextFreeSlot, timeToMinutes, minutesToTime, formatMinutes } from '../../utils/timeOverlap';
 import { findFreeSlots } from '../../utils/autoScheduler';
+import { checkDayOverload, getSmartEstimation } from '../../utils/smartTimeInsights';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -40,6 +41,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
   const [learningData, setLearningData] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState(null);
   const [overlapWarning, setOverlapWarning] = useState(null);
+  const [overloadWarning, setOverloadWarning] = useState(null);
+  const [smartEstimation, setSmartEstimation] = useState(null);
   const [manualTimeSet, setManualTimeSet] = useState(!!defaultTime); // אם יש שעה מברירת מחדל - לא לדרוס
 
   // מילוי נתונים בעריכה
@@ -92,6 +95,28 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
 
     setSuggestedTime(suggested);
   }, [formData.taskType, learningData, taskTypes]);
+
+  // הערכה חכמה מהיסטוריה
+  useEffect(() => {
+    if (!formData.taskType || !existingTasks.length) return;
+    
+    const estimation = getSmartEstimation(formData.taskType, existingTasks);
+    setSmartEstimation(estimation);
+  }, [formData.taskType, existingTasks]);
+
+  // בדיקת עומס יום כשמשתנה תאריך או משך
+  useEffect(() => {
+    if (!formData.dueDate) return;
+    
+    const duration = parseInt(formData.estimatedDuration) || 0;
+    const overload = checkDayOverload(formData.dueDate, existingTasks, duration);
+    
+    if (overload.riskLevel !== 'ok') {
+      setOverloadWarning(overload);
+    } else {
+      setOverloadWarning(null);
+    }
+  }, [formData.dueDate, formData.estimatedDuration, existingTasks]);
 
   // שיבוץ אוטומטי של שעה כשנקבע משך הזמן או סוג משימה
   useEffect(() => {
@@ -402,6 +427,73 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
           )}
         </div>
       </div>
+
+      {/* אזהרת עומס יום */}
+      {overloadWarning && (
+        <div className={`p-4 rounded-xl border-2 ${
+          overloadWarning.riskLevel === 'critical' 
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
+            : overloadWarning.riskLevel === 'high'
+            ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+        }`}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">
+              {overloadWarning.riskLevel === 'critical' ? '🚨' : 
+               overloadWarning.riskLevel === 'high' ? '⚠️' : '💡'}
+            </span>
+            <div className="flex-1">
+              <h4 className={`font-bold ${
+                overloadWarning.riskLevel === 'critical' ? 'text-red-800 dark:text-red-200' :
+                overloadWarning.riskLevel === 'high' ? 'text-orange-800 dark:text-orange-200' :
+                'text-yellow-800 dark:text-yellow-200'
+              }`}>
+                {overloadWarning.message}
+              </h4>
+              <p className="text-sm mt-1 opacity-80">
+                מתוכנן: {Math.round(overloadWarning.totalPlanned / 60)} שעות מתוך {Math.round(overloadWarning.availableTime / 60)} אפשריות
+                ({overloadWarning.tasksCount} משימות)
+              </p>
+              {overloadWarning.suggestion && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tomorrow = new Date(formData.dueDate);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      dueDate: tomorrow.toISOString().split('T')[0] 
+                    }));
+                    toast.success('הועבר למחר');
+                  }}
+                  className="mt-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  📅 העבר למחר במקום
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* הצעת זמן מלמידה */}
+      {smartEstimation?.message && !formData.estimatedDuration && (
+        <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
+          <p className="text-sm text-indigo-700 dark:text-indigo-300">
+            {smartEstimation.message}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setFormData(prev => ({ ...prev, estimatedDuration: smartEstimation.suggested.toString() }));
+              toast.success(`נקבע ל-${smartEstimation.suggested} דקות`);
+            }}
+            className="mt-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            ← קבע {smartEstimation.suggested} דק' (מבוסס על {smartEstimation.basedOn})
+          </button>
+        </div>
+      )}
 
       {/* עדיפות */}
       <div>
