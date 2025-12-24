@@ -358,11 +358,18 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                   </span>
                 )}
                 <span className="text-gray-400">•</span>
-                <span>{formatMinutes(duration)}</span>
-                {spent > 0 && (
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">
-                    (עבדת {formatMinutes(spent)})
-                  </span>
+                {spent > 0 ? (
+                  spent >= duration ? (
+                    <span className="text-red-600 dark:text-red-400 font-medium">
+                      חריגה: +{formatMinutes(spent - duration)}
+                    </span>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400 font-medium">
+                      נותרו {formatMinutes(duration - spent)}
+                    </span>
+                  )
+                ) : (
+                  <span>{formatMinutes(duration)}</span>
                 )}
               </div>
               

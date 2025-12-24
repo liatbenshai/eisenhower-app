@@ -19,11 +19,15 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
     title: '',
     taskType: 'other',
     estimatedDuration: '',
-    dueDate: defaultDate || new Date().toISOString().split('T')[0],
+    startDate: defaultDate || new Date().toISOString().split('T')[0],
+    dueDate: '', // דדליין - אופציונלי
     dueTime: '',
     description: '',
     priority: 'normal' // דחיפות: urgent, high, normal
   });
+
+  // האם משימה ארוכה (מעל יום)
+  const [isLongTask, setIsLongTask] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [learningData, setLearningData] = useState(null);
@@ -32,11 +36,14 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
   // מילוי נתונים בעריכה
   useEffect(() => {
     if (task) {
+      const hasDeadline = task.due_date && task.start_date && task.due_date !== task.start_date;
+      setIsLongTask(hasDeadline);
       setFormData({
         title: task.title || '',
         taskType: task.task_type || 'other',
         estimatedDuration: task.estimated_duration || '',
-        dueDate: task.due_date || defaultDate || new Date().toISOString().split('T')[0],
+        startDate: task.start_date || task.due_date || defaultDate || new Date().toISOString().split('T')[0],
+        dueDate: hasDeadline ? task.due_date : '',
         dueTime: task.due_time || '',
         description: task.description || '',
         priority: task.priority || 'normal'
@@ -113,7 +120,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         description: formData.description.trim() || null,
         taskType: formData.taskType,
         estimatedDuration: parseInt(formData.estimatedDuration),
-        dueDate: formData.dueDate || null,
+        startDate: formData.startDate || null,
+        dueDate: isLongTask ? formData.dueDate : formData.startDate, // אם לא משימה ארוכה, dueDate = startDate
         dueTime: formData.dueTime || null,
         priority: formData.priority || 'normal',
         quadrant: 1
@@ -288,22 +296,79 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         )}
       </div>
 
-      {/* תאריך ושעה */}
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="תאריך"
-          type="date"
-          name="dueDate"
-          value={formData.dueDate}
-          onChange={handleChange}
-        />
-        <Input
-          label="שעה (אופציונלי)"
-          type="time"
-          name="dueTime"
-          value={formData.dueTime}
-          onChange={handleChange}
-        />
+      {/* תאריכים */}
+      <div className="space-y-3">
+        {/* בחירת סוג משימה */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLongTask(false)}
+            className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
+              !isLongTask
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700'
+                : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            📋 משימה פשוטה
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsLongTask(true)}
+            className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
+              isLongTask
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700'
+                : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            📅 משימה ארוכה (עם דדליין)
+          </button>
+        </div>
+
+        {!isLongTask ? (
+          /* משימה פשוטה - תאריך אחד + שעה */
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="תאריך"
+              type="date"
+              name="startDate"
+              value={formData.startDate}
+              onChange={handleChange}
+            />
+            <Input
+              label="שעה (אופציונלי)"
+              type="time"
+              name="dueTime"
+              value={formData.dueTime}
+              onChange={handleChange}
+            />
+          </div>
+        ) : (
+          /* משימה ארוכה - תאריך התחלה + דדליין */
+          <div className="space-y-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="📅 תאריך התחלה"
+                type="date"
+                name="startDate"
+                value={formData.startDate}
+                onChange={handleChange}
+              />
+              <Input
+                label="🎯 דדליין לסיום"
+                type="date"
+                name="dueDate"
+                value={formData.dueDate}
+                onChange={handleChange}
+                min={formData.startDate}
+              />
+            </div>
+            {formData.startDate && formData.dueDate && (
+              <div className="text-sm text-purple-600 dark:text-purple-400">
+                ⏱️ {Math.ceil((new Date(formData.dueDate) - new Date(formData.startDate)) / (1000 * 60 * 60 * 24))} ימים לביצוע
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* תיאור */}

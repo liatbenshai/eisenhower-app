@@ -60,8 +60,10 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   const estimated = currentTask?.estimated_duration ? parseInt(currentTask.estimated_duration) : 0;
   const currentSessionMinutes = Math.floor(elapsedSeconds / 60);
   const totalSpent = timeSpent + currentSessionMinutes;
-  const progress = targetMinutes > 0
-    ? Math.min(100, Math.round((currentSessionMinutes / targetMinutes) * 100))
+  const remaining = Math.max(0, estimated - totalSpent);
+  const isOverTime = totalSpent > estimated && estimated > 0;
+  const progress = estimated > 0
+    ? Math.min(100, Math.round((totalSpent / estimated) * 100))
     : 0;
 
   // עדכון targetMinutes
@@ -283,12 +285,16 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   };
 
   // עצירה ושמירה
+  const stopAndSaveRef = useRef(null);
+  
   const stopAndSave = async () => {
     const result = await saveProgress(true);
     if (result?.success) {
       toast.success(`💾 נשמר! ${result.minutesToAdd} דקות נוספו`);
     }
   };
+  
+  stopAndSaveRef.current = stopAndSave;
 
   // פורמט זמן
   const formatSeconds = (seconds) => {
@@ -305,6 +311,60 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
     if (mins === 0) return `${hours}:00`;
     return `${hours}:${mins.toString().padStart(2, '0')}`;
   };
+
+  // התראה כשהזמן נגמר
+  const [timeUpNotified, setTimeUpNotified] = useState(false);
+  
+  useEffect(() => {
+    if (isRunning && estimated > 0 && !timeUpNotified) {
+      if (totalSpent >= estimated) {
+        setTimeUpNotified(true);
+        // צליל התראה
+        try {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp2YjHNiXWZxgIqRko2Gf3dxb3F2fYOIi4uJhoJ9d3Rxc3h9goeKi4mFgHt2c3N3fIGGiYuKh4N+eXZ0dXl+g4eKi4iEf3p2dHV4fYKHiouIhH95dXR2eX6DiIuLiIR/eXV0dXl+g4iLi4mFf3p2dHV4fYKHi4uJhYB7d3R1eH2Ch4uLiYWAe3d0dXh9goeKi4mFgHt3dHV4fYKHi4uIhH95dXR2eX6Ch4uLiYSAe3d0dXh9goeLi4mFgHt3dHV4fYKHi4uJhYB7d3R1eH2Ch4uLiYV/end0dXl+g4iLi4iEf3l1dHZ5foOIi4uIhH95dXR2eX6DiIuLiIR/eXV0dnl+g4iLi4iEf3l1dHZ5foOIi4uIhH95dXR2eX6DiIuLiIR/eXV0dnl+gw==');
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        } catch (e) {}
+        
+        // הודעה
+        toast((t) => (
+          <div className="flex flex-col gap-2">
+            <div className="font-bold">⏰ הזמן המתוכנן הסתיים!</div>
+            <div className="text-sm">סיימת את {estimated} הדקות שתכננת</div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  if (stopAndSaveRef.current) {
+                    stopAndSaveRef.current();
+                  }
+                }}
+                className="px-3 py-1 bg-green-500 text-white rounded text-sm"
+              >
+                ✅ סיימתי
+              </button>
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="px-3 py-1 bg-gray-300 text-gray-700 rounded-lg text-sm"
+              >
+                ממשיכה
+              </button>
+            </div>
+          </div>
+        ), { 
+          duration: 30000,
+          icon: '⏰'
+        });
+      }
+    }
+  }, [isRunning, totalSpent, estimated, timeUpNotified]);
+
+  // איפוס התראה כשמתחילים מחדש
+  useEffect(() => {
+    if (!isRunning) {
+      setTimeUpNotified(false);
+    }
+  }, [isRunning]);
 
   if (!currentTask) {
     return (
@@ -375,14 +435,19 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
             <div className="mb-4">
               <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-blue-400 to-blue-600"
+                  className={`h-full ${isOverTime ? 'bg-gradient-to-r from-red-400 to-red-600' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
                   initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
+                  animate={{ width: `${Math.min(100, progress)}%` }}
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>{progress}%</span>
-                <span>{formatMinutes(targetMinutes - currentSessionMinutes)} נותר</span>
+                <span className={isOverTime ? 'text-red-600 font-medium' : ''}>
+                  {isOverTime 
+                    ? `חריגה: +${formatMinutes(totalSpent - estimated)}`
+                    : `נותרו ${formatMinutes(remaining)}`
+                  }
+                </span>
               </div>
             </div>
 

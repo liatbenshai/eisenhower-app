@@ -211,26 +211,30 @@ function TaskCard({
             <div className="mt-2">
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-gray-600 dark:text-gray-400">התקדמות</span>
-                <span className="font-medium text-blue-600 dark:text-blue-400">
-                  {regularTaskProgress}%
+                <span className={`font-medium ${
+                  regularTaskProgress >= 100 
+                    ? 'text-red-600 dark:text-red-400' 
+                    : 'text-blue-600 dark:text-blue-400'
+                }`}>
+                  {regularTaskProgress >= 100 
+                    ? `חריגה: +${(currentTask.time_spent || 0) - currentTask.estimated_duration} דק'`
+                    : `נותרו ${currentTask.estimated_duration - (currentTask.time_spent || 0)} דק'`
+                  }
                 </span>
               </div>
               <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
                     regularTaskProgress >= 100 
-                      ? 'bg-green-500' 
+                      ? 'bg-red-500' 
                       : regularTaskProgress >= 75 
-                      ? 'bg-blue-500' 
+                      ? 'bg-orange-500' 
                       : regularTaskProgress >= 50 
                       ? 'bg-yellow-500' 
-                      : 'bg-orange-500'
+                      : 'bg-green-500'
                   }`}
-                  style={{ width: `${regularTaskProgress}%` }}
+                  style={{ width: `${Math.min(100, regularTaskProgress)}%` }}
                 />
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {currentTask.time_spent || 0} / {currentTask.estimated_duration} דקות
               </div>
             </div>
           )}

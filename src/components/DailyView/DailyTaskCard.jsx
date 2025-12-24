@@ -137,7 +137,10 @@ function DailyTaskCard({ task, onEdit, onUpdate }) {
                 <span className={`text-sm font-medium ${
                   isOverTime ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'
                 }`}>
-                  {formatMinutes(spent)} / {formatMinutes(estimated)}
+                  {isOverTime 
+                    ? `חריגה: +${formatMinutes(spent - estimated)}`
+                    : `נותרו ${formatMinutes(estimated - spent)}`
+                  }
                 </span>
               </div>
 
