@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import TaskInsights from './pages/TaskInsights';
+import TimeManagement from './pages/TimeManagement';
 
 // רכיבים
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -75,6 +76,12 @@ function App() {
         <Route path="/insights" element={
           <ProtectedRoute>
             <TaskInsights />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/time-management" element={
+          <ProtectedRoute>
+            <TimeManagement />
           </ProtectedRoute>
         } />
         
