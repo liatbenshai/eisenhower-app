@@ -134,13 +134,10 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
 
   // טעינת מצב שמור מ-localStorage - רק פעם אחת למשימה!
   useEffect(() => {
-    console.log('🔍 Restore useEffect:', { taskId: currentTask?.id, restoredTaskIdRef: restoredTaskIdRef.current });
-    
     if (!currentTask?.id) return;
     
     // אם כבר שוחזר לאותה משימה - לא לשחזר שוב
     if (restoredTaskIdRef.current === currentTask.id) {
-      console.log('⏭️ Already restored for this task, skipping');
       return;
     }
     
@@ -148,11 +145,9 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     restoredTaskIdRef.current = currentTask.id;
 
     const savedState = loadTimerState(currentTask.id);
-    console.log('📦 Saved state:', savedState);
     
     // אם אין מצב שמור או שהוא לא רץ או שכבר שוחזר - לא לשחזר
     if (!savedState || !savedState.isRunning || !savedState.sessionStartTime || savedState.restored) {
-      console.log('⏭️ No valid state to restore');
       return;
     }
     
@@ -162,12 +157,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     const elapsedSinceStart = Math.floor((now - startTime) / 1000);
     
     if (elapsedSinceStart > 0 && elapsedSinceStart < 86400) { // פחות מ-24 שעות
-      console.log('⏰ משחזר טיימר:', {
-        taskId: currentTask.id,
-        elapsedSinceStart,
-        minutes: Math.floor(elapsedSinceStart / 60)
-      });
-      
       // סימון ב-localStorage שכבר שוחזר
       saveTimerState(currentTask.id, { ...savedState, restored: true });
       
@@ -190,18 +179,13 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
 
   // עדכון שניות כל שנייה
   useEffect(() => {
-    console.log('🔄 Interval useEffect:', { isRunning, sessionStartTime: sessionStartTime?.toISOString() });
-    
     if (isRunning && sessionStartTime) {
-      console.log('▶️ Starting interval');
       intervalRef.current = setInterval(() => {
         const now = new Date();
         const elapsed = Math.floor((now - sessionStartTime) / 1000);
-        console.log('⏱️ Tick:', elapsed);
         setSessionSeconds(elapsed);
       }, 1000);
     } else {
-      console.log('⏹️ Stopping interval');
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -210,7 +194,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
 
     return () => {
       if (intervalRef.current) {
-        console.log('🧹 Cleanup interval');
         clearInterval(intervalRef.current);
       }
     };
@@ -265,7 +248,8 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       saveTimerState(currentTask.id, {
         isRunning,
         sessionStartTime: sessionStartTime.toISOString(),
-        sessionSeconds
+        sessionSeconds,
+        restored: true // מונע שחזור כפול כשהקומפוננטה נטענת מחדש
       });
     }
   }, [currentTask?.id, isRunning, sessionStartTime, sessionSeconds]);
@@ -525,8 +509,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
 
   // התחלת טיימר
   const startTimer = useCallback(() => {
-    console.log('🚀 startTimer called:', { taskId: currentTask?.id, isRunning, sessionSeconds });
-    
     if (currentTask?.id) {
       setActiveTask(currentTask.id);
     }
@@ -537,14 +519,12 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     
     if (!isRunning) {
       const now = new Date();
-      console.log('🕐 Setting sessionStartTime:', now.toISOString());
       setSessionStartTime(now);
       // לא מאפסים sessionSeconds אם כבר יש זמן צבור (מושהה)
       if (sessionSeconds === 0) {
         setSessionSeconds(0);
         savedMinutesThisSessionRef.current = 0; // סשן חדש - אפס את השמור
       }
-      console.log('✅ Setting isRunning to true');
       setIsRunning(true);
       
       saveTimerState(currentTask?.id, {
@@ -555,8 +535,6 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
       });
       
       toast.success('▶ טיימר הופעל');
-    } else {
-      console.log('⚠️ Timer already running, skipping');
     }
   }, [currentTask?.id, hasReachedTarget, isRunning, sessionSeconds, setActiveTask]);
 
