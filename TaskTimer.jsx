@@ -687,7 +687,7 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
 
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          ⏱️ טיימר עבודה
+          ⏱️ טיימר עבודה - TEST
         </h3>
         {hasReachedTarget && (
           <span className="text-xs font-bold text-green-600 dark:text-green-400 animate-bounce">
