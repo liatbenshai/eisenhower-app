@@ -140,6 +140,12 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     if (restoredTaskIdRef.current === currentTask.id) {
       return;
     }
+    
+    // אם הטיימר כבר רץ או יש הפרעה - לא לשחזר
+    if (isRunning || interruption) {
+      restoredTaskIdRef.current = currentTask.id;
+      return;
+    }
 
     const savedState = loadTimerState(currentTask.id);
     if (savedState && savedState.isRunning && savedState.sessionStartTime) {
@@ -168,6 +174,7 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
             duration: 3000
           });
         }
+        return;
       } else {
         // זמן ישן מדי - מנקים
         clearTimerState(currentTask.id);
@@ -176,7 +183,7 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
     
     // סימון ששוחזר (גם אם לא היה מה לשחזר)
     restoredTaskIdRef.current = currentTask.id;
-  }, [currentTask?.id]);
+  }, [currentTask?.id, isRunning, interruption]);
 
   // עדכון שניות כל שנייה
   useEffect(() => {
