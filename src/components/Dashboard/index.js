@@ -1,4 +1,5 @@
 export { default as Dashboard } from './Dashboard';
+export { default as CEODashboard } from './CEODashboard';
 export { default as ComprehensiveDashboard } from './ComprehensiveDashboard';
 export { default as DailySummaryCard } from './DailySummaryCard';
 export { default as WeeklySummaryCard } from './WeeklySummaryCard';

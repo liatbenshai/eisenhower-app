@@ -17,43 +17,78 @@ export const TASK_TYPES = {
     id: 'transcription', 
     name: 'תמלול', 
     icon: '🎙️',
-    defaultDuration: 60
+    defaultDuration: 60,
+    category: 'work'
   },
   proofreading: { 
     id: 'proofreading', 
     name: 'הגהה', 
     icon: '📝',
-    defaultDuration: 45
+    defaultDuration: 45,
+    category: 'work'
   },
   email: { 
     id: 'email', 
     name: 'מיילים', 
     icon: '📧',
-    defaultDuration: 25
+    defaultDuration: 25,
+    category: 'work'
   },
   course: { 
     id: 'course', 
-    name: 'עבודה על הקורס', 
+    name: 'קורס התמלול', 
     icon: '📚',
-    defaultDuration: 90
+    defaultDuration: 90,
+    category: 'venture'
   },
   client_communication: { 
     id: 'client_communication', 
-    name: 'תקשורת עם לקוחות', 
+    name: 'לקוחות', 
     icon: '💬',
-    defaultDuration: 30
+    defaultDuration: 30,
+    category: 'work'
+  },
+  management: { 
+    id: 'management', 
+    name: 'ניהול', 
+    icon: '👔',
+    defaultDuration: 45,
+    category: 'work'
+  },
+  family: { 
+    id: 'family', 
+    name: 'משפחה', 
+    icon: '👨‍👩‍👧‍👦',
+    defaultDuration: 60,
+    category: 'family'
+  },
+  kids: { 
+    id: 'kids', 
+    name: 'ילדים', 
+    icon: '🧒',
+    defaultDuration: 30,
+    category: 'family'
+  },
+  personal: { 
+    id: 'personal', 
+    name: 'זמן אישי', 
+    icon: '🧘',
+    defaultDuration: 30,
+    category: 'personal'
   },
   unexpected: { 
     id: 'unexpected', 
     name: 'בלת"מים', 
     icon: '⚡',
-    defaultDuration: 30
+    defaultDuration: 30,
+    category: 'work'
   },
   other: { 
     id: 'other', 
     name: 'אחר', 
     icon: '📋',
-    defaultDuration: 30
+    defaultDuration: 30,
+    category: 'work'
   }
 };
 

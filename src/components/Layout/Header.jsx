@@ -48,7 +48,8 @@ function Header() {
 
   // קישורי ניווט
   const navLinks = [
-    { path: '/dashboard', label: 'לוח משימות', icon: '📋' },
+    { path: '/dashboard', label: 'דשבורד', icon: '🏠' },
+    { path: '/daily', label: 'תצוגה יומית', icon: '📋' },
     { path: '/time-management', label: 'ניהול זמן', icon: '⏱️' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];
