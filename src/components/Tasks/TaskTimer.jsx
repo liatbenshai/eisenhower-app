@@ -766,13 +766,19 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={endInterruption}
+              onClick={(e) => {
+                e.stopPropagation();
+                endInterruption();
+              }}
               className="flex-1 bg-green-500 hover:bg-green-600 text-white"
             >
               ✅ חזרה לעבודה
             </Button>
             <Button
-              onClick={cancelInterruption}
+              onClick={(e) => {
+                e.stopPropagation();
+                cancelInterruption();
+              }}
               className="bg-gray-400 hover:bg-gray-500 text-white"
             >
               ❌
@@ -857,13 +863,19 @@ function TaskTimer({ task, onUpdate, onComplete, onRescheduleNext }) {
           {/* כפתורי הפרעה */}
           <div className="flex gap-2 mt-3 pt-3 border-t-2 border-dashed border-orange-300 dark:border-orange-700">
             <button
-              onClick={() => startInterruption('call')}
+              onClick={(e) => {
+                e.stopPropagation();
+                startInterruption('call');
+              }}
               className="flex-1 py-3 px-3 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
             >
               📞 שיחת לקוח
             </button>
             <button
-              onClick={() => startInterruption('distraction')}
+              onClick={(e) => {
+                e.stopPropagation();
+                startInterruption('distraction');
+              }}
               className="flex-1 py-3 px-3 bg-pink-500 text-white rounded-lg text-sm font-bold hover:bg-pink-600 transition-colors flex items-center justify-center gap-2"
             >
               🔔 הפרעה
