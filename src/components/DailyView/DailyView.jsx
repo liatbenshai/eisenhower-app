@@ -16,9 +16,81 @@ import { getTodayIdleStats, formatIdleTime } from '../../utils/idleTimeTracker';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 
-// ייבוא סוגי משימות מקובץ מרכזי
-import { TASK_TYPES } from '../../config/taskTypes';
-export { TASK_TYPES }; // ייצוא לתאימות לאחור
+/**
+ * סוגי משימות
+ */
+export const TASK_TYPES = {
+  transcription: { 
+    id: 'transcription', 
+    name: 'תמלול', 
+    icon: '🎙️',
+    defaultDuration: 60,
+    color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700'
+  },
+  proofreading: { 
+    id: 'proofreading', 
+    name: 'הגהה', 
+    icon: '📝',
+    defaultDuration: 45,
+    color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700'
+  },
+  email: { 
+    id: 'email', 
+    name: 'מיילים', 
+    icon: '📧',
+    defaultDuration: 25,
+    color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700'
+  },
+  course: { 
+    id: 'course', 
+    name: 'עבודה על הקורס', 
+    icon: '📚',
+    defaultDuration: 90,
+    color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700'
+  },
+  client_communication: { 
+    id: 'client_communication', 
+    name: 'תקשורת עם לקוחות', 
+    icon: '💬',
+    defaultDuration: 30,
+    color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200 border-pink-300 dark:border-pink-700'
+  },
+  unexpected: { 
+    id: 'unexpected', 
+    name: 'בלת"מים', 
+    icon: '⚡',
+    defaultDuration: 30,
+    color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-700'
+  },
+  selfcare: { 
+    id: 'selfcare', 
+    name: 'טיפוח', 
+    icon: '💅',
+    defaultDuration: 30,
+    color: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700'
+  },
+  family: { 
+    id: 'family', 
+    name: 'משפחה', 
+    icon: '👨‍👩‍👧',
+    defaultDuration: 60,
+    color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-700'
+  },
+  reminders: { 
+    id: 'reminders', 
+    name: 'תזכורות אישיות', 
+    icon: '🔔',
+    defaultDuration: 15,
+    color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700'
+  },
+  other: { 
+    id: 'other', 
+    name: 'אחר', 
+    icon: '📋',
+    defaultDuration: 30,
+    color: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600'
+  }
+};
 
 const WORK_HOURS = {
   start: 8,
