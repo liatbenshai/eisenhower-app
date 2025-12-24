@@ -29,24 +29,6 @@ if (typeof window !== 'undefined') {
       return Promise.reject(new Error('Service Workers disabled'));
     };
   }
-  
-  // ניקוי מפתחות טיימר ישנים (פורמט ישן)
-  // זה רץ פעם אחת כשהאפליקציה נטענת
-  try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('timer_') && !key.startsWith('timer_state_')) {
-        keysToRemove.push(key);
-      }
-    }
-    if (keysToRemove.length > 0) {
-      console.log('🧹 מנקה מפתחות טיימר ישנים:', keysToRemove.length);
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-    }
-  } catch (e) {
-    console.warn('⚠️ שגיאה בניקוי מפתחות ישנים:', e);
-  }
 }
 
 console.log('⚡ main.jsx loading...');

@@ -1,65 +1,75 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
-import { useAuth } from '../../hooks/useAuth';
 import { TASK_TYPES } from '../DailyView/DailyView';
-import { getAllTaskTypeLearning } from '../../services/supabase';
-import {
-  analyzeCapacity,
-  scheduleByPriority,
-  findMovableTasks,
-  proposeTaskMoves,
-  formatMinutes,
-  getDateISO,
-  minutesToTime,
-  timeToMinutes,
-  PRIORITY_ORDER
-} from '../../utils/smartScheduling';
 import toast from 'react-hot-toast';
 
 /**
- * שיבוץ אוטומטי חכם - משופר עם עדיפויות
+ * שעות העבודה
+ */
+const WORK_HOURS = {
+  start: 8,
+  end: 16
+};
+
+/**
+ * יחידת זמן מינימלית (בדקות)
+ */
+const TIME_SLOT = 15;
+
+/**
+ * קבלת תאריך בפורמט ISO
+ */
+function getDateISO(date) {
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * המרת שעה לדקות מתחילת היום
+ */
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [hours, mins] = timeStr.split(':').map(Number);
+  return hours * 60 + (mins || 0);
+}
+
+/**
+ * המרת דקות לשעה
+ */
+function minutesToTime(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
+
+/**
+ * עיגול דקות ל-TIME_SLOT הקרוב (כלפי מעלה)
+ */
+function roundUpToSlot(minutes) {
+  return Math.ceil(minutes / TIME_SLOT) * TIME_SLOT;
+}
+
+/**
+ * שיבוץ אוטומטי חכם
  */
 function SmartScheduler({ selectedDate, onClose, onScheduled }) {
   const { tasks, editTask, loadTasks } = useTasks();
-  const { user } = useAuth();
   const [scheduling, setScheduling] = useState(false);
   const [scheduledTasks, setScheduledTasks] = useState([]);
-  const [tasksToMove, setTasksToMove] = useState([]);
-  const [selectedMoves, setSelectedMoves] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
-  const [learningData, setLearningData] = useState({});
-  const [sortBy, setSortBy] = useState('priority'); // 'priority' | 'duration' | 'deadline'
-
-  // טעינת נתוני למידה
-  useEffect(() => {
-    if (user?.id) {
-      getAllTaskTypeLearning(user.id)
-        .then(data => {
-          const byType = {};
-          data.forEach(d => { byType[d.task_type] = d; });
-          setLearningData(byType);
-        })
-        .catch(console.error);
-    }
-  }, [user?.id]);
 
   // משימות לא משובצות (ללא תאריך או שעה)
   const unscheduledTasks = useMemo(() => {
     return tasks.filter(task => {
       if (task.is_completed) return false;
+      // משימה לא משובצת = אין לה תאריך, או אין לה שעה
       if (!task.due_date) return true;
       if (!task.due_time) return true;
       return false;
     });
   }, [tasks]);
 
-  // ניתוח קיבולת לשבוע הקרוב
-  const capacityDays = useMemo(() => {
-    return analyzeCapacity(tasks, selectedDate, null, 14);
-  }, [tasks, selectedDate]);
-
-  // משימות משובצות ליום הנבחר
+  // משימות משובצות ליום הנבחר (עם שעה!)
   const scheduledForDay = useMemo(() => {
     const dateISO = getDateISO(selectedDate);
     return tasks.filter(task => {
@@ -68,62 +78,126 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     });
   }, [tasks, selectedDate]);
 
-  // קיבולת היום הנבחר
-  const todayCapacity = useMemo(() => {
-    return capacityDays.find(d => d.dateISO === getDateISO(selectedDate)) || {
-      freeMinutes: 0,
-      freeSlots: [],
-      occupiedMinutes: 0,
-      totalMinutes: 480
-    };
-  }, [capacityDays, selectedDate]);
+  // חישוב זמנים תפוסים ביום (כמערך של {start, end} בדקות)
+  const occupiedSlots = useMemo(() => {
+    return scheduledForDay.map(task => {
+      const startMinutes = timeToMinutes(task.due_time);
+      const duration = task.estimated_duration || 30;
+      return {
+        start: startMinutes,
+        end: startMinutes + duration,
+        task
+      };
+    }).sort((a, b) => a.start - b.start);
+  }, [scheduledForDay]);
 
-  // סה"כ זמן משימות לא משובצות
+  // חישוב זמנים פנויים ביום
+  const freeSlots = useMemo(() => {
+    const slots = [];
+    const dayStart = WORK_HOURS.start * 60;
+    const dayEnd = WORK_HOURS.end * 60;
+    
+    let currentTime = dayStart;
+    
+    for (const occupied of occupiedSlots) {
+      // אם יש רווח לפני המשימה הבאה
+      if (currentTime < occupied.start) {
+        const gapDuration = occupied.start - currentTime;
+        if (gapDuration >= TIME_SLOT) {
+          slots.push({
+            start: currentTime,
+            end: occupied.start,
+            duration: gapDuration
+          });
+        }
+      }
+      // מעדכנים את הזמן הנוכחי לסוף המשימה
+      currentTime = Math.max(currentTime, occupied.end);
+    }
+    
+    // רווח אחרי המשימה האחרונה עד סוף היום
+    if (currentTime < dayEnd) {
+      const gapDuration = dayEnd - currentTime;
+      if (gapDuration >= TIME_SLOT) {
+        slots.push({
+          start: currentTime,
+          end: dayEnd,
+          duration: gapDuration
+        });
+      }
+    }
+    
+    return slots;
+  }, [occupiedSlots]);
+
+  // חישוב סה"כ זמן פנוי
+  const totalFreeTime = useMemo(() => {
+    return freeSlots.reduce((sum, slot) => sum + slot.duration, 0);
+  }, [freeSlots]);
+
+  // חישוב סה"כ זמן משימות לא משובצות
   const totalUnscheduledTime = useMemo(() => {
     return unscheduledTasks.reduce((sum, task) => sum + (task.estimated_duration || 30), 0);
   }, [unscheduledTasks]);
 
-  // חישוב שיבוץ
+  // אלגוריתם שיבוץ משופר
   const calculateSchedule = () => {
-    // שיבוץ לפי עדיפות
-    const { scheduled, unscheduled } = scheduleByPriority(
-      unscheduledTasks,
-      capacityDays,
-      learningData
-    );
-
-    // סנן רק את אלו שמשובצים ליום הנבחר (או לכל הימים)
-    const dateISO = getDateISO(selectedDate);
+    const schedule = [];
     
-    return {
-      scheduled: scheduled.filter(s => s.dateISO === dateISO),
-      allScheduled: scheduled,
-      unscheduled
-    };
+    // עותק עמוק של החלונות הפנויים
+    const availableSlots = freeSlots.map(slot => ({ ...slot }));
+    
+    // מיון משימות: קצרות קודם (Best Fit)
+    const tasksToSchedule = [...unscheduledTasks].sort((a, b) => {
+      return (a.estimated_duration || 30) - (b.estimated_duration || 30);
+    });
+
+    for (const task of tasksToSchedule) {
+      const duration = roundUpToSlot(task.estimated_duration || 30);
+      
+      // מציאת החלון הקטן ביותר שמתאים (Best Fit)
+      let bestSlotIndex = -1;
+      let bestSlotSize = Infinity;
+      
+      for (let i = 0; i < availableSlots.length; i++) {
+        const slot = availableSlots[i];
+        if (slot.duration >= duration && slot.duration < bestSlotSize) {
+          bestSlotIndex = i;
+          bestSlotSize = slot.duration;
+        }
+      }
+      
+      if (bestSlotIndex !== -1) {
+        const slot = availableSlots[bestSlotIndex];
+        
+        // שיבוץ המשימה
+        schedule.push({
+          task,
+          time: minutesToTime(slot.start),
+          date: getDateISO(selectedDate),
+          duration
+        });
+
+        // עדכון החלון
+        if (slot.duration === duration) {
+          // החלון נוצל במלואו - מסירים
+          availableSlots.splice(bestSlotIndex, 1);
+        } else {
+          // מעדכנים את תחילת החלון
+          slot.start += duration;
+          slot.duration -= duration;
+        }
+      }
+    }
+
+    // מיון לפי שעה
+    return schedule.sort((a, b) => a.time.localeCompare(b.time));
   };
 
-  // חישוב שיבוץ לכל השבוע
-  const calculateWeekSchedule = () => {
-    const { scheduled, unscheduled } = scheduleByPriority(
-      unscheduledTasks,
-      capacityDays,
-      learningData
-    );
-
-    return { scheduled, unscheduled };
-  };
-
-  // תצוגה מקדימה - יום בלבד
-  const handlePreviewToday = () => {
-    const result = calculateSchedule();
-    setScheduledTasks(result.scheduled);
-    setShowPreview(true);
-  };
-
-  // תצוגה מקדימה - כל השבוע
-  const handlePreviewWeek = () => {
-    const result = calculateWeekSchedule();
-    setScheduledTasks(result.scheduled);
+  // תצוגה מקדימה
+  const handlePreview = () => {
+    const schedule = calculateSchedule();
+    setScheduledTasks(schedule);
     setShowPreview(true);
   };
 
@@ -133,30 +207,15 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     
     setScheduling(true);
     try {
-      // שיבוץ המשימות
       for (const item of scheduledTasks) {
         await editTask(item.task.id, {
-          dueDate: item.dateISO,
-          dueTime: item.startTime,
-          estimatedDuration: item.duration
-        });
-      }
-
-      // הזזת משימות אם נבחרו
-      for (const move of selectedMoves) {
-        await editTask(move.task.id, {
-          dueDate: move.newDate,
-          dueTime: move.newTime
+          dueDate: item.date,
+          dueTime: item.time
         });
       }
       
       await loadTasks();
-      
-      const message = selectedMoves.length > 0
-        ? `${scheduledTasks.length} משימות שובצו, ${selectedMoves.length} הוזזו`
-        : `${scheduledTasks.length} משימות שובצו בהצלחה!`;
-      
-      toast.success(message);
+      toast.success(`${scheduledTasks.length} משימות שובצו בהצלחה!`);
       
       if (onScheduled) onScheduled();
       if (onClose) onClose();
@@ -168,52 +227,13 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
     }
   };
 
-  // מיון משימות לפי בחירה
-  const sortedUnscheduledTasks = useMemo(() => {
-    const sorted = [...unscheduledTasks];
-    
-    switch (sortBy) {
-      case 'priority':
-        return sorted.sort((a, b) => {
-          const pa = PRIORITY_ORDER[a.priority] || 3;
-          const pb = PRIORITY_ORDER[b.priority] || 3;
-          return pa - pb;
-        });
-      case 'duration':
-        return sorted.sort((a, b) => 
-          (a.estimated_duration || 30) - (b.estimated_duration || 30)
-        );
-      case 'deadline':
-        return sorted.sort((a, b) => {
-          if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
-          if (a.deadline) return -1;
-          if (b.deadline) return 1;
-          return 0;
-        });
-      default:
-        return sorted;
-    }
-  }, [unscheduledTasks, sortBy]);
-
-  // קבלת צבע עדיפות
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'urgent': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-      case 'high': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
-      case 'normal': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'low': return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
-      default: return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
-    }
-  };
-
-  const getPriorityLabel = (priority) => {
-    switch (priority) {
-      case 'urgent': return '🔴 דחוף';
-      case 'high': return '🟠 גבוה';
-      case 'normal': return '🔵 רגיל';
-      case 'low': return '⚪ נמוך';
-      default: return '🔵 רגיל';
-    }
+  // פורמט דקות
+  const formatMinutes = (minutes) => {
+    if (minutes < 60) return `${minutes} דק'`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) return `${hours} שעות`;
+    return `${hours}:${mins.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -234,117 +254,51 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
         
         <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {formatMinutes(todayCapacity.freeMinutes)}
+            {formatMinutes(totalFreeTime)}
           </div>
           <div className="text-sm text-green-700 dark:text-green-300">
-            פנוי היום
+            זמן פנוי היום
           </div>
           <div className="text-xs text-green-500 dark:text-green-400 mt-1">
-            ({todayCapacity.freeSlots.length} חלונות)
+            ({freeSlots.length} חלונות)
           </div>
         </div>
       </div>
 
-      {/* בחירת סדר מיון */}
-      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-          📊 סדר שיבוץ:
-        </label>
-        <div className="flex gap-2">
-          {[
-            { id: 'priority', label: '⭐ עדיפות', desc: 'דחופים קודם' },
-            { id: 'duration', label: '⏱️ משך', desc: 'קצרים קודם' },
-            { id: 'deadline', label: '📅 דדליין', desc: 'קרובים קודם' }
-          ].map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setSortBy(opt.id)}
-              className={`
-                flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all
-                ${sortBy === opt.id 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }
-              `}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* רשימת משימות לא משובצות */}
-      {unscheduledTasks.length > 0 && !showPreview && (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <div className="p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              📋 משימות ממתינות ({unscheduledTasks.length}):
-            </h4>
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {sortedUnscheduledTasks.map(task => {
-              const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
-              const learning = learningData[task.task_type];
-              const hasLearning = learning && learning.total_tasks >= 2;
-              
-              return (
-                <div 
-                  key={task.id}
-                  className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className={`px-2 py-0.5 rounded text-xs ${taskType.color}`}>
-                      {taskType.icon}
-                    </span>
-                    <span className="truncate text-gray-900 dark:text-white">
-                      {task.title}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(task.priority)}`}>
-                      {getPriorityLabel(task.priority)}
-                    </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {formatMinutes(task.estimated_duration || 30)}
-                      {hasLearning && (
-                        <span className="text-yellow-500 mr-1" title={`יחס למידה: ${Math.round(learning.average_ratio * 100)}%`}>
-                          📈
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+      {/* חלונות זמן פנויים */}
+      {freeSlots.length > 0 && (
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            🕐 חלונות זמן פנויים:
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {freeSlots.map((slot, index) => (
+              <span 
+                key={index}
+                className="px-2 py-1 bg-white dark:bg-gray-700 rounded text-sm border border-gray-200 dark:border-gray-600"
+              >
+                {minutesToTime(slot.start)} - {minutesToTime(slot.end)} ({formatMinutes(slot.duration)})
+              </span>
+            ))}
           </div>
         </div>
       )}
 
-      {/* קיבולת שבועית */}
-      {!showPreview && capacityDays.length > 0 && (
+      {/* משימות שכבר משובצות */}
+      {scheduledForDay.length > 0 && (
         <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            📅 קיבולת שבועית:
+            📋 כבר משובצות היום ({scheduledForDay.length}):
           </h4>
-          <div className="flex gap-1 overflow-x-auto pb-2">
-            {capacityDays.slice(0, 7).map(day => {
-              const pct = Math.round((day.occupiedMinutes / day.totalMinutes) * 100);
-              const isFull = pct >= 80;
-              const isSelected = day.dateISO === getDateISO(selectedDate);
+          <div className="space-y-1 max-h-24 overflow-y-auto">
+            {scheduledForDay.map(task => {
+              const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
               return (
-                <div 
-                  key={day.dateISO}
-                  className={`
-                    flex-shrink-0 w-16 p-2 rounded text-center text-xs cursor-pointer
-                    ${isSelected ? 'ring-2 ring-blue-500' : ''}
-                    ${isFull ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}
-                  `}
-                >
-                  <div className="font-medium">{day.dayName}</div>
-                  <div className={`text-lg ${isFull ? 'text-red-600' : 'text-green-600'}`}>
-                    {Math.round(day.freeMinutes / 60)}h
-                  </div>
-                  <div className="text-gray-500">פנוי</div>
+                <div key={task.id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span>{task.due_time}</span>
+                  <span>{taskType.icon}</span>
+                  <span className="truncate">{task.title}</span>
+                  <span className="text-gray-400">({formatMinutes(task.estimated_duration || 30)})</span>
                 </div>
               );
             })}
@@ -353,16 +307,21 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
       )}
 
       {/* אזהרות */}
-      {totalUnscheduledTime > todayCapacity.freeMinutes && !showPreview && (
+      {totalUnscheduledTime > totalFreeTime && (
         <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-700 dark:text-orange-300 text-sm">
-          ⚠️ יש יותר משימות ({formatMinutes(totalUnscheduledTime)}) מזמן פנוי היום ({formatMinutes(todayCapacity.freeMinutes)}). 
-          חלק ישובצו לימים הבאים.
+          ⚠️ יש יותר משימות ({formatMinutes(totalUnscheduledTime)}) מזמן פנוי ({formatMinutes(totalFreeTime)}). חלק מהמשימות לא ישובצו.
         </div>
       )}
 
       {unscheduledTasks.length === 0 && (
         <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400 text-sm text-center">
           ✅ כל המשימות כבר משובצות!
+        </div>
+      )}
+
+      {freeSlots.length === 0 && unscheduledTasks.length > 0 && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-700 dark:text-red-300 text-sm text-center">
+          ❌ אין זמן פנוי ביום הזה. נסי יום אחר.
         </div>
       )}
 
@@ -383,35 +342,23 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
             <div className="max-h-60 overflow-y-auto">
               {scheduledTasks.map((item, index) => {
                 const taskType = TASK_TYPES[item.task.task_type] || TASK_TYPES.other;
+                const endTime = timeToMinutes(item.time) + item.duration;
                 return (
                   <div
                     key={index}
-                    className="p-3 border-b border-gray-100 dark:border-gray-800"
+                    className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-sm ${taskType.color}`}>
-                          {taskType.icon}
-                        </span>
-                        <span className="text-gray-900 dark:text-white">
-                          {item.task.title}
-                        </span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${getPriorityColor(item.task.priority)}`}>
-                          {getPriorityLabel(item.task.priority)}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded text-sm ${taskType.color}`}>
+                        {taskType.icon}
+                      </span>
+                      <span className="text-gray-900 dark:text-white">
+                        {item.task.title}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      <span>📅 {item.dayName}</span>
-                      <span>•</span>
-                      <span className="font-medium">{item.startTime} - {item.endTime}</span>
-                      <span>•</span>
-                      <span>{formatMinutes(item.duration)}</span>
-                      {item.wasAdjusted && (
-                        <span className="text-yellow-600 dark:text-yellow-400" title="זמן מותאם לפי היסטוריה">
-                          📈 (מותאם)
-                        </span>
-                      )}
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="font-medium">{item.time}</span>
+                      <span className="text-gray-400"> - {minutesToTime(endTime)}</span>
                     </div>
                   </div>
                 );
@@ -422,31 +369,19 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
       </AnimatePresence>
 
       {/* כפתורים */}
-      <div className="space-y-2">
+      <div className="flex gap-2">
         {!showPreview ? (
-          <div className="flex gap-2">
-            <button
-              onClick={handlePreviewToday}
-              disabled={unscheduledTasks.length === 0 || todayCapacity.freeSlots.length === 0}
-              className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              🔍 שבץ להיום
-            </button>
-            <button
-              onClick={handlePreviewWeek}
-              disabled={unscheduledTasks.length === 0}
-              className="flex-1 py-3 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              📅 שבץ לשבוע
-            </button>
-          </div>
+          <button
+            onClick={handlePreview}
+            disabled={unscheduledTasks.length === 0 || freeSlots.length === 0}
+            className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            🔍 תצוגה מקדימה
+          </button>
         ) : (
-          <div className="flex gap-2">
+          <>
             <button
-              onClick={() => {
-                setShowPreview(false);
-                setScheduledTasks([]);
-              }}
+              onClick={() => setShowPreview(false)}
               className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               ← חזרה
@@ -465,16 +400,13 @@ function SmartScheduler({ selectedDate, onClose, onScheduled }) {
                 `✅ שבץ ${scheduledTasks.length} משימות`
               )}
             </button>
-          </div>
+          </>
         )}
       </div>
 
       {/* הסבר */}
-      <div className="text-xs text-gray-500 dark:text-gray-400 text-center space-y-1">
-        <p>💡 המערכת משבצת לפי {sortBy === 'priority' ? 'עדיפות' : sortBy === 'duration' ? 'משך' : 'דדליין'}</p>
-        {Object.keys(learningData).length > 0 && (
-          <p>📈 זמנים מותאמים לפי ההיסטוריה שלך</p>
-        )}
+      <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+        💡 המערכת משבצת משימות לחלונות הפנויים בלבד, ללא חפיפות
       </div>
     </div>
   );

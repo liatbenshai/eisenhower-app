@@ -9,8 +9,6 @@ import QuickAdd from '../QuickAdd/QuickAdd';
 import UrgentReschedule from '../Scheduler/UrgentReschedule';
 import WeeklyReview from '../Analytics/WeeklyReview';
 import ClientTracker from '../Analytics/ClientTracker';
-import DailySummary from '../Analytics/DailySummary';
-import TimeGapsReport from '../Analytics/TimeGapsReport';
 import WorkPreferences from '../Settings/WorkPreferences';
 
 /**
@@ -99,7 +97,7 @@ function getGreeting() {
  */
 function Dashboard({ onNavigate }) {
   const { user } = useAuth();
-  const { tasks, loading, loadTasks, editTask } = useTasks();
+  const { tasks, loading, loadTasks } = useTasks();
   const [currentTime, setCurrentTime] = useState(getCurrentTime());
   const [lastAlertedTask, setLastAlertedTask] = useState(null);
   const [showTaskAlert, setShowTaskAlert] = useState(false);
@@ -111,8 +109,6 @@ function Dashboard({ onNavigate }) {
   const [showWeeklyReview, setShowWeeklyReview] = useState(false);
   const [showClientTracker, setShowClientTracker] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
-  const [showDailySummary, setShowDailySummary] = useState(false);
-  const [showTimeGaps, setShowTimeGaps] = useState(false);
   
   // עדכון שעה כל דקה
   useEffect(() => {
@@ -533,25 +529,13 @@ function Dashboard({ onNavigate }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
-          className="flex gap-2 justify-center flex-wrap"
+          className="flex gap-2 justify-center"
         >
-          <button
-            onClick={() => setShowDailySummary(true)}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 flex items-center gap-1"
-          >
-            <span>📊</span> סיכום יומי
-          </button>
-          <button
-            onClick={() => setShowTimeGaps(true)}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-1"
-          >
-            <span>📈</span> איפה הזמן הלך?
-          </button>
           <button
             onClick={() => setShowWeeklyReview(true)}
             className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
           >
-            <span>📋</span> סקירה שבועית
+            <span>📊</span> סקירה שבועית
           </button>
           <button
             onClick={() => setShowClientTracker(true)}
@@ -610,38 +594,6 @@ function Dashboard({ onNavigate }) {
         <WorkPreferences 
           onClose={() => setShowPreferences(false)}
           onSaved={loadTasks}
-        />
-      </Modal>
-
-      {/* סיכום יומי */}
-      <Modal
-        isOpen={showDailySummary}
-        onClose={() => setShowDailySummary(false)}
-        title=""
-      >
-        <DailySummary 
-          tasks={tasks}
-          date={new Date()}
-          onClose={() => setShowDailySummary(false)}
-          onMoveTasks={async (tasksToMove, newDate) => {
-            for (const task of tasksToMove) {
-              await editTask(task.id, { ...task, dueDate: newDate });
-            }
-            loadTasks();
-            setShowDailySummary(false);
-          }}
-        />
-      </Modal>
-
-      {/* דוח פערים */}
-      <Modal
-        isOpen={showTimeGaps}
-        onClose={() => setShowTimeGaps(false)}
-        title=""
-      >
-        <TimeGapsReport 
-          tasks={tasks}
-          onClose={() => setShowTimeGaps(false)}
         />
       </Modal>
     </div>

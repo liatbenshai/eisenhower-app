@@ -19,16 +19,6 @@ function SmartNotifications({ onTaskClick }) {
   const { tasks } = useTasks();
   const [dismissed, setDismissed] = useState(new Set());
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // רענון כל 30 שניות כדי לבדוק התראות
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 30000); // כל 30 שניות
-
-    return () => clearInterval(interval);
-  }, []);
 
   // בקשת הרשאה להתראות
   useEffect(() => {
@@ -51,7 +41,7 @@ function SmartNotifications({ onTaskClick }) {
 
   // חישוב התראות
   const notifications = useMemo(() => {
-    const now = currentTime;
+    const now = new Date();
     const today = now.toISOString().split('T')[0];
     const currentHour = now.getHours();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -63,28 +53,13 @@ function SmartNotifications({ onTaskClick }) {
 
       const taskType = TASK_TYPES[task.task_type] || TASK_TYPES.other;
 
-      // משימה שמתחילה בקרוב או עכשיו
+      // משימה שמתחילה בקרוב (תוך 15 דקות)
       if (task.due_date === today && task.due_time) {
         const [hour, min] = task.due_time.split(':').map(Number);
         const taskMinutes = hour * 60 + (min || 0);
         const diff = taskMinutes - currentMinutes;
 
-        // משימה שהגיע זמנה עכשיו! (בין -2 ל-0 דקות)
-        if (diff <= 0 && diff >= -2) {
-          alerts.push({
-            id: `now-${task.id}`,
-            taskId: task.id,
-            type: 'now',
-            priority: -1, // הכי גבוה!
-            icon: '🚨',
-            title: '🔔 הגיע הזמן להתחיל!',
-            message: `${taskType.icon} ${task.title} - עכשיו!`,
-            task,
-            color: 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 dark:border-purple-600 animate-pulse'
-          });
-        }
-        // משימה שמתחילה בקרוב (תוך 15 דקות)
-        else if (diff > 0 && diff <= 15) {
+        if (diff > 0 && diff <= 15) {
           alerts.push({
             id: `upcoming-${task.id}`,
             taskId: task.id,
@@ -98,9 +73,8 @@ function SmartNotifications({ onTaskClick }) {
           });
         }
 
-        // משימה שהגיע זמנה (איחור - יותר מ-2 דקות)
-        // רק אם לא התחילו לעבוד עליה (time_spent = 0)
-        if (diff < -2 && diff > -60 && (!task.time_spent || task.time_spent === 0)) {
+        // משימה שהגיע זמנה (איחור)
+        if (diff < 0 && diff > -60) {
           alerts.push({
             id: `overdue-${task.id}`,
             taskId: task.id,
@@ -169,7 +143,7 @@ function SmartNotifications({ onTaskClick }) {
 
     // מיון לפי עדיפות
     return alerts.sort((a, b) => a.priority - b.priority);
-  }, [tasks, dismissed, currentTime]);
+  }, [tasks, dismissed]);
 
   // סגירת התראה
   const dismissNotification = (id, taskId) => {
@@ -177,55 +151,6 @@ function SmartNotifications({ onTaskClick }) {
       setDismissed(prev => new Set([...prev, taskId]));
     } else {
       setDismissed(prev => new Set([...prev, id]));
-    }
-  };
-
-  // צפצוף התראה
-  const playAlertSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      
-      // צליל ראשון
-      const osc1 = audioContext.createOscillator();
-      const gain1 = audioContext.createGain();
-      osc1.connect(gain1);
-      gain1.connect(audioContext.destination);
-      osc1.frequency.value = 880;
-      osc1.type = 'sine';
-      gain1.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-      osc1.start(audioContext.currentTime);
-      osc1.stop(audioContext.currentTime + 0.3);
-
-      // צליל שני - גבוה יותר
-      setTimeout(() => {
-        const osc2 = audioContext.createOscillator();
-        const gain2 = audioContext.createGain();
-        osc2.connect(gain2);
-        gain2.connect(audioContext.destination);
-        osc2.frequency.value = 1100;
-        osc2.type = 'sine';
-        gain2.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        osc2.start(audioContext.currentTime);
-        osc2.stop(audioContext.currentTime + 0.3);
-      }, 200);
-
-      // צליל שלישי - הכי גבוה
-      setTimeout(() => {
-        const osc3 = audioContext.createOscillator();
-        const gain3 = audioContext.createGain();
-        osc3.connect(gain3);
-        gain3.connect(audioContext.destination);
-        osc3.frequency.value = 1320;
-        osc3.type = 'sine';
-        gain3.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gain3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        osc3.start(audioContext.currentTime);
-        osc3.stop(audioContext.currentTime + 0.5);
-      }, 400);
-    } catch (err) {
-      console.error('שגיאה בהשמעת צליל:', err);
     }
   };
 
@@ -240,35 +165,13 @@ function SmartNotifications({ onTaskClick }) {
     }
   };
 
-  // מעקב אחרי התראות שכבר הושמעו (כדי לא לחזור עליהן)
-  const [playedAlerts, setPlayedAlerts] = useState(new Set());
-
-  // אפקט לשליחת התראות מערכת וצליל
+  // אפקט לשליחת התראות מערכת
   useEffect(() => {
-    // התראות "עכשיו" - צליל + toast
-    const nowAlerts = notifications.filter(n => n.type === 'now' && !playedAlerts.has(n.id));
-    nowAlerts.forEach(alert => {
-      playAlertSound();
-      toast(alert.message, {
-        icon: '🚨',
-        duration: 10000,
-        style: {
-          background: '#7c3aed',
-          color: '#fff',
-          fontWeight: 'bold'
-        }
-      });
-      sendSystemNotification('🔔 הגיע הזמן להתחיל!', alert.message);
-      setPlayedAlerts(prev => new Set([...prev, alert.id]));
-    });
-
-    // התראות "בקרוב" - רק notification
-    const upcomingAlerts = notifications.filter(n => n.type === 'upcoming' && !playedAlerts.has(n.id));
+    const upcomingAlerts = notifications.filter(n => n.type === 'upcoming');
     upcomingAlerts.forEach(alert => {
       sendSystemNotification(alert.title, alert.message);
-      setPlayedAlerts(prev => new Set([...prev, alert.id]));
     });
-  }, [notifications, notificationsEnabled, playedAlerts]);
+  }, [notifications, notificationsEnabled]);
 
   if (notifications.length === 0) {
     return null;
