@@ -236,9 +236,27 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate, defaultTime, ex
   // קבלת הזמן המוצע מאזהרת החפיפה
   const handleAcceptAlternativeTime = () => {
     if (overlapWarning?.suggestedTime) {
-      setFormData(prev => ({ ...prev, dueTime: overlapWarning.suggestedTime }));
+      const suggested = overlapWarning.suggestedTime;
+      
+      // בדיקה אם ההצעה היא למחר
+      if (suggested.startsWith('מחר ')) {
+        const time = suggested.replace('מחר ', '');
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        
+        setFormData(prev => ({ 
+          ...prev, 
+          dueTime: time,
+          dueDate: tomorrowStr 
+        }));
+        toast.success(`המשימה הועברה למחר ב-${time}`);
+      } else {
+        setFormData(prev => ({ ...prev, dueTime: suggested }));
+        toast.success(`השעה שונתה ל-${suggested}`);
+      }
+      
       setOverlapWarning(null);
-      toast.success(`השעה שונתה ל-${overlapWarning.suggestedTime}`);
     }
   };
 
