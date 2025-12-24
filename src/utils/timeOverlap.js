@@ -80,22 +80,9 @@ export function findOverlappingTasks(newTask, existingTasks) {
  * @param {number} endHour - שעת סיום יום העבודה
  * @returns {string|null} - השעה הפנויה הבאה או null
  */
-export function findNextFreeSlot(date, duration, existingTasks, startHour = 8, endHour = 17) {
+export function findNextFreeSlot(date, duration, existingTasks, startHour = 8, endHour = 16) {
   const dayStart = startHour * 60;
   const dayEnd = endHour * 60;
-
-  // בדיקה אם זה היום - אז לא מציעים שעות שעברו
-  const today = new Date().toISOString().split('T')[0];
-  const isToday = date === today;
-  
-  let earliestStart = dayStart;
-  
-  if (isToday) {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    // מעגלים למעלה ל-15 דקות הבאות
-    earliestStart = Math.max(dayStart, Math.ceil(currentMinutes / 15) * 15);
-  }
 
   // משימות של אותו יום, ממוינות לפי שעה
   const dayTasks = existingTasks
@@ -106,17 +93,12 @@ export function findNextFreeSlot(date, duration, existingTasks, startHour = 8, e
     }))
     .sort((a, b) => a.start - b.start);
 
-  // חיפוש חלון פנוי - מתחילים מהשעה הרלוונטית
-  let currentTime = earliestStart;
+  // חיפוש חלון פנוי
+  let currentTime = dayStart;
 
   for (const task of dayTasks) {
-    // דילוג על משימות שכבר עברו
-    if (task.end <= earliestStart) {
-      continue;
-    }
-    
     // יש רווח לפני המשימה?
-    if (currentTime + duration <= task.start && currentTime >= earliestStart) {
+    if (currentTime + duration <= task.start) {
       return minutesToTime(currentTime);
     }
     // מעבר לסוף המשימה
@@ -126,18 +108,6 @@ export function findNextFreeSlot(date, duration, existingTasks, startHour = 8, e
   // בדיקה אם יש מקום אחרי המשימה האחרונה
   if (currentTime + duration <= dayEnd) {
     return minutesToTime(currentTime);
-  }
-
-  // אם אין מקום היום, מחפשים מחר
-  if (isToday) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    // קריאה רקורסיבית למחר (לא isToday אז יתחיל מתחילת היום)
-    const tomorrowSlot = findNextFreeSlot(tomorrowStr, duration, existingTasks, startHour, endHour);
-    if (tomorrowSlot) {
-      return `מחר ${tomorrowSlot}`;
-    }
   }
 
   return null; // אין זמן פנוי
