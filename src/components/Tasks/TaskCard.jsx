@@ -146,13 +146,24 @@ function TaskCard({
         {/* תוכן */}
         <div className="flex-1 min-w-0">
           {/* כותרת */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className={`
               font-medium text-gray-900 dark:text-white text-sm
               ${currentTask.is_completed ? 'line-through text-gray-500' : ''}
             `}>
               {currentTask.title}
             </p>
+            {/* תגית דחיפות */}
+            {currentTask.priority === 'urgent' && (
+              <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
+                🔴 דחוף
+              </span>
+            )}
+            {currentTask.priority === 'high' && (
+              <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full">
+                🟡 בינוני
+              </span>
+            )}
             {isProject && (
               <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
                 פרויקט

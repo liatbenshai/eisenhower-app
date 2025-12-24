@@ -30,7 +30,8 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
     dueTime: defaultTime || '',
     reminderMinutes: '',
     estimatedDuration: '',
-    taskType: 'other' // ברירת מחדל חשובה!
+    taskType: 'other', // ברירת מחדל חשובה!
+    priority: 'normal' // דחיפות: urgent, high, normal
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -82,7 +83,8 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
         dueTime: task.due_time || '',
         reminderMinutes: task.reminder_minutes || '',
         estimatedDuration: task.estimated_duration || '',
-        taskType: task.task_type || 'other'
+        taskType: task.task_type || 'other',
+        priority: task.priority || 'normal'
       });
     }
   }, [task]);
@@ -282,6 +284,57 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
         {errors.description && (
           <p className="mt-1 text-sm text-red-500">{errors.description}</p>
         )}
+      </div>
+
+      {/* בחירת דחיפות */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          🚦 דחיפות
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'urgent' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'urgent'
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/30 shadow-md'
+                : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700'
+              }
+            `}
+          >
+            <span className="text-2xl">🔴</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">דחוף</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'high' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'high'
+                ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 shadow-md'
+                : 'border-gray-200 dark:border-gray-700 hover:border-yellow-300 dark:hover:border-yellow-700'
+              }
+            `}
+          >
+            <span className="text-2xl">🟡</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">בינוני</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, priority: 'normal' }))}
+            className={`
+              flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all
+              ${formData.priority === 'normal'
+                ? 'border-green-500 bg-green-50 dark:bg-green-900/30 shadow-md'
+                : 'border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-700'
+              }
+            `}
+          >
+            <span className="text-2xl">🟢</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">לא דחוף</span>
+          </button>
+        </div>
       </div>
 
       {/* בחירת סוג משימה */}
