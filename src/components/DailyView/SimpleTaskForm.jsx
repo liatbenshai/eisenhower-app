@@ -115,24 +115,84 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
     setLoading(true);
 
     try {
-      const taskData = {
-        title: formData.title.trim(),
-        description: formData.description.trim() || null,
-        taskType: formData.taskType,
-        estimatedDuration: parseInt(formData.estimatedDuration),
-        startDate: formData.startDate || null,
-        dueDate: isLongTask ? formData.dueDate : formData.startDate, // אם לא משימה ארוכה, dueDate = startDate
-        dueTime: formData.dueTime || null,
-        priority: formData.priority || 'normal',
-        quadrant: 1
-      };
+      const duration = parseInt(formData.estimatedDuration);
+      const startDate = formData.startDate;
+      const dueDate = isLongTask ? formData.dueDate : formData.startDate;
 
-      if (isEditing) {
-        await editTask(task.id, taskData);
-        toast.success('המשימה עודכנה');
+      // בדיקה אם צריך לפצל - משימה ארוכה עם מספר ימים
+      if (isLongTask && startDate && dueDate && startDate !== dueDate && !isEditing) {
+        // חישוב מספר הימים
+        const start = new Date(startDate);
+        const end = new Date(dueDate);
+        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // חישוב זמן יומי (מקסימום 45 דקות למקטע)
+        const dailyDuration = Math.ceil(duration / daysDiff);
+        const maxChunkSize = 45; // מקסימום 45 דקות למקטע
+        
+        // אם הזמן היומי קטן מ-45 דקות, ניצור משימה אחת ליום
+        // אם גדול יותר, ניצור מספר משימות ליום
+        let remainingDuration = duration;
+        let currentDate = new Date(start);
+        let taskIndex = 1;
+        const totalChunks = Math.ceil(duration / maxChunkSize);
+
+        while (remainingDuration > 0 && currentDate <= end) {
+          // כמה זמן להקצות ליום הזה
+          const daysLeft = Math.ceil((end - currentDate) / (1000 * 60 * 60 * 24)) + 1;
+          let todayDuration = Math.ceil(remainingDuration / daysLeft);
+          
+          // אם יותר מ-45 דקות, נפצל למקטעים
+          while (todayDuration > 0 && remainingDuration > 0) {
+            const chunkDuration = Math.min(todayDuration, maxChunkSize, remainingDuration);
+            
+            const dateISO = currentDate.toISOString().split('T')[0];
+            
+            await addTask({
+              title: totalChunks > 1 
+                ? `${formData.title.trim()} (${taskIndex}/${totalChunks})`
+                : formData.title.trim(),
+              description: formData.description.trim() || null,
+              taskType: formData.taskType,
+              estimatedDuration: chunkDuration,
+              startDate: dateISO,
+              dueDate: dateISO,
+              dueTime: formData.dueTime || null,
+              priority: formData.priority || 'normal',
+              quadrant: 1
+            });
+
+            remainingDuration -= chunkDuration;
+            todayDuration -= chunkDuration;
+            taskIndex++;
+          }
+          
+          // מעבר ליום הבא
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        toast.success(`המשימה פוצלה ל-${taskIndex - 1} חלקים על פני ${daysDiff} ימים`);
       } else {
-        await addTask(taskData);
-        toast.success('המשימה נוספה');
+        // משימה רגילה או עריכה
+        const taskData = {
+          title: formData.title.trim(),
+          description: formData.description.trim() || null,
+          taskType: formData.taskType,
+          estimatedDuration: duration,
+          startDate: startDate || null,
+          dueDate: dueDate || null,
+          dueTime: formData.dueTime || null,
+          priority: formData.priority || 'normal',
+          quadrant: 1
+        };
+
+        if (isEditing) {
+          await editTask(task.id, taskData);
+          toast.success('המשימה עודכנה');
+        } else {
+          await addTask(taskData);
+          toast.success('המשימה נוספה');
+        }
       }
 
       onClose();
@@ -362,10 +422,14 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
                 min={formData.startDate}
               />
             </div>
-            {formData.startDate && formData.dueDate && (
-              <div className="text-sm text-purple-600 dark:text-purple-400">
-                ⏱️ {Math.ceil((new Date(formData.dueDate) - new Date(formData.startDate)) / (1000 * 60 * 60 * 24))} ימים לביצוע
-              </div>
+            
+            {/* תצוגה מקדימה של הפיצול */}
+            {formData.startDate && formData.dueDate && formData.estimatedDuration && (
+              <SplitPreview 
+                startDate={formData.startDate}
+                dueDate={formData.dueDate}
+                duration={parseInt(formData.estimatedDuration)}
+              />
             )}
           </div>
         )}
@@ -398,6 +462,78 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * תצוגה מקדימה של פיצול משימה
+ */
+function SplitPreview({ startDate, dueDate, duration }) {
+  const start = new Date(startDate);
+  const end = new Date(dueDate);
+  const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  const maxChunkSize = 45;
+  const totalChunks = Math.ceil(duration / maxChunkSize);
+  
+  // חישוב פיזור על פני ימים
+  const dailyBreakdown = [];
+  let remaining = duration;
+  let currentDate = new Date(start);
+  
+  while (remaining > 0 && currentDate <= end) {
+    const daysLeft = Math.ceil((end - currentDate) / (1000 * 60 * 60 * 24)) + 1;
+    let todayTotal = Math.ceil(remaining / daysLeft);
+    const todayChunks = Math.ceil(todayTotal / maxChunkSize);
+    
+    const chunks = [];
+    let todayRemaining = Math.min(todayTotal, remaining);
+    for (let i = 0; i < todayChunks && todayRemaining > 0; i++) {
+      const chunk = Math.min(maxChunkSize, todayRemaining);
+      chunks.push(chunk);
+      todayRemaining -= chunk;
+      remaining -= chunk;
+    }
+    
+    if (chunks.length > 0) {
+      dailyBreakdown.push({
+        date: new Date(currentDate),
+        chunks
+      });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  const days = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+  
+  return (
+    <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-300 dark:border-purple-700">
+      <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
+        ✂️ המשימה תפוצל אוטומטית:
+      </div>
+      <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+        {duration} דקות ÷ {daysDiff} ימים = {totalChunks} מקטעים של עד 45 דק'
+      </div>
+      <div className="space-y-1.5">
+        {dailyBreakdown.map((day, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs">
+            <span className="w-16 text-gray-500">
+              יום {days[day.date.getDay()]} {day.date.getDate()}/{day.date.getMonth() + 1}
+            </span>
+            <div className="flex gap-1 flex-1">
+              {day.chunks.map((chunk, j) => (
+                <span 
+                  key={j}
+                  className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded"
+                >
+                  {chunk} דק'
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
