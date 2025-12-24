@@ -36,6 +36,9 @@ export function TaskProvider({ children }) {
 
   // מניעת טעינות כפולות
   const loadingRef = useRef(false);
+  
+  // שמירת user ID קודם - למניעת טעינה מחדש כשהאובייקט user משתנה אבל ה-id נשאר אותו דבר
+  const previousUserIdRef = useRef(null);
 
   // מעקב אחרי משימה פעילה - התחלה/עצירה של זמן מת
   const setActiveTask = useCallback((taskId) => {
@@ -115,9 +118,24 @@ export function TaskProvider({ children }) {
   }, [user?.id, authLoading]);
 
   // טעינה ראשונית - רק אחרי שהאותנטיקציה נטענה
+  // חשוב: בודקים רק אם ה-id עצמו השתנה, לא אם האובייקט user השתנה
   useEffect(() => {
-    if (!authLoading && user?.id) {
+    const currentUserId = user?.id;
+    const previousUserId = previousUserIdRef.current;
+    
+    // טעינה רק אם:
+    // 1. האותנטיקציה נטענה
+    // 2. יש משתמש
+    // 3. ה-id השתנה (לא רק האובייקט)
+    if (!authLoading && currentUserId && currentUserId !== previousUserId) {
+      console.log('🔄 טעינת משימות - user ID השתנה:', { previous: previousUserId, current: currentUserId });
+      previousUserIdRef.current = currentUserId;
       loadTasks();
+    } else if (!authLoading && !currentUserId && previousUserId) {
+      // המשתמש התנתק - מנקים
+      console.log('🔄 המשתמש התנתק - מנקה משימות');
+      previousUserIdRef.current = null;
+      setTasks([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]); // לא loadTasks כדי למנוע לולאה
