@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import DailyViewPage from './pages/DailyViewPage';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import TaskInsights from './pages/TaskInsights';
@@ -64,6 +65,12 @@ function App() {
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/daily" element={
+          <ProtectedRoute>
+            <DailyViewPage />
           </ProtectedRoute>
         } />
         

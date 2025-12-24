@@ -1,10 +1,10 @@
-import DailyView from '../components/DailyView/DailyView';
+import CEODashboard from '../components/Dashboard/CEODashboard';
 
 /**
- * דף לוח המחוונים הראשי - תצוגה יומית
+ * דף לוח המחוונים הראשי - דשבורד מנכ"לית
  */
 function Dashboard() {
-  return <DailyView />;
+  return <CEODashboard />;
 }
 
 export default Dashboard;
