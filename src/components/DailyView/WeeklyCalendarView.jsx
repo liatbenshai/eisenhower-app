@@ -83,8 +83,10 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
       });
     });
 
-    // מיון משימות
-    tasks.forEach(task => {
+    // מיון משימות - רק פעילות (לא הושלמו ולא נמחקו)
+    const activeTasks = tasks.filter(t => !t.is_completed && !t.deleted_at);
+    
+    activeTasks.forEach(task => {
       const taskDate = task.due_date;
       if (!taskDate || !map[taskDate]) return;
       
@@ -192,14 +194,9 @@ function WeeklyCalendarView({ tasks, selectedDate, onSelectDate, onEditTask }) {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         onClick={() => onEditTask(task)}
-                        className={`
-                          w-full text-right p-1.5 rounded text-xs mb-1
+                        className="w-full text-right p-1.5 rounded text-xs mb-1
                           transition-all hover:shadow-md cursor-pointer
-                          ${task.is_completed 
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 line-through opacity-60' 
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                          }
-                        `}
+                          bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/50"
                         style={{
                           minHeight: `${rowSpan * 50}px`
                         }}

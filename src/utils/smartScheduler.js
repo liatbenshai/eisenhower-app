@@ -2,30 +2,25 @@
  * מנוע שיבוץ חכם
  * 
  * כללים:
- * 1. כל משימה מחולקת לאינטרוולים של 45 דקות
- * 2. סדר עדיפויות: דחוף קודם, תמלולים בבוקר, הגהות אחר כך
- * 3. 15 דקות הפסקה בין משימות
- * 4. משימות חייבות להסתיים בבוקר של יום הדדליין
- * 5. תמיכה בשיבוץ מחדש אוטומטי
+ * 1. קיבולת יומית: 7 שעות (420 דקות)
+ * 2. שעות עבודה: 08:00-17:00
+ * 3. הפסקה כל 90 דקות
+ * 4. הפסקת צהריים: 12:00-12:30
+ * 5. משימות משובצות הכי מוקדם שאפשר (לא דוחים לרגע האחרון)
  */
 
-// קונפיגורציה
+// קונפיגורציה - מעודכן לפי העדפות המשתמשת
 const CONFIG = {
-  INTERVAL_MINUTES: 45,        // אורך אינטרוול
-  BREAK_MINUTES: 15,           // הפסקה בין משימות
-  WORK_START_HOUR: 8,          // תחילת יום עבודה
-  WORK_END_HOUR: 16,           // סוף יום עבודה
-  DEADLINE_END_HOUR: 12,       // משימות חייבות להסתיים עד השעה הזו ביום הדדליין
+  WORK_START_HOUR: 8,          // תחילת יום עבודה: 08:00
+  WORK_END_HOUR: 17,           // סוף יום עבודה: 17:00
+  DAILY_CAPACITY: 420,         // 7 שעות = 420 דקות
+  BREAK_AFTER_MINUTES: 90,     // הפסקה אחרי 90 דקות
+  BREAK_DURATION: 10,          // הפסקה של 10 דקות
+  LUNCH_START_HOUR: 12,        // צהריים ב-12:00
+  LUNCH_DURATION: 30,          // 30 דקות צהריים
+  INTERVAL_MINUTES: 45,        // אורך אינטרוול מקסימלי
   WORK_DAYS: [0, 1, 2, 3, 4],  // ראשון עד חמישי
-  
-  // שעות מועדפות לפי סוג משימה
-  TYPE_PREFERRED_HOURS: {
-    transcription: { start: 8, end: 12 },   // תמלול: 8:00-12:00
-    proofreading: { start: 10, end: 16 },   // הגהה: 10:00-16:00
-    typing: { start: 8, end: 16 },          // הקלדה: כל היום
-    recording: { start: 9, end: 14 },       // הקלטה: בוקר
-    other: { start: 8, end: 16 }
-  }
+  MAX_DAYS_AHEAD: 14           // חיפוש עד 14 יום קדימה
 };
 
 // סדר עדיפויות לסוגי משימות (נמוך = קודם בבוקר)
@@ -435,6 +430,221 @@ export function getScheduleSummaryText(results) {
   
   return lines.join('\n');
 }
+
+// ========================================
+// פונקציות הצעת שיבוץ חדשות
+// ========================================
+
+/**
+ * חישוב דקות מתוזמנות ביום
+ */
+function getScheduledMinutesForDay(date, tasks) {
+  const dateISO = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+  
+  return tasks
+    .filter(t => {
+      const taskDate = t.due_date || t.dueDate;
+      const isCompleted = t.is_completed || t.isCompleted;
+      return taskDate === dateISO && !isCompleted;
+    })
+    .reduce((sum, t) => {
+      const duration = t.estimated_duration || t.estimatedDuration || 30;
+      return sum + duration;
+    }, 0);
+}
+
+/**
+ * קבלת חלונות תפוסים ביום (כולל הפסקת צהריים)
+ */
+function getOccupiedSlotsForDay(date, tasks) {
+  const dateISO = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+  
+  const slots = tasks
+    .filter(t => {
+      const taskDate = t.due_date || t.dueDate;
+      const taskTime = t.due_time || t.dueTime;
+      const isCompleted = t.is_completed || t.isCompleted;
+      return taskDate === dateISO && taskTime && !isCompleted;
+    })
+    .map(t => {
+      const time = t.due_time || t.dueTime;
+      const duration = t.estimated_duration || t.estimatedDuration || 30;
+      const start = timeToMinutes(time);
+      return { start, end: start + duration };
+    });
+  
+  // הפסקת צהריים
+  slots.push({
+    start: CONFIG.LUNCH_START_HOUR * 60,
+    end: CONFIG.LUNCH_START_HOUR * 60 + CONFIG.LUNCH_DURATION,
+    isLunch: true
+  });
+  
+  return slots.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * מציאת החלון הפנוי הראשון ביום
+ */
+function findFirstFreeSlotInDay(date, duration, tasks) {
+  const dateISO = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+  const workStart = CONFIG.WORK_START_HOUR * 60;
+  const workEnd = CONFIG.WORK_END_HOUR * 60;
+  
+  // אם זה היום - לא מציעים שעות שעברו
+  const today = new Date().toISOString().split('T')[0];
+  let searchStart = workStart;
+  
+  if (dateISO === today) {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    // מעגלים ל-15 דקות הבאות + 5 דקות מרווח
+    searchStart = Math.max(workStart, Math.ceil((currentMinutes + 5) / 15) * 15);
+  }
+  
+  // אם כבר מאוחר מדי
+  if (searchStart + duration > workEnd) {
+    return null;
+  }
+  
+  const occupiedSlots = getOccupiedSlotsForDay(date, tasks);
+  let currentTime = searchStart;
+  
+  for (const slot of occupiedSlots) {
+    // יש מקום לפני החלון התפוס?
+    if (currentTime + duration <= slot.start) {
+      return {
+        time: minutesToTime(currentTime),
+        startMinutes: currentTime,
+        endMinutes: currentTime + duration
+      };
+    }
+    // מזיזים אחרי החלון התפוס
+    currentTime = Math.max(currentTime, slot.end);
+  }
+  
+  // יש מקום בסוף היום?
+  if (currentTime + duration <= workEnd) {
+    return {
+      time: minutesToTime(currentTime),
+      startMinutes: currentTime,
+      endMinutes: currentTime + duration
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * פורמט תאריך בעברית
+ */
+function formatHebrewDate(dateStr) {
+  const date = new Date(dateStr);
+  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  return `יום ${days[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+}
+
+/**
+ * הצעת שיבוץ אופטימלי למשימה - הפונקציה הראשית לשימוש בטופס
+ * מחזירה עד 3 הצעות מהמוקדמת לאיחור
+ */
+export function suggestSchedule(taskDuration, existingTasks, options = {}) {
+  const suggestions = [];
+  const today = new Date().toISOString().split('T')[0];
+  let currentDate = new Date();
+  
+  // מחפשים עד 14 יום קדימה
+  for (let i = 0; i < CONFIG.MAX_DAYS_AHEAD; i++) {
+    const dateISO = currentDate.toISOString().split('T')[0];
+    
+    // דילוג על ימים שאינם ימי עבודה
+    if (!isWorkDay(dateISO)) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+    
+    // בדיקת קיבולת יומית
+    const scheduled = getScheduledMinutesForDay(dateISO, existingTasks);
+    const remaining = CONFIG.DAILY_CAPACITY - scheduled;
+    
+    // אם יש מספיק קיבולת
+    if (remaining >= taskDuration) {
+      const slot = findFirstFreeSlotInDay(dateISO, taskDuration, existingTasks);
+      
+      if (slot) {
+        const isToday = dateISO === today;
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const isTomorrow = dateISO === tomorrow.toISOString().split('T')[0];
+        
+        suggestions.push({
+          date: dateISO,
+          time: slot.time,
+          displayText: isToday 
+            ? `היום ב-${slot.time}` 
+            : isTomorrow 
+              ? `מחר ב-${slot.time}`
+              : `${formatHebrewDate(dateISO)} ב-${slot.time}`,
+          isToday,
+          isTomorrow,
+          remainingAfter: remaining - taskDuration,
+          dayIndex: i
+        });
+        
+        // מספיק 3 הצעות
+        if (suggestions.length >= 3) break;
+      }
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return suggestions;
+}
+
+/**
+ * סטטוס עומס היום
+ */
+export function getDayLoadStatus(date, tasks) {
+  const scheduled = getScheduledMinutesForDay(date, tasks);
+  const remaining = CONFIG.DAILY_CAPACITY - scheduled;
+  const percentage = Math.round((scheduled / CONFIG.DAILY_CAPACITY) * 100);
+  
+  let status, color, icon;
+  
+  if (percentage >= 100) {
+    status = 'מלא';
+    color = 'red';
+    icon = '🔴';
+  } else if (percentage >= 80) {
+    status = 'עמוס';
+    color = 'orange';
+    icon = '🟠';
+  } else if (percentage >= 50) {
+    status = 'בינוני';
+    color = 'yellow';
+    icon = '🟡';
+  } else {
+    status = 'פנוי';
+    color = 'green';
+    icon = '🟢';
+  }
+  
+  return {
+    scheduled,
+    remaining,
+    percentage,
+    status,
+    color,
+    icon,
+    displayRemaining: `${Math.floor(remaining / 60)}:${(remaining % 60).toString().padStart(2, '0')}`
+  };
+}
+
+/**
+ * ייצוא ההגדרות
+ */
+export { CONFIG as SCHEDULER_CONFIG };
 
 export default {
   CONFIG,

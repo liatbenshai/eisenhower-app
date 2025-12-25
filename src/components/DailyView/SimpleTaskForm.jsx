@@ -5,6 +5,7 @@ import { getTaskTypeLearning } from '../../services/supabase';
 import { findOverlappingTasks, findNextFreeSlot } from '../../utils/timeOverlap';
 import { findTasksToDefer, calculateNewDueDate } from '../../utils/urgentRescheduler';
 import { getAvailableMinutesForDay } from '../../utils/smartTaskSplitter';
+import { suggestSlots, getDayLoad } from '../../utils/slotSuggester';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
@@ -79,6 +80,22 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
     }
     return null;
   }, [formData.startDate, formData.dueTime, formData.estimatedDuration, tasks, isEditing]);
+
+  // הצעות לחלונות זמן - מחשב כשמשתנה משך המשימה
+  const slotSuggestions = useMemo(() => {
+    if (isEditing) return null;
+    
+    const duration = parseInt(formData.estimatedDuration);
+    if (!duration || duration <= 0) return null;
+    
+    const result = suggestSlots({
+      estimatedDuration: duration,
+      priority: formData.priority
+    }, tasks);
+    
+    console.log('💡 הצעות זמן:', result);
+    return result;
+  }, [formData.estimatedDuration, formData.priority, tasks, isEditing]);
 
   // מילוי נתונים בעריכה
   useEffect(() => {
@@ -517,6 +534,46 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
                 onChange={handleChange}
               />
             </div>
+            
+            {/* הצעות לזמנים פנויים - מוצג כשיש משך זמן אבל עדיין לא בחרו שעה */}
+            {slotSuggestions?.hasSuggestions && !formData.dueTime && (
+              <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                  💡 הצעות לזמנים פנויים:
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {slotSuggestions.suggestions.slice(0, 4).map((slot, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          startDate: slot.date,
+                          dueTime: slot.time
+                        }));
+                        toast.success(`נבחר: ${slot.displayText}`);
+                      }}
+                      className={`
+                        px-3 py-2 rounded-lg text-sm font-medium transition-all
+                        ${idx === 0 
+                          ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                          : 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                        }
+                      `}
+                    >
+                      <div>{slot.dateLabel}</div>
+                      <div className="text-xs opacity-80">{slot.time}</div>
+                    </button>
+                  ))}
+                </div>
+                {slotSuggestions.suggestions.length > 0 && (
+                  <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                    {slotSuggestions.suggestions[0].loadPercent}% מהיום תפוס • נשארו {slotSuggestions.suggestions[0].remainingMinutes} דק׳
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* אינדיקציה לחפיפות בזמן אמת */}
             {conflictInfo && !showConflictAlert && (

@@ -29,17 +29,25 @@ function ScheduleConflictAlert({
     return findOverlappingTasks(newTask, existingTasks);
   }, [newTask, existingTasks]);
 
-  // משימות חופפות שפחות דחופות מהמשימה החדשה
-  const lessUrgentOverlapping = useMemo(() => {
-    if (!isNewTaskUrgent) return [];
+  // משימות פחות דחופות באותו יום (לא רק חופפות בשעה!)
+  const lessUrgentSameDay = useMemo(() => {
+    if (!isNewTaskUrgent || !newTask.dueDate) return [];
+    
     const priorityOrder = { urgent: 0, high: 1, normal: 2 };
     const newTaskPriority = priorityOrder[newTask.priority] ?? 2;
+    const targetDate = newTask.dueDate;
     
-    return overlappingTasks.filter(t => {
+    return existingTasks.filter(t => {
+      const taskDate = t.due_date || t.dueDate;
+      const isCompleted = t.is_completed || t.isCompleted;
       const taskPriority = priorityOrder[t.priority] ?? 2;
-      return taskPriority > newTaskPriority; // פחות דחוף = מספר גבוה יותר
+      
+      // באותו יום, לא הושלמה, ופחות דחופה
+      return taskDate === targetDate && 
+             !isCompleted && 
+             taskPriority > newTaskPriority;
     });
-  }, [overlappingTasks, isNewTaskUrgent, newTask.priority]);
+  }, [existingTasks, isNewTaskUrgent, newTask.dueDate, newTask.priority]);
 
   // בדיקת עומס יומי
   const dayOverload = useMemo(() => {
@@ -97,8 +105,8 @@ function ScheduleConflictAlert({
   const handleDeferLessUrgent = async () => {
     setLoading(true);
     try {
-      if (onDefer && lessUrgentOverlapping.length > 0) {
-        await onDefer(lessUrgentOverlapping);
+      if (onDefer && lessUrgentSameDay.length > 0) {
+        await onDefer(lessUrgentSameDay);
       }
     } finally {
       setLoading(false);
@@ -147,8 +155,8 @@ function ScheduleConflictAlert({
             }
           </h4>
           <p className={`text-sm ${isNewTaskUrgent ? 'text-red-700 dark:text-red-300' : 'text-orange-700 dark:text-orange-300'}`}>
-            {isNewTaskUrgent && lessUrgentOverlapping.length > 0
-              ? `יש ${lessUrgentOverlapping.length} משימות פחות דחופות שאפשר לדחות`
+            {isNewTaskUrgent && lessUrgentSameDay.length > 0
+              ? `יש ${lessUrgentSameDay.length} משימות פחות דחופות שאפשר לדחות`
               : overlappingTasks.length > 0 
                 ? `המשימה חופפת ל-${overlappingTasks.length} משימות קיימות`
                 : `חסרות ${dayOverload?.overloadAmount} דקות ביום הזה`
@@ -158,13 +166,13 @@ function ScheduleConflictAlert({
       </div>
 
       {/* הודעה מיוחדת למשימה דחופה */}
-      {isNewTaskUrgent && lessUrgentOverlapping.length > 0 && (
+      {isNewTaskUrgent && lessUrgentSameDay.length > 0 && (
         <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
           <div className="text-sm font-bold text-red-800 dark:text-red-200 mb-2">
             🎯 המשימה שלך דחופה - מומלץ לדחות את המשימות הפחות חשובות:
           </div>
           <div className="space-y-1">
-            {lessUrgentOverlapping.map(task => (
+            {lessUrgentSameDay.map(task => (
               <div 
                 key={task.id}
                 className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded text-sm"
@@ -181,7 +189,7 @@ function ScheduleConflictAlert({
       )}
 
       {/* משימות חופפות - רק אם לא דחוף או אם יש גם משימות דחופות שחופפות */}
-      {overlappingTasks.length > 0 && (!isNewTaskUrgent || lessUrgentOverlapping.length === 0) && (
+      {overlappingTasks.length > 0 && (!isNewTaskUrgent || lessUrgentSameDay.length === 0) && (
         <div className="mb-4">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             משימות חופפות:
@@ -270,7 +278,7 @@ function ScheduleConflictAlert({
         </div>
         
         {/* אופציה 1: דחיית משימות פחות דחופות (רק למשימות דחופות עם חפיפות) */}
-        {isNewTaskUrgent && lessUrgentOverlapping.length > 0 && (
+        {isNewTaskUrgent && lessUrgentSameDay.length > 0 && (
           <Button
             onClick={handleDeferLessUrgent}
             loading={loading}
@@ -278,13 +286,13 @@ function ScheduleConflictAlert({
           >
             <span className="flex items-center gap-2 w-full">
               <span>🚀</span>
-              <span className="flex-1 text-right">דחה {lessUrgentOverlapping.length} משימות פחות דחופות ושבץ אותי</span>
+              <span className="flex-1 text-right">דחה {lessUrgentSameDay.length} משימות פחות דחופות ושבץ אותי</span>
             </span>
           </Button>
         )}
         
         {/* אופציה 2: דחיית משימות (אם לא דחוף, או אם דחוף בלי משימות פחות דחופות) */}
-        {deferSuggestion?.tasksToDefer.length > 0 && (!isNewTaskUrgent || lessUrgentOverlapping.length === 0) && (
+        {deferSuggestion?.tasksToDefer.length > 0 && (!isNewTaskUrgent || lessUrgentSameDay.length === 0) && (
           <Button
             onClick={handleDefer}
             loading={loading}

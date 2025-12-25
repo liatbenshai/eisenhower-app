@@ -1,41 +1,62 @@
-# עדכון מערכת פיצול משימות + התראות חפיפות
+# עדכון מערכת אייזנהאואר
 ## תאריך: December 2025
+
+---
+
+## סיכום תיקונים
+
+### 1. תצוגה שבועית ✅
+- תוקן: משימות שנמחקו או הושלמו לא מופיעות יותר
+
+### 2. טיימר ביומן שעות ✅
+- תוקן: כפתור "התחל עבודה" עובד כמו שצריך
+- לחיצה על הטיימר לא סוגרת את הכרטיס
+
+### 3. משימות דחופות ✅
+- חדש: כשמוסיפים משימה דחופה, המערכת מציעה לדחות משימות **פחות דחופות מאותו יום** (לא רק חופפות בשעה)
+- הכפתור הראשון: "🚀 דחה X משימות פחות דחופות ושבץ אותי"
+
+### 4. הצעות שיבוץ חכמות ✅
+- כשמזינים זמן משוער, מוצגות הצעות לשעות פנויות
+- לחיצה על הצעה ממלאת תאריך ושעה אוטומטית
+- עובד לפי: 7 שעות עבודה, מ-08:00
 
 ---
 
 ## קבצים לעדכון
 
 ```
-src/utils/smartTaskSplitter.js               
-src/utils/urgentRescheduler.js               
-src/utils/timeOverlap.js                     
-src/components/Tasks/TaskForm.jsx            
-src/components/Tasks/ScheduleConflictAlert.jsx  ← תיקון אופציות!
-src/components/Tasks/TaskTimerWithInterruptions.jsx ← תיקון טיימר!
-src/components/DailyView/SimpleTaskForm.jsx  
-src/components/DailyView/DiaryView.jsx       
-utils/smartTaskSplitter.js                   
+src/components/DailyView/WeeklyCalendarView.jsx  ← תיקון משימות מחוקות
+src/components/DailyView/DiaryView.jsx           ← לוגים לדיבאג
+src/components/DailyView/SimpleTaskForm.jsx      ← הצעות שיבוץ
+src/components/Tasks/ScheduleConflictAlert.jsx   ← משימות דחופות
+src/components/Tasks/TaskTimerWithInterruptions.jsx ← תיקון טיימר
+src/components/Tasks/TaskForm.jsx
+src/utils/slotSuggester.js                       ← הגדרות: 7 שעות, 08:00
+src/utils/smartScheduler.js                      ← מעודכן
+src/utils/timeOverlap.js
+src/utils/urgentRescheduler.js
+src/utils/smartTaskSplitter.js
 ```
 
 ---
 
-## מה תוקן
+## הגדרות (slotSuggester.js)
 
-### 1. טיימר ביומן שעות ✅
-- הכפתורים עכשיו עובדים
-- לחיצה על הטיימר לא סוגרת את הכרטיס
-
-### 2. אופציות ברורות בהתראת חפיפות ✅
-כשיש חפיפה, מוצגות כל האופציות הרלוונטיות:
-- 🚀 דחה משימות פחות דחופות (אם המשימה החדשה דחופה)
-- 📤 דחה משימות למחר
-- 🕐 עבור לשעה פנויה
-- ⚠️ שבץ בכל זאת (יהיה כפל)
-- ❌ ביטול
+```javascript
+WORK_START_HOUR: 8,           // 08:00
+DAILY_CAPACITY_MINUTES: 420,  // 7 שעות
+BREAK_AFTER_MINUTES: 90,      // הפסקה כל 90 דק'
+BREAK_DURATION: 10,           // 10 דק' הפסקה
+LUNCH_HOUR: 12,               // צהריים
+LUNCH_DURATION: 30            // 30 דק' צהריים
+```
 
 ---
 
 ## בדיקות
 
-1. **טיימר:** ביומן שעות → לחצי על משימה → לחצי "התחל עבודה"
-2. **משימה דחופה:** הוסיפי משימה דחופה בשעה תפוסה → תראי את כל האופציות
+1. **תצוגה שבועית:** וודאי שמשימות שמחקת לא מופיעות
+2. **טיימר:** יומן שעות → לחצי על משימה → "התחל עבודה"
+3. **משימה דחופה:** הוסיפי משימה דחופה ביום עמוס → תראי הצעה לדחות משימות פחות דחופות
+4. **הצעות:** הזיני זמן משוער בטופס → תראי כפתורים עם הצעות זמן
