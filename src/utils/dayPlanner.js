@@ -393,6 +393,22 @@ function generateWarnings(tasks, scheduledBlocks, unscheduledTasks, date) {
     });
   }
   
+  // ⚠️ אזהרה על חפיפות זמנים
+  const overlaps = findOverlappingTasks(tasks);
+  if (overlaps.length > 0) {
+    overlaps.forEach(overlap => {
+      warnings.push({
+        type: 'overlap',
+        severity: 'high',
+        message: `חפיפה! "${overlap.task1.title}" ו-"${overlap.task2.title}" מתוכננות לאותו זמן (${overlap.time})`,
+        tasks: [overlap.task1.id, overlap.task2.id],
+        canAutoFix: true,
+        fixAction: 'reschedule',
+        overlap
+      });
+    });
+  }
+  
   // אזהרה על משימות דחופות
   const urgentTasks = tasks.filter(t => t.priority === 'urgent');
   if (urgentTasks.length > 3) {
@@ -432,6 +448,41 @@ function generateWarnings(tasks, scheduledBlocks, unscheduledTasks, date) {
   }
   
   return warnings;
+}
+
+/**
+ * מציאת משימות חופפות
+ */
+function findOverlappingTasks(tasks) {
+  const overlaps = [];
+  const tasksWithTime = tasks.filter(t => t.due_time && !t.is_completed);
+  
+  for (let i = 0; i < tasksWithTime.length; i++) {
+    for (let j = i + 1; j < tasksWithTime.length; j++) {
+      const task1 = tasksWithTime[i];
+      const task2 = tasksWithTime[j];
+      
+      // המרת זמנים לדקות
+      const [h1, m1] = task1.due_time.split(':').map(Number);
+      const [h2, m2] = task2.due_time.split(':').map(Number);
+      const start1 = h1 * 60 + (m1 || 0);
+      const start2 = h2 * 60 + (m2 || 0);
+      const end1 = start1 + (task1.estimated_duration || 30);
+      const end2 = start2 + (task2.estimated_duration || 30);
+      
+      // בדיקת חפיפה
+      if (start1 < end2 && start2 < end1) {
+        overlaps.push({
+          task1,
+          task2,
+          time: task1.due_time,
+          overlapMinutes: Math.min(end1, end2) - Math.max(start1, start2)
+        });
+      }
+    }
+  }
+  
+  return overlaps;
 }
 
 /**

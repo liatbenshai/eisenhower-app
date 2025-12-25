@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
 import { planDay, planWeek, suggestTimeForTask, SCHEDULE_STATUS } from '../../utils/dayPlanner';
-import { formatDuration, getAvailableMinutesForDay, BUFFER_PERCENTAGE } from '../../config/workSchedule';
+import { formatDuration, getAvailableMinutesForDay, BUFFER_PERCENTAGE, formatTime } from '../../config/workSchedule';
 import { TASK_TYPES } from '../../config/taskTypes';
+import { supabase } from '../../services/supabase';
 import SimpleTaskForm from './SimpleTaskForm';
 import TaskTimerWithInterruptions from '../Tasks/TaskTimerWithInterruptions';
 import Modal from '../UI/Modal';
@@ -72,6 +73,36 @@ function SmartDayPlanner() {
       toast.success('✅ משימה הושלמה!');
     } catch (err) {
       toast.error('שגיאה בעדכון');
+    }
+  };
+
+  // תיקון חפיפות זמנים
+  const handleFixOverlap = async (warning) => {
+    if (!warning.overlap) return;
+    
+    const { task1, task2 } = warning.overlap;
+    
+    // חישוב שעה חדשה למשימה השנייה (אחרי המשימה הראשונה)
+    const [h1, m1] = task1.due_time.split(':').map(Number);
+    const task1EndMinutes = h1 * 60 + (m1 || 0) + (task1.estimated_duration || 30);
+    const newHour = Math.floor(task1EndMinutes / 60);
+    const newMinutes = task1EndMinutes % 60;
+    const newTime = `${newHour.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+    
+    try {
+      // עדכון המשימה השנייה לשעה חדשה
+      const { error } = await supabase
+        .from('tasks')
+        .update({ due_time: newTime })
+        .eq('id', task2.id);
+      
+      if (error) throw error;
+      
+      toast.success(`✅ "${task2.title}" הועברה ל-${newTime}`);
+      loadTasks();
+    } catch (err) {
+      console.error('שגיאה בתיקון חפיפה:', err);
+      toast.error('שגיאה בתיקון החפיפה');
     }
   };
 
@@ -180,7 +211,7 @@ function SmartDayPlanner() {
 
       {/* אזהרות */}
       {dayPlan.warnings?.length > 0 && viewMode !== 'week' && (
-        <WarningsPanel warnings={dayPlan.warnings} />
+        <WarningsPanel warnings={dayPlan.warnings} onFixOverlap={handleFixOverlap} />
       )}
 
       {/* כפתור הוספה */}
@@ -355,12 +386,13 @@ function DayStatusCard({ dayPlan }) {
 }
 
 /**
- * פאנל אזהרות
+ * פאנל אזהרות - עם כפתור תיקון לחפיפות
  */
-function WarningsPanel({ warnings }) {
-  const [isOpen, setIsOpen] = useState(false);
+function WarningsPanel({ warnings, onFixOverlap }) {
+  const [isOpen, setIsOpen] = useState(true);
   
   const highSeverity = warnings.filter(w => w.severity === 'high');
+  const overlaps = warnings.filter(w => w.type === 'overlap');
   
   if (warnings.length === 0) return null;
 
@@ -368,18 +400,28 @@ function WarningsPanel({ warnings }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
+      className={`mb-4 p-3 border rounded-lg ${
+        overlaps.length > 0 
+          ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
+          : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+      }`}
     >
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between"
       >
-        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
-          <span>⚠️</span>
+        <div className={`flex items-center gap-2 ${
+          overlaps.length > 0 
+            ? 'text-red-800 dark:text-red-200'
+            : 'text-amber-800 dark:text-amber-200'
+        }`}>
+          <span>{overlaps.length > 0 ? '🔴' : '⚠️'}</span>
           <span className="font-medium">
-            {highSeverity.length > 0 
-              ? `${highSeverity.length} אזהרות חשובות`
-              : `${warnings.length} הערות`
+            {overlaps.length > 0 
+              ? `${overlaps.length} חפיפות זמן!`
+              : highSeverity.length > 0 
+                ? `${highSeverity.length} אזהרות חשובות`
+                : `${warnings.length} הערות`
             }
           </span>
         </div>
@@ -396,17 +438,44 @@ function WarningsPanel({ warnings }) {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="mt-2 space-y-1">
+            <div className="mt-3 space-y-2">
               {warnings.map((warning, idx) => (
                 <div 
                   key={idx}
-                  className={`text-sm p-2 rounded ${
-                    warning.severity === 'high' 
-                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  className={`p-3 rounded-lg ${
+                    warning.type === 'overlap'
+                      ? 'bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-700'
+                      : warning.severity === 'high' 
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                   }`}
                 >
-                  {warning.message}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <div className={`text-sm font-medium ${
+                        warning.type === 'overlap' ? 'text-red-800 dark:text-red-200' : ''
+                      }`}>
+                        {warning.message}
+                      </div>
+                      
+                      {/* הצגת פרטי החפיפה */}
+                      {warning.type === 'overlap' && warning.overlap && (
+                        <div className="mt-2 text-xs text-red-600 dark:text-red-300">
+                          חפיפה של {warning.overlap.overlapMinutes} דקות
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* כפתור תיקון לחפיפות */}
+                    {warning.canAutoFix && onFixOverlap && (
+                      <button
+                        onClick={() => onFixOverlap(warning)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        🔧 תקן
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
