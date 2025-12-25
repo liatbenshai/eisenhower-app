@@ -9,9 +9,13 @@ import { suggestEstimatedTime } from '../../utils/timeEstimation';
 import { TASK_CATEGORIES, detectTaskCategory } from '../../utils/taskCategories';
 import { predictTaskDuration } from '../../utils/taskTypeLearning';
 import { getSuggestedTimeWithCorrection, markRuleAsApplied } from '../../utils/timeCorrectionRules';
+import { findOverlappingTasks } from '../../utils/timeOverlap';
+import { findTasksToDefer, calculateNewDueDate } from '../../utils/urgentRescheduler';
+import { getAvailableMinutesForDay } from '../../utils/smartTaskSplitter';
 import toast from 'react-hot-toast';
 import Input from '../UI/Input';
 import Button from '../UI/Button';
+import ScheduleConflictAlert from './ScheduleConflictAlert';
 
 /**
  * טופס הוספה/עריכת משימה
@@ -41,6 +45,34 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
   const [detectedCategory, setDetectedCategory] = useState(null);
   const [aiPrediction, setAiPrediction] = useState(null);
   const [correctionSuggestion, setCorrectionSuggestion] = useState(null);
+  const [showConflictAlert, setShowConflictAlert] = useState(false);
+  const [conflictChecked, setConflictChecked] = useState(false);
+
+  // בדיקת חפיפות בזמן אמת
+  const conflictInfo = useMemo(() => {
+    if (!formData.dueDate || !formData.dueTime || isEditing) return null;
+    
+    const newTask = {
+      dueDate: formData.dueDate,
+      dueTime: formData.dueTime,
+      estimatedDuration: parseInt(formData.estimatedDuration) || 30
+    };
+    
+    const overlapping = findOverlappingTasks(newTask, tasks);
+    const availableMinutes = getAvailableMinutesForDay(formData.dueDate, tasks);
+    const isOverloaded = availableMinutes < newTask.estimatedDuration;
+    
+    if (overlapping.length > 0 || isOverloaded) {
+      return {
+        hasConflict: true,
+        overlappingTasks: overlapping,
+        isOverloaded,
+        availableMinutes,
+        overloadAmount: isOverloaded ? newTask.estimatedDuration - availableMinutes : 0
+      };
+    }
+    return null;
+  }, [formData.dueDate, formData.dueTime, formData.estimatedDuration, tasks, isEditing]);
 
   // חישוב הצעת זמן משוער
   const timeSuggestion = useMemo(() => {
@@ -187,6 +219,12 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
       return;
     }
 
+    // בדיקת חפיפות - רק במשימה חדשה ואם לא אישרו כבר
+    if (!isEditing && conflictInfo?.hasConflict && !conflictChecked) {
+      setShowConflictAlert(true);
+      return;
+    }
+
     setLoading(true);
     setErrors({}); // ניקוי שגיאות קודמות
     
@@ -254,8 +292,71 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
     { value: '1440', label: 'יום לפני' }
   ];
 
+  // טיפול בדחיית משימות חופפות
+  const handleDeferConflicts = async (tasksToDefer) => {
+    try {
+      for (const task of tasksToDefer) {
+        const newDueDate = calculateNewDueDate(task, tasks);
+        await editTask(task.id, { 
+          dueDate: newDueDate,
+          wasDeferred: true,
+          deferredFrom: task.due_date
+        });
+      }
+      toast.success(`${tasksToDefer.length} משימות נדחו למחר`);
+      setShowConflictAlert(false);
+      setConflictChecked(true);
+      // שולחים את הטופס אחרי הדחייה
+      handleSubmit({ preventDefault: () => {} });
+    } catch (err) {
+      console.error('שגיאה בדחיית משימות:', err);
+      toast.error('שגיאה בדחיית משימות');
+    }
+  };
+
+  // שינוי שעה לשעה פנויה
+  const handleChangeTime = (newTime, isTomorrow) => {
+    if (isTomorrow) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setFormData(prev => ({
+        ...prev,
+        dueDate: tomorrow.toISOString().split('T')[0],
+        dueTime: newTime
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, dueTime: newTime }));
+    }
+    setShowConflictAlert(false);
+    toast.success(`השעה שונתה ל-${newTime}${isTomorrow ? ' מחר' : ''}`);
+  };
+
+  // התעלמות מהתראה והמשך
+  const handleIgnoreConflict = () => {
+    setShowConflictAlert(false);
+    setConflictChecked(true);
+    // שולחים את הטופס
+    handleSubmit({ preventDefault: () => {} });
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* התראת חפיפות */}
+      {showConflictAlert && conflictInfo && (
+        <ScheduleConflictAlert
+          newTask={{
+            dueDate: formData.dueDate,
+            dueTime: formData.dueTime,
+            estimatedDuration: parseInt(formData.estimatedDuration) || 30
+          }}
+          existingTasks={tasks}
+          onDefer={handleDeferConflicts}
+          onChangeTime={handleChangeTime}
+          onIgnore={handleIgnoreConflict}
+          onCancel={() => setShowConflictAlert(false)}
+        />
+      )}
+
       {/* כותרת */}
       <Input
         label="כותרת המשימה"
@@ -499,6 +600,21 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
             error={errors.dueTime}
           />
         </div>
+        
+        {/* אינדיקציה לחפיפות בזמן אמת */}
+        {conflictInfo && !showConflictAlert && (
+          <div className="mt-2 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
+            <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-300">
+              <span>⚠️</span>
+              <span>
+                {conflictInfo.overlappingTasks.length > 0 
+                  ? `חופף ל-${conflictInfo.overlappingTasks.length} משימות`
+                  : `היום עמוס (חסרות ${conflictInfo.overloadAmount} דק׳)`
+                }
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* תזכורת */}
