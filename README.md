@@ -6,12 +6,13 @@
 ## קבצים לעדכון
 
 ```
-src/utils/smartTaskSplitter.js    ← החלף
-src/utils/urgentRescheduler.js    ← החלף
-src/utils/timeOverlap.js          ← החלף (חשוב!)
-src/components/Tasks/TaskForm.jsx ← החלף
+src/utils/smartTaskSplitter.js         ← החלף
+src/utils/urgentRescheduler.js         ← החלף
+src/utils/timeOverlap.js               ← החלף (חשוב!)
+src/components/Tasks/TaskForm.jsx      ← החלף (לתצוגת רשימה)
 src/components/Tasks/ScheduleConflictAlert.jsx ← הוסף (חדש!)
-utils/smartTaskSplitter.js        ← החלף
+src/components/DailyView/SimpleTaskForm.jsx   ← החלף (ליומן שעות!)
+utils/smartTaskSplitter.js             ← החלף
 ```
 
 ---
@@ -19,15 +20,15 @@ utils/smartTaskSplitter.js        ← החלף
 ## Debug Mode
 
 הגרסה כוללת לוגים ב-Console (F12):
-- `🔍 בדיקת חפיפות:` - מראה את המשימות והפורמט שלהן
+- `🔍 SimpleTaskForm - בדיקת חפיפות:` - מראה את הבדיקה
 - `🔄 תוצאת חפיפות:` - מה נמצא
 - `⚠️ נמצאה חפיפה!` - כשיש התנגשות
 
 ---
 
-## בדיקה
+## בדיקה ביומן השעות
 
-1. פתחי F12 > Console לפני הוספת משימה
-2. הוסיפי משימה עם תאריך ושעה ומשך זמן
-3. הוסיפי משימה נוספת באותו זמן
+1. פתחי F12 > Console
+2. לחצי "+ משימה" ביומן השעות
+3. הזיני שם, זמן, ובחרי **שעה** שכבר קיימת משימה בה
 4. צריך לראות את הלוגים + התראה כתומה
