@@ -471,6 +471,7 @@ function DiaryView({ date, tasks, onEditTask, onAddTask, onUpdate }) {
                 
                 {/* טיימר עם הפרעות */}
                 <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
+                  {console.log('🎬 מציג טיימר למשימה:', task.id, task.title)}
                   <TaskTimerWithInterruptions
                     task={task}
                     onUpdate={onUpdate}

@@ -311,7 +311,8 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
           newTask={{
             dueDate: formData.startDate,
             dueTime: formData.dueTime,
-            estimatedDuration: parseInt(formData.estimatedDuration) || 30
+            estimatedDuration: parseInt(formData.estimatedDuration) || 30,
+            priority: formData.priority
           }}
           existingTasks={tasks}
           onDefer={handleDeferConflicts}

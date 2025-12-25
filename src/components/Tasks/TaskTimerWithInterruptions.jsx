@@ -27,8 +27,18 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
 
   // קבלת המשימה העדכנית
   const currentTask = useMemo(() => {
-    if (!task || !task.id) return null;
-    return tasks.find(t => t.id === task.id) || task;
+    console.log('⏱️ TaskTimerWithInterruptions - קיבלתי:', {
+      taskProp: task ? { id: task.id, title: task.title } : 'null',
+      tasksCount: tasks?.length
+    });
+    
+    if (!task || !task.id) {
+      console.log('⏱️ אין משימה או אין ID');
+      return null;
+    }
+    const found = tasks.find(t => t.id === task.id);
+    console.log('⏱️ משימה נמצאה:', found ? 'כן' : 'לא');
+    return found || task;
   }, [tasks, task?.id]);
 
   // State
@@ -367,12 +377,15 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   }, [isRunning]);
 
   if (!currentTask) {
+    console.log('⏱️ אין currentTask - מציג הודעת "בחרי משימה"');
     return (
       <div className="p-4 text-center text-gray-500">
         בחרי משימה להתחיל
       </div>
     );
   }
+
+  console.log('⏱️ מציג טיימר למשימה:', currentTask.title);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">

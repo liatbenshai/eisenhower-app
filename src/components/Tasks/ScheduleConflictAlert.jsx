@@ -20,11 +20,26 @@ function ScheduleConflictAlert({
   const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // האם המשימה החדשה דחופה?
+  const isNewTaskUrgent = newTask.priority === 'urgent' || newTask.priority === 'high';
+
   // בדיקת חפיפות
   const overlappingTasks = useMemo(() => {
     if (!newTask.dueDate || !newTask.dueTime) return [];
     return findOverlappingTasks(newTask, existingTasks);
   }, [newTask, existingTasks]);
+
+  // משימות חופפות שפחות דחופות מהמשימה החדשה
+  const lessUrgentOverlapping = useMemo(() => {
+    if (!isNewTaskUrgent) return [];
+    const priorityOrder = { urgent: 0, high: 1, normal: 2 };
+    const newTaskPriority = priorityOrder[newTask.priority] ?? 2;
+    
+    return overlappingTasks.filter(t => {
+      const taskPriority = priorityOrder[t.priority] ?? 2;
+      return taskPriority > newTaskPriority; // פחות דחוף = מספר גבוה יותר
+    });
+  }, [overlappingTasks, isNewTaskUrgent, newTask.priority]);
 
   // בדיקת עומס יומי
   const dayOverload = useMemo(() => {
@@ -46,7 +61,7 @@ function ScheduleConflictAlert({
     if (!dayOverload?.isOverloaded && overlappingTasks.length === 0) return null;
     
     const requiredMinutes = dayOverload?.overloadAmount || 
-      overlappingTasks.reduce((sum, t) => sum + (t.estimated_duration || 30), 0);
+      overlappingTasks.reduce((sum, t) => sum + (t.estimated_duration || t.estimatedDuration || 30), 0);
     
     return findTasksToDefer(existingTasks, newTask.dueDate, requiredMinutes);
   }, [existingTasks, newTask.dueDate, dayOverload, overlappingTasks]);
@@ -78,6 +93,18 @@ function ScheduleConflictAlert({
     }
   };
 
+  // דחיית רק המשימות הפחות דחופות
+  const handleDeferLessUrgent = async () => {
+    setLoading(true);
+    try {
+      if (onDefer && lessUrgentOverlapping.length > 0) {
+        await onDefer(lessUrgentOverlapping);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // צבע לפי רבע
   const getQuadrantColor = (q) => ({
     1: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
@@ -86,30 +113,75 @@ function ScheduleConflictAlert({
     4: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
   }[q] || 'bg-gray-100');
 
+  // צבע לפי דחיפות
+  const getPriorityColor = (p) => ({
+    urgent: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    high: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    normal: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  }[p] || 'bg-gray-100');
+
+  const getPriorityLabel = (p) => ({
+    urgent: '🔴 דחוף',
+    high: '🟠 גבוה',
+    normal: '⚪ רגיל'
+  }[p] || 'רגיל');
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="border-2 border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mb-4"
+      className={`border-2 rounded-xl p-4 mb-4 ${
+        isNewTaskUrgent 
+          ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+          : 'border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20'
+      }`}
     >
       {/* כותרת */}
       <div className="flex items-start gap-3 mb-3">
-        <span className="text-2xl">⚠️</span>
+        <span className="text-2xl">{isNewTaskUrgent ? '🚨' : '⚠️'}</span>
         <div className="flex-1">
-          <h4 className="font-bold text-orange-800 dark:text-orange-200">
-            {overlappingTasks.length > 0 ? 'יש חפיפה בזמנים!' : 'היום עמוס מדי!'}
+          <h4 className={`font-bold ${isNewTaskUrgent ? 'text-red-800 dark:text-red-200' : 'text-orange-800 dark:text-orange-200'}`}>
+            {isNewTaskUrgent 
+              ? 'משימה דחופה חופפת למשימות אחרות!'
+              : overlappingTasks.length > 0 ? 'יש חפיפה בזמנים!' : 'היום עמוס מדי!'
+            }
           </h4>
-          <p className="text-sm text-orange-700 dark:text-orange-300">
-            {overlappingTasks.length > 0 
-              ? `המשימה חופפת ל-${overlappingTasks.length} משימות קיימות`
-              : `חסרות ${dayOverload?.overloadAmount} דקות ביום הזה`
+          <p className={`text-sm ${isNewTaskUrgent ? 'text-red-700 dark:text-red-300' : 'text-orange-700 dark:text-orange-300'}`}>
+            {isNewTaskUrgent && lessUrgentOverlapping.length > 0
+              ? `יש ${lessUrgentOverlapping.length} משימות פחות דחופות שאפשר לדחות`
+              : overlappingTasks.length > 0 
+                ? `המשימה חופפת ל-${overlappingTasks.length} משימות קיימות`
+                : `חסרות ${dayOverload?.overloadAmount} דקות ביום הזה`
             }
           </p>
         </div>
       </div>
 
-      {/* משימות חופפות */}
-      {overlappingTasks.length > 0 && (
+      {/* הודעה מיוחדת למשימה דחופה */}
+      {isNewTaskUrgent && lessUrgentOverlapping.length > 0 && (
+        <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
+          <div className="text-sm font-bold text-red-800 dark:text-red-200 mb-2">
+            🎯 המשימה שלך דחופה - מומלץ לדחות את המשימות הפחות חשובות:
+          </div>
+          <div className="space-y-1">
+            {lessUrgentOverlapping.map(task => (
+              <div 
+                key={task.id}
+                className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded text-sm"
+              >
+                <span className={`px-1.5 py-0.5 rounded text-xs ${getPriorityColor(task.priority)}`}>
+                  {getPriorityLabel(task.priority)}
+                </span>
+                <span className="flex-1 truncate">{task.title}</span>
+                <span className="text-xs text-gray-500">{task.due_time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* משימות חופפות - רק אם לא דחוף או אם יש גם משימות דחופות שחופפות */}
+      {overlappingTasks.length > 0 && (!isNewTaskUrgent || lessUrgentOverlapping.length === 0) && (
         <div className="mb-4">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             משימות חופפות:
@@ -120,12 +192,12 @@ function ScheduleConflictAlert({
                 key={task.id}
                 className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-800"
               >
-                <span className={`px-2 py-0.5 rounded text-xs ${getQuadrantColor(task.quadrant)}`}>
-                  Q{task.quadrant}
+                <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(task.priority)}`}>
+                  {getPriorityLabel(task.priority)}
                 </span>
                 <span className="font-medium flex-1 text-sm truncate">{task.title}</span>
                 <span className="text-xs text-gray-500">
-                  {task.due_time} • {task.estimated_duration || 30} דק׳
+                  {task.due_time || task.dueTime} • {task.estimated_duration || task.estimatedDuration || 30} דק׳
                 </span>
               </div>
             ))}
@@ -133,8 +205,8 @@ function ScheduleConflictAlert({
         </div>
       )}
 
-      {/* הצעה לדחיית משימות */}
-      {deferSuggestion && deferSuggestion.tasksToDefer.length > 0 && (
+      {/* הצעה לדחיית משימות - רק אם לא משימה דחופה */}
+      {!isNewTaskUrgent && deferSuggestion && deferSuggestion.tasksToDefer.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -193,7 +265,19 @@ function ScheduleConflictAlert({
 
       {/* כפתורים */}
       <div className="flex flex-wrap gap-2">
-        {deferSuggestion?.tasksToDefer.length > 0 && (
+        {/* כפתור דחייה למשימה דחופה */}
+        {isNewTaskUrgent && lessUrgentOverlapping.length > 0 && (
+          <Button
+            onClick={handleDeferLessUrgent}
+            loading={loading}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm"
+          >
+            🚀 דחה את הפחות דחופות ושבץ אותי
+          </Button>
+        )}
+        
+        {/* כפתור דחייה רגיל */}
+        {!isNewTaskUrgent && deferSuggestion?.tasksToDefer.length > 0 && (
           <Button
             onClick={handleDefer}
             loading={loading}
