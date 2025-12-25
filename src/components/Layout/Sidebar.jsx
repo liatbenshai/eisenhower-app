@@ -14,6 +14,8 @@ function Sidebar({ isOpen, onClose }) {
 
   // קישורי ניווט
   const navLinks = [
+    { path: '/planner', label: 'תכנון חכם', icon: '🎯' },
+    { path: '/daily', label: 'יומן משימות', icon: '📅' },
     { path: '/dashboard', label: 'לוח משימות', icon: '📋' },
     { path: '/insights', label: 'תובנות למידה', icon: '📊' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
@@ -49,8 +51,8 @@ function Sidebar({ isOpen, onClose }) {
         {/* כותרת */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📊</span>
-            <span className="font-bold text-gray-900 dark:text-white">מטריצת אייזנהאואר</span>
+            <span className="text-2xl">⏰</span>
+            <span className="font-bold text-gray-900 dark:text-white">ניהול זמן</span>
           </div>
           <button
             onClick={onClose}

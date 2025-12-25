@@ -48,9 +48,10 @@ function Header() {
 
   // קישורי ניווט
   const navLinks = [
-    { path: '/dashboard', label: 'דשבורד', icon: '🏠' },
-    { path: '/daily', label: 'תצוגה יומית', icon: '📋' },
-    { path: '/time-management', label: 'ניהול זמן', icon: '⏱️' },
+    { path: '/planner', label: 'תכנון חכם', icon: '🎯' },
+    { path: '/daily', label: 'יומן', icon: '📅' },
+    { path: '/dashboard', label: 'דשבורד', icon: '📋' },
+    { path: '/insights', label: 'תובנות', icon: '📊' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];
 
@@ -63,10 +64,10 @@ function Header() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* לוגו */}
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <span className="text-2xl">📊</span>
+          <Link to="/planner" className="flex items-center gap-2">
+            <span className="text-2xl">⏰</span>
             <span className="font-bold text-xl text-gray-900 dark:text-white hidden sm:block">
-              מטריצת אייזנהאואר
+              ניהול זמן
             </span>
           </Link>
 

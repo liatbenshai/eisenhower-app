@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DailyViewPage from './pages/DailyViewPage';
+import SmartPlannerPage from './pages/SmartPlannerPage';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import TaskInsights from './pages/TaskInsights';
@@ -55,7 +56,7 @@ function App() {
       {/* ניתוב */}
       <Routes>
         {/* דף בית */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Home />} />
+        <Route path="/" element={user ? <Navigate to="/planner" /> : <Home />} />
         
         {/* התחברות והרשמה */}
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
@@ -71,6 +72,12 @@ function App() {
         <Route path="/daily" element={
           <ProtectedRoute>
             <DailyViewPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/planner" element={
+          <ProtectedRoute>
+            <SmartPlannerPage />
           </ProtectedRoute>
         } />
         
