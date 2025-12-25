@@ -50,7 +50,25 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
 
   // בדיקת חפיפות בזמן אמת
   const conflictInfo = useMemo(() => {
-    if (!formData.dueDate || !formData.dueTime || isEditing) return null;
+    console.log('🔍 בדיקת חפיפות:', {
+      dueDate: formData.dueDate,
+      dueTime: formData.dueTime,
+      estimatedDuration: formData.estimatedDuration,
+      isEditing,
+      tasksCount: tasks?.length,
+      sampleTask: tasks?.[0] ? {
+        id: tasks[0].id,
+        due_date: tasks[0].due_date,
+        dueDate: tasks[0].dueDate,
+        due_time: tasks[0].due_time,
+        dueTime: tasks[0].dueTime
+      } : 'no tasks'
+    });
+    
+    if (!formData.dueDate || !formData.dueTime || isEditing) {
+      console.log('⏭️ דילוג על בדיקת חפיפות - חסרים נתונים');
+      return null;
+    }
     
     const newTask = {
       dueDate: formData.dueDate,
@@ -59,10 +77,15 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
     };
     
     const overlapping = findOverlappingTasks(newTask, tasks);
+    console.log('🔄 תוצאת חפיפות:', overlapping);
+    
     const availableMinutes = getAvailableMinutesForDay(formData.dueDate, tasks);
+    console.log('⏰ דקות פנויות:', availableMinutes);
+    
     const isOverloaded = availableMinutes < newTask.estimatedDuration;
     
     if (overlapping.length > 0 || isOverloaded) {
+      console.log('⚠️ נמצאה חפיפה!', { overlapping: overlapping.length, isOverloaded });
       return {
         hasConflict: true,
         overlappingTasks: overlapping,
@@ -71,6 +94,7 @@ function TaskForm({ task, defaultQuadrant = 1, defaultDate = null, defaultTime =
         overloadAmount: isOverloaded ? newTask.estimatedDuration - availableMinutes : 0
       };
     }
+    console.log('✅ אין חפיפות');
     return null;
   }, [formData.dueDate, formData.dueTime, formData.estimatedDuration, tasks, isEditing]);
 

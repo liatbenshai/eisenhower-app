@@ -49,22 +49,24 @@ export function findOverlappingTasks(newTask, existingTasks) {
     }
 
     // התעלם ממשימות שהושלמו
-    if (task.is_completed) {
+    if (task.is_completed || task.isCompleted) {
       return false;
     }
 
-    // רק משימות באותו יום
-    if (task.due_date !== newTask.dueDate) {
+    // רק משימות באותו יום (תומך גם ב-snake_case וגם ב-camelCase)
+    const taskDate = task.due_date || task.dueDate;
+    if (taskDate !== newTask.dueDate) {
       return false;
     }
 
     // רק משימות עם שעה
-    if (!task.due_time) {
+    const taskTime = task.due_time || task.dueTime;
+    if (!taskTime) {
       return false;
     }
 
-    const taskStart = timeToMinutes(task.due_time);
-    const taskDuration = task.estimated_duration || 30;
+    const taskStart = timeToMinutes(taskTime);
+    const taskDuration = task.estimated_duration || task.estimatedDuration || 30;
     const taskEnd = taskStart + taskDuration;
 
     return doTimesOverlap(newStart, newEnd, taskStart, taskEnd);
@@ -97,13 +99,22 @@ export function findNextFreeSlot(date, duration, existingTasks, startHour = 8, e
     earliestStart = Math.max(dayStart, Math.ceil(currentMinutes / 15) * 15);
   }
 
-  // משימות של אותו יום, ממוינות לפי שעה
+  // משימות של אותו יום, ממוינות לפי שעה (תומך גם ב-snake_case וגם ב-camelCase)
   const dayTasks = existingTasks
-    .filter(t => t.due_date === date && t.due_time && !t.is_completed)
-    .map(t => ({
-      start: timeToMinutes(t.due_time),
-      end: timeToMinutes(t.due_time) + (t.estimated_duration || 30)
-    }))
+    .filter(t => {
+      const taskDate = t.due_date || t.dueDate;
+      const taskTime = t.due_time || t.dueTime;
+      const isCompleted = t.is_completed || t.isCompleted;
+      return taskDate === date && taskTime && !isCompleted;
+    })
+    .map(t => {
+      const taskTime = t.due_time || t.dueTime;
+      const taskDuration = t.estimated_duration || t.estimatedDuration || 30;
+      return {
+        start: timeToMinutes(taskTime),
+        end: timeToMinutes(taskTime) + taskDuration
+      };
+    })
     .sort((a, b) => a.start - b.start);
 
   // חיפוש חלון פנוי - מתחילים מהשעה הרלוונטית

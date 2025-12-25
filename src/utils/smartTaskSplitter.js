@@ -105,14 +105,17 @@ export function getAvailableMinutesForDay(date, existingTasks = []) {
   if (!isWorkDay(date)) return 0;
   
   const dateISO = new Date(date).toISOString().split('T')[0];
-  const dayTasks = existingTasks.filter(t => 
-    !t.is_completed && 
-    (t.due_date === dateISO || t.scheduled_date === dateISO)
-  );
+  const dayTasks = existingTasks.filter(t => {
+    const isCompleted = t.is_completed || t.isCompleted;
+    const taskDate = t.due_date || t.dueDate;
+    const scheduledDate = t.scheduled_date || t.scheduledDate;
+    return !isCompleted && (taskDate === dateISO || scheduledDate === dateISO);
+  });
   
-  const scheduledMinutes = dayTasks.reduce((sum, t) => 
-    sum + (t.estimated_duration || 30), 0
-  );
+  const scheduledMinutes = dayTasks.reduce((sum, t) => {
+    const duration = t.estimated_duration || t.estimatedDuration || 30;
+    return sum + duration;
+  }, 0);
   
   return Math.max(0, (CONFIG.WORK_HOURS_PER_DAY * 60) - scheduledMinutes);
 }

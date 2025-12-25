@@ -94,12 +94,12 @@ export function calculateDeferScore(task) {
 export function findTasksToDefer(tasks, date, requiredMinutes) {
   const dateISO = typeof date === 'string' ? date : date.toISOString().split('T')[0];
   
-  // מסנן משימות של היום שלא הושלמו ושאינן Q1
-  const dayTasks = tasks.filter(t => 
-    !t.is_completed &&
-    t.due_date === dateISO &&
-    t.quadrant !== 1 // לעולם לא דוחים Q1!
-  );
+  // מסנן משימות של היום שלא הושלמו ושאינן Q1 (תומך גם ב-snake_case וגם ב-camelCase)
+  const dayTasks = tasks.filter(t => {
+    const isCompleted = t.is_completed || t.isCompleted;
+    const taskDate = t.due_date || t.dueDate;
+    return !isCompleted && taskDate === dateISO && t.quadrant !== 1; // לעולם לא דוחים Q1!
+  });
   
   // מחשב ניקוד דחייה לכל משימה
   const tasksWithScore = dayTasks.map(task => ({
@@ -120,7 +120,7 @@ export function findTasksToDefer(tasks, date, requiredMinutes) {
     // רק משימות עם ניקוד חיובי (אפשר לדחות)
     if (task.deferScore > 0) {
       toDefer.push(task);
-      freedMinutes += task.estimated_duration || 30;
+      freedMinutes += task.estimated_duration || task.estimatedDuration || 30;
     }
   }
   
@@ -142,14 +142,16 @@ export function findTasksToDefer(tasks, date, requiredMinutes) {
  * מחפש את היום הקרוב ביותר עם מקום פנוי
  */
 export function calculateNewDueDate(task, existingTasks) {
-  const currentDueDate = task.due_date ? new Date(task.due_date) : new Date();
+  const taskDueDate = task.due_date || task.dueDate;
+  const currentDueDate = taskDueDate ? new Date(taskDueDate) : new Date();
   let newDate = getNextWorkDay(currentDueDate);
   
   // בודק זמינות בימים הבאים
   let attempts = 0;
+  const taskDuration = task.estimated_duration || task.estimatedDuration || 30;
   while (attempts < 7) {
     const available = getAvailableMinutesForDay(newDate, existingTasks);
-    if (available >= (task.estimated_duration || 30)) {
+    if (available >= taskDuration) {
       return newDate.toISOString().split('T')[0];
     }
     newDate = getNextWorkDay(newDate);
