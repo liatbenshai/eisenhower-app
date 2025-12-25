@@ -263,53 +263,75 @@ function ScheduleConflictAlert({
         </div>
       )}
 
-      {/* כפתורים */}
-      <div className="flex flex-wrap gap-2">
-        {/* כפתור דחייה למשימה דחופה */}
+      {/* כפתורים - כאופציות ברורות */}
+      <div className="space-y-2">
+        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          בחרי מה לעשות:
+        </div>
+        
+        {/* אופציה 1: דחיית משימות פחות דחופות (רק למשימות דחופות עם חפיפות) */}
         {isNewTaskUrgent && lessUrgentOverlapping.length > 0 && (
           <Button
             onClick={handleDeferLessUrgent}
             loading={loading}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm"
+            className="w-full bg-red-500 hover:bg-red-600 text-white text-sm justify-start"
           >
-            🚀 דחה את הפחות דחופות ושבץ אותי
+            <span className="flex items-center gap-2 w-full">
+              <span>🚀</span>
+              <span className="flex-1 text-right">דחה {lessUrgentOverlapping.length} משימות פחות דחופות ושבץ אותי</span>
+            </span>
           </Button>
         )}
         
-        {/* כפתור דחייה רגיל */}
-        {!isNewTaskUrgent && deferSuggestion?.tasksToDefer.length > 0 && (
+        {/* אופציה 2: דחיית משימות (אם לא דחוף, או אם דחוף בלי משימות פחות דחופות) */}
+        {deferSuggestion?.tasksToDefer.length > 0 && (!isNewTaskUrgent || lessUrgentOverlapping.length === 0) && (
           <Button
             onClick={handleDefer}
             loading={loading}
-            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white text-sm justify-start"
           >
-            📤 דחה ופנה מקום
+            <span className="flex items-center gap-2 w-full">
+              <span>📤</span>
+              <span className="flex-1 text-right">דחה {deferSuggestion.tasksToDefer.length} משימות למחר ופנה מקום</span>
+            </span>
           </Button>
         )}
         
+        {/* אופציה 3: מעבר לשעה פנויה - תמיד מוצג אם יש שעה פנויה */}
         {nextFreeSlot && onChangeTime && (
           <Button
             onClick={() => onChangeTime(nextFreeSlot.replace('מחר ', ''), nextFreeSlot.includes('מחר'))}
-            className="flex-1 bg-green-500 hover:bg-green-600 text-white text-sm"
+            className="w-full bg-green-500 hover:bg-green-600 text-white text-sm justify-start"
           >
-            🕐 עבור ל-{nextFreeSlot}
+            <span className="flex items-center gap-2 w-full">
+              <span>🕐</span>
+              <span className="flex-1 text-right">עבור לשעה פנויה: {nextFreeSlot}</span>
+            </span>
           </Button>
         )}
         
+        {/* אופציה 4: המשך בכל זאת */}
         <Button
           onClick={onIgnore}
           variant="secondary"
-          className="text-sm"
+          className="w-full text-sm justify-start"
         >
-          המשך בכל זאת
+          <span className="flex items-center gap-2 w-full">
+            <span>⚠️</span>
+            <span className="flex-1 text-right">שבץ בכל זאת (יהיה כפל)</span>
+          </span>
         </Button>
         
+        {/* אופציה 5: ביטול */}
         <Button
           onClick={onCancel}
           variant="secondary"
-          className="text-sm"
+          className="w-full text-sm justify-start text-gray-500"
         >
-          ביטול
+          <span className="flex items-center gap-2 w-full">
+            <span>❌</span>
+            <span className="flex-1 text-right">ביטול - חזרה לטופס</span>
+          </span>
         </Button>
       </div>
     </motion.div>

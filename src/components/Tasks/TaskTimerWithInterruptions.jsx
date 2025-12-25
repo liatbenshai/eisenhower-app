@@ -170,7 +170,8 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   }, [isInterrupted, interruptionStart]);
 
   // התחלת עבודה
-  const startTimer = () => {
+  const startTimer = (e) => {
+    if (e) e.stopPropagation();
     const now = new Date();
     setStartTime(now);
     setIsRunning(true);
@@ -180,21 +181,24 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   };
 
   // השהיה
-  const pauseTimer = () => {
+  const pauseTimer = (e) => {
+    if (e) e.stopPropagation();
     setIsRunning(false);
     setIsPaused(true);
     toast('⏸ טיימר מושהה');
   };
 
   // המשך
-  const resumeTimer = () => {
+  const resumeTimer = (e) => {
+    if (e) e.stopPropagation();
     setIsRunning(true);
     setIsPaused(false);
     toast.success('▶ ממשיכים!');
   };
 
   // התחלת הפרעה
-  const startInterruption = (type) => {
+  const startInterruption = (type, e) => {
+    if (e) e.stopPropagation();
     setIsInterrupted(true);
     setInterruptionType(type);
     setInterruptionStart(new Date());
@@ -204,7 +208,8 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   };
 
   // סיום הפרעה
-  const endInterruption = () => {
+  const endInterruption = (e) => {
+    if (e) e.stopPropagation();
     if (!isInterrupted || !interruptionStart) return;
 
     const duration = Math.ceil(interruptionSeconds / 60); // בדקות
@@ -278,7 +283,8 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   };
 
   // איפוס
-  const resetTimer = () => {
+  const resetTimer = (e) => {
+    if (e) e.stopPropagation();
     setIsRunning(false);
     setIsPaused(false);
     setElapsedSeconds(0);
@@ -297,7 +303,8 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   // עצירה ושמירה
   const stopAndSaveRef = useRef(null);
   
-  const stopAndSave = async () => {
+  const stopAndSave = async (e) => {
+    if (e) e.stopPropagation();
     const result = await saveProgress(true);
     if (result?.success) {
       toast.success(`💾 נשמר! ${result.minutesToAdd} דקות נוספו`);
@@ -387,8 +394,16 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
 
   console.log('⏱️ מציג טיימר למשימה:', currentTask.title);
 
+  // עוצר כל לחיצה מלהגיע ל-div ההורה (שסוגר/פותח את הכרטיס)
+  const handleContainerClick = (e) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div 
+      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+      onClick={handleContainerClick}
+    >
       {/* כותרת */}
       <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
         <h4 className="font-medium text-gray-900 dark:text-white truncate">

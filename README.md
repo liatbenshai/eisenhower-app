@@ -6,44 +6,36 @@
 ## קבצים לעדכון
 
 ```
-src/utils/smartTaskSplitter.js               ← החלף
-src/utils/urgentRescheduler.js               ← החלף
-src/utils/timeOverlap.js                     ← החלף
-src/components/Tasks/TaskForm.jsx            ← החלף
-src/components/Tasks/ScheduleConflictAlert.jsx ← החלף (תיקון למשימות דחופות!)
-src/components/Tasks/TaskTimerWithInterruptions.jsx ← החלף (עם לוגים לדיבאג)
-src/components/DailyView/SimpleTaskForm.jsx  ← החלף (עם דחיפות בהתראות)
-src/components/DailyView/DiaryView.jsx       ← החלף (עם לוגים לדיבאג טיימר)
-utils/smartTaskSplitter.js                   ← החלף
+src/utils/smartTaskSplitter.js               
+src/utils/urgentRescheduler.js               
+src/utils/timeOverlap.js                     
+src/components/Tasks/TaskForm.jsx            
+src/components/Tasks/ScheduleConflictAlert.jsx  ← תיקון אופציות!
+src/components/Tasks/TaskTimerWithInterruptions.jsx ← תיקון טיימר!
+src/components/DailyView/SimpleTaskForm.jsx  
+src/components/DailyView/DiaryView.jsx       
+utils/smartTaskSplitter.js                   
 ```
 
 ---
 
-## מה חדש
+## מה תוקן
 
-### התראות למשימות דחופות
-- כשמוסיפים משימה דחופה שחופפת למשימות פחות דחופות
-- מציג רקע אדום עם 🚨
-- כפתור "דחה את הפחות דחופות ושבץ אותי"
-- מזהה אוטומטית משימות שאפשר לדחות
+### 1. טיימר ביומן שעות ✅
+- הכפתורים עכשיו עובדים
+- לחיצה על הטיימר לא סוגרת את הכרטיס
 
----
-
-## Debug Mode
-
-הגרסה כוללת לוגים ב-Console (F12):
-
-**להתראות חפיפות:**
-- `🔍 SimpleTaskForm - בדיקת חפיפות:`
-
-**לטיימר:**
-- `🎬 מציג טיימר למשימה:`
-- `⏱️ TaskTimerWithInterruptions - קיבלתי:`
-- `⏱️ מציג טיימר למשימה:`
+### 2. אופציות ברורות בהתראת חפיפות ✅
+כשיש חפיפה, מוצגות כל האופציות הרלוונטיות:
+- 🚀 דחה משימות פחות דחופות (אם המשימה החדשה דחופה)
+- 📤 דחה משימות למחר
+- 🕐 עבור לשעה פנויה
+- ⚠️ שבץ בכל זאת (יהיה כפל)
+- ❌ ביטול
 
 ---
 
 ## בדיקות
 
-1. **משימה דחופה:** הוסיפי משימה דחופה (אדום) בשעה שיש כבר משימה רגילה
-2. **טיימר:** ביומן שעות, לחצי על משימה ובדקי Console
+1. **טיימר:** ביומן שעות → לחצי על משימה → לחצי "התחל עבודה"
+2. **משימה דחופה:** הוסיפי משימה דחופה בשעה תפוסה → תראי את כל האופציות
