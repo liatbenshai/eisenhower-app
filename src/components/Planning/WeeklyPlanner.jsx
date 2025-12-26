@@ -319,6 +319,9 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
   const blocks = day.blocks || day.scheduledBlocks || [];
   const usagePercent = day.usagePercent || day.stats?.utilization || 0;
 
+  // Debug log
+  console.log(`🗓️ DayColumn ${day.date}: ${blocks.length} blocks`, blocks.map(b => b.title));
+
   // חישוב שם היום והתאריך מתוך day.date
   const dateObj = new Date(day.date + 'T12:00:00'); // הוספת שעה למניעת בעיות timezone
   const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -498,7 +501,7 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
                   <div className="flex-1 py-1 space-y-1">
                     {blocksAtHour.map((block, idx) => (
                       <TaskSlot
-                        key={block.taskId || idx}
+                        key={block.id || `hour-${hour}-block-${idx}`}
                         slot={block}
                         onEdit={() => onEditTask(block.task)}
                         onComplete={() => onComplete(block.task)}
