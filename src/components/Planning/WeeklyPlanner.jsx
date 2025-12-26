@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
-import { proactivePlan } from '../../utils/proactiveScheduler';
+import { planWeek } from '../../utils/dayPlanner';
 import { TASK_TYPES } from '../../config/taskTypes';
 import { formatDuration } from '../../config/workSchedule';
 import SimpleTaskForm from '../DailyView/SimpleTaskForm';
@@ -23,28 +23,55 @@ function WeeklyPlanner() {
   const [viewMode, setViewMode] = useState('week'); // 'week' | 'day'
   const [selectedDay, setSelectedDay] = useState(null);
 
-  // חישוב תחילת השבוע
+  // חישוב תחילת השבוע - יום ראשון של השבוע הנוכחי
   const weekStart = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - date.getDay() + (weekOffset * 7));
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = ראשון, 5 = שישי, 6 = שבת
+    const date = new Date(today);
+    // מחזיר ליום ראשון של השבוע
+    date.setDate(today.getDate() - dayOfWeek + (weekOffset * 7));
     date.setHours(0, 0, 0, 0);
+    
+    console.log('📅 Week calculation:', {
+      today: today.toISOString(),
+      todayDay: dayOfWeek,
+      weekStart: date.toISOString(),
+      weekOffset
+    });
+    
     return date;
   }, [weekOffset]);
 
-  // תכנון פרואקטיבי
+  // היום הנוכחי
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // תכנון שבועי - משתמש ב-planWeek הקיים
   const plan = useMemo(() => {
     if (!tasks) return null;
-    return proactivePlan(tasks, weekStart, 7);
+    console.log('🔄 WeeklyPlanner calling planWeek:', {
+      weekStart: weekStart.toISOString(),
+      tasksCount: tasks.length
+    });
+    const weekPlan = planWeek(weekStart, tasks);
+    console.log('📊 Week plan result:', {
+      days: weekPlan.days?.map(d => ({
+        date: d.date,
+        dayName: d.dayName,
+        isWorkDay: d.isWorkDay,
+        blocksCount: d.scheduledBlocks?.length || 0
+      }))
+    });
+    return weekPlan;
   }, [tasks, weekStart]);
 
-  // ניווט
+  // ניווט - תיקון כיוון לעברית (RTL)
   const goToPrevWeek = () => setWeekOffset(w => w - 1);
   const goToNextWeek = () => setWeekOffset(w => w + 1);
   const goToThisWeek = () => setWeekOffset(0);
 
-  // בדיקה אם היום הוא היום
+  // בדיקה אם היום הוא היום הנוכחי
   const isToday = (dateStr) => {
-    return dateStr === new Date().toISOString().split('T')[0];
+    return dateStr === todayStr;
   };
 
   // פתיחת טופס משימה
@@ -120,8 +147,9 @@ function WeeklyPlanner() {
         {/* ניווט שבועות */}
         <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm">
           <button
-            onClick={goToPrevWeek}
+            onClick={goToNextWeek}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+            title="שבוע הבא"
           >
             ◄
           </button>
@@ -135,14 +163,15 @@ function WeeklyPlanner() {
                 onClick={goToThisWeek}
                 className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded"
               >
-                היום
+                השבוע
               </button>
             )}
           </div>
           
           <button
-            onClick={goToNextWeek}
+            onClick={goToPrevWeek}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+            title="שבוע קודם"
           >
             ►
           </button>
@@ -154,33 +183,31 @@ function WeeklyPlanner() {
         <StatCard
           icon="📊"
           label="ניצולת"
-          value={`${plan.stats.utilizationPercent}%`}
-          color={plan.stats.utilizationPercent >= 80 ? 'green' : plan.stats.utilizationPercent >= 50 ? 'yellow' : 'red'}
+          value={`${plan.summary?.usagePercent || 0}%`}
+          color={(plan.summary?.usagePercent || 0) >= 80 ? 'green' : (plan.summary?.usagePercent || 0) >= 50 ? 'yellow' : 'red'}
         />
         <StatCard
           icon="✅"
-          label="משובצות"
-          value={plan.stats.assignedTasks}
-          subtext={`מתוך ${plan.stats.totalTasks}`}
+          label="זמן מתוכנן"
+          value={formatDuration(plan.summary?.totalScheduledMinutes || 0)}
         />
         <StatCard
           icon="⏱️"
-          label="זמן מתוכנן"
-          value={formatDuration(plan.stats.totalScheduledMinutes)}
+          label="זמן פנוי"
+          value={formatDuration((plan.summary?.totalAvailableMinutes || 0) - (plan.summary?.totalScheduledMinutes || 0))}
         />
         <StatCard
-          icon="🚀"
-          label="עבודה מוקדמת"
-          value={plan.stats.proactivelyScheduled}
-          subtext="משימות"
-          color="blue"
+          icon="⚠️"
+          label="ימים עמוסים"
+          value={plan.summary?.overloadDays || 0}
+          color={(plan.summary?.overloadDays || 0) > 0 ? 'red' : 'green'}
         />
       </div>
 
       {/* תצוגת שבוע */}
       {viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-2">
-          {plan.schedule.map((day, idx) => (
+        <div className="grid grid-cols-7 gap-2" dir="rtl">
+          {plan.days.map((day, idx) => (
             <DayColumn
               key={day.date}
               day={day}
@@ -197,7 +224,7 @@ function WeeklyPlanner() {
         </div>
       ) : (
         <DayDetailView
-          day={selectedDay || plan.schedule.find(d => isToday(d.date)) || plan.schedule[0]}
+          day={selectedDay || plan.days.find(d => isToday(d.date)) || plan.days[0]}
           onBack={() => setViewMode('week')}
           onAddTask={handleAddTask}
           onEditTask={handleEditTask}
@@ -205,28 +232,23 @@ function WeeklyPlanner() {
         />
       )}
 
-      {/* משימות לא משובצות */}
-      {plan.unassignedTasks.length > 0 && (
+      {/* אזהרות */}
+      {plan.warnings?.length > 0 && (
         <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
           <h3 className="font-bold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
             <span>⚠️</span>
-            {plan.unassignedTasks.length} משימות לא נכנסות ללוח הזמנים
+            {plan.warnings.length} אזהרות
           </h3>
           <div className="space-y-2">
-            {plan.unassignedTasks.slice(0, 5).map(task => (
+            {plan.warnings.slice(0, 5).map((warning, idx) => (
               <div 
-                key={task.id}
+                key={idx}
                 className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded-lg"
               >
-                <span className="text-sm text-gray-700 dark:text-gray-300">{task.title}</span>
-                <span className="text-xs text-gray-500">{formatDuration(task.estimated_duration || 30)}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{warning.message}</span>
+                <span className="text-xs text-gray-500">{warning.date}</span>
               </div>
             ))}
-            {plan.unassignedTasks.length > 5 && (
-              <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                +{plan.unassignedTasks.length - 5} נוספות
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -284,6 +306,16 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
     ? 'border-blue-400 dark:border-blue-600' 
     : 'border-gray-200 dark:border-gray-700';
 
+  // שימוש ב-scheduledBlocks מתוך planDay
+  const blocks = day.scheduledBlocks || [];
+  const usagePercent = day.usagePercent || 0;
+
+  // חישוב שם היום והתאריך מתוך day.date
+  const dateObj = new Date(day.date + 'T12:00:00'); // הוספת שעה למניעת בעיות timezone
+  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const dayName = dayNames[dateObj.getDay()];
+  const dayNumber = dateObj.getDate();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -296,10 +328,10 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
         className="p-2 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
       >
         <div className={`text-sm font-bold ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
-          {day.dayName}
+          {dayName}
         </div>
         <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-500'}`}>
-          {new Date(day.date).getDate()}
+          {dayNumber}
         </div>
       </button>
 
@@ -309,17 +341,17 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
           <div className="text-center text-gray-400 text-xs py-4">
             🌴 יום חופש
           </div>
-        ) : day.slots.length === 0 ? (
+        ) : blocks.length === 0 ? (
           <div className="text-center text-gray-400 text-xs py-4">
             אין משימות
           </div>
         ) : (
-          day.slots.map((slot, idx) => (
+          blocks.map((block, idx) => (
             <TaskSlot
-              key={slot.taskId || idx}
-              slot={slot}
-              onEdit={() => onEditTask(slot.task)}
-              onComplete={() => onComplete(slot.task)}
+              key={block.taskId || idx}
+              slot={block}
+              onEdit={() => onEditTask(block.task)}
+              onComplete={() => onComplete(block.task)}
               compact
             />
           ))
@@ -342,17 +374,17 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
           <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div 
               className={`h-full rounded-full transition-all ${
-                day.stats.utilizationPercent >= 80 
+                usagePercent >= 80 
                   ? 'bg-green-500' 
-                  : day.stats.utilizationPercent >= 50 
+                  : usagePercent >= 50 
                     ? 'bg-yellow-500' 
                     : 'bg-red-400'
               }`}
-              style={{ width: `${Math.min(day.stats.utilizationPercent, 100)}%` }}
+              style={{ width: `${Math.min(usagePercent, 100)}%` }}
             />
           </div>
           <div className="text-center text-xs text-gray-400 mt-1">
-            {day.stats.utilizationPercent}%
+            {usagePercent}%
           </div>
         </div>
       )}
@@ -371,6 +403,13 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
     }
   }
 
+  const blocks = day.scheduledBlocks || [];
+  
+  // חישוב שם היום מתוך day.date
+  const dateObj = new Date(day.date + 'T12:00:00');
+  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const dayName = dayNames[dateObj.getDay()];
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* כותרת */}
@@ -384,10 +423,10 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
         
         <div className="text-center">
           <div className="text-xl font-bold text-gray-900 dark:text-white">
-            יום {day.dayName}
+            יום {dayName}
           </div>
           <div className="text-sm text-gray-500">
-            {new Date(day.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })}
+            {dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })}
           </div>
         </div>
         
@@ -408,9 +447,9 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
         <div className="p-4">
           <div className="relative">
             {hours.map(hour => {
-              const slotsAtHour = day.slots.filter(s => {
-                const slotHour = Math.floor(s.startMinute / 60);
-                return slotHour === hour;
+              const blocksAtHour = blocks.filter(b => {
+                const blockHour = Math.floor(b.startMinute / 60);
+                return blockHour === hour;
               });
 
               return (
@@ -422,12 +461,12 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
                   
                   {/* משימות */}
                   <div className="flex-1 py-1 space-y-1">
-                    {slotsAtHour.map((slot, idx) => (
+                    {blocksAtHour.map((block, idx) => (
                       <TaskSlot
-                        key={slot.taskId || idx}
-                        slot={slot}
-                        onEdit={() => onEditTask(slot.task)}
-                        onComplete={() => onComplete(slot.task)}
+                        key={block.taskId || idx}
+                        slot={block}
+                        onEdit={() => onEditTask(block.task)}
+                        onComplete={() => onComplete(block.task)}
                       />
                     ))}
                   </div>
@@ -440,19 +479,19 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
           <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg flex justify-around text-center">
             <div>
               <div className="text-lg font-bold text-gray-900 dark:text-white">
-                {formatDuration(day.stats.scheduled)}
+                {formatDuration(day.scheduledMinutes || 0)}
               </div>
               <div className="text-xs text-gray-500">מתוכנן</div>
             </div>
             <div>
               <div className="text-lg font-bold text-green-600">
-                {formatDuration(day.stats.free)}
+                {formatDuration(day.freeMinutes || 0)}
               </div>
               <div className="text-xs text-gray-500">פנוי</div>
             </div>
             <div>
               <div className="text-lg font-bold text-blue-600">
-                {day.stats.utilizationPercent}%
+                {day.usagePercent || 0}%
               </div>
               <div className="text-xs text-gray-500">ניצולת</div>
             </div>
@@ -469,15 +508,16 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
 function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
   const taskType = TASK_TYPES[slot.task?.task_type] || TASK_TYPES.other;
   
-  const sourceColors = {
-    proactive: 'border-r-blue-500 bg-blue-50 dark:bg-blue-900/20',
-    due_date: 'border-r-orange-500 bg-orange-50 dark:bg-orange-900/20',
-    overdue: 'border-r-red-500 bg-red-50 dark:bg-red-900/20',
-    fixed: 'border-r-purple-500 bg-purple-50 dark:bg-purple-900/20',
-    default: 'border-r-gray-300 bg-gray-50 dark:bg-gray-700'
+  // צבעים לפי מצב המשימה
+  const priorityColors = {
+    urgent: 'border-r-red-500 bg-red-50 dark:bg-red-900/20',
+    high: 'border-r-orange-500 bg-orange-50 dark:bg-orange-900/20',
+    normal: 'border-r-blue-500 bg-blue-50 dark:bg-blue-900/20'
   };
 
-  const colorClass = sourceColors[slot.source] || sourceColors.default;
+  const colorClass = slot.isFixed 
+    ? 'border-r-purple-500 bg-purple-50 dark:bg-purple-900/20'
+    : priorityColors[slot.task?.priority] || 'border-r-gray-300 bg-gray-50 dark:bg-gray-700';
 
   return (
     <motion.div
@@ -505,10 +545,10 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
             {slot.startTime} - {slot.endTime}
           </div>
           
-          {/* תגית מקור */}
-          {slot.source === 'proactive' && !compact && (
-            <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 text-xs rounded">
-              🚀 עבודה מוקדמת
+          {/* תגית שעה קבועה */}
+          {slot.isFixed && !compact && (
+            <span className="inline-block mt-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200 text-xs rounded">
+              📍 שעה קבועה
             </span>
           )}
         </div>
