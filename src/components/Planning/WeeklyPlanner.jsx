@@ -48,9 +48,25 @@ function WeeklyPlanner() {
   // תכנון שבועי - משתמש במנוע החכם
   const plan = useMemo(() => {
     if (!tasks) return null;
-    console.log('🔄 WeeklyPlanner calling smartScheduleWeek with', tasks.length, 'tasks');
+    console.log('🔄 WeeklyPlanner calling smartScheduleWeek');
+    console.log('📋 Tasks from DB:', tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      duration: t.estimated_duration,
+      due: t.due_date,
+      completed: t.is_completed
+    })));
+    
     const weekPlan = smartScheduleWeek(weekStart, tasks);
-    console.log('📊 Smart week plan result:', weekPlan);
+    
+    console.log('📊 Week plan result:');
+    weekPlan.days.forEach(day => {
+      console.log(`  ${day.date} (${day.dayName}): ${day.blocks?.length || 0} blocks, ${day.usagePercent}% usage`);
+      day.blocks?.forEach(b => {
+        console.log(`    - ${b.startTime}-${b.endTime}: ${b.title} (${b.duration}min)`);
+      });
+    });
+    
     return weekPlan;
   }, [tasks, weekStart]);
 
@@ -341,7 +357,7 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
         ) : (
           blocks.map((block, idx) => (
             <TaskSlot
-              key={block.taskId || idx}
+              key={block.id || `block-${idx}`}
               slot={block}
               onEdit={() => onEditTask(block.task)}
               onComplete={() => onComplete(block.task)}
