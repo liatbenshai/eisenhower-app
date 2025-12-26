@@ -1252,5 +1252,162 @@ export function calculateSuggestedTime(learningData, baseEstimate) {
   return Math.round(baseEstimate * learningData.average_ratio);
 }
 
+// =============================================
+// פונקציות הפרעות - לניתוח ולמידה
+// =============================================
+
+/**
+ * שמירת הפרעה חדשה
+ */
+export async function saveInterruption(interruptionData) {
+  const { data, error } = await supabase
+    .from('interruptions')
+    .insert([{
+      user_id: interruptionData.user_id,
+      task_id: interruptionData.task_id || null,
+      type: interruptionData.type,
+      duration_seconds: interruptionData.duration_seconds || 0,
+      started_at: interruptionData.started_at,
+      ended_at: interruptionData.ended_at || new Date().toISOString(),
+      task_title: interruptionData.task_title || null,
+      notes: interruptionData.notes || null
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('שגיאה בשמירת הפרעה:', error);
+    throw error;
+  }
+
+  console.log('✅ הפרעה נשמרה:', data);
+  return data;
+}
+
+/**
+ * קבלת הפרעות לפי תאריך
+ */
+export async function getInterruptionsByDate(userId, date) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const { data, error } = await supabase
+    .from('interruptions')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('started_at', startOfDay.toISOString())
+    .lte('started_at', endOfDay.toISOString())
+    .order('started_at', { ascending: false });
+
+  if (error) {
+    console.error('שגיאה בטעינת הפרעות:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
+ * קבלת סטטיסטיקות הפרעות
+ */
+export async function getInterruptionStats(userId, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const { data, error } = await supabase
+    .from('interruptions')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('started_at', startDate.toISOString())
+    .order('started_at', { ascending: false });
+
+  if (error) {
+    console.error('שגיאה בטעינת סטטיסטיקות הפרעות:', error);
+    throw error;
+  }
+
+  // חישוב סטטיסטיקות
+  const interruptions = data || [];
+  
+  const byType = {};
+  const byDayOfWeek = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  const byHour = {};
+  let totalSeconds = 0;
+
+  interruptions.forEach(int => {
+    // לפי סוג
+    if (!byType[int.type]) {
+      byType[int.type] = { count: 0, totalSeconds: 0 };
+    }
+    byType[int.type].count++;
+    byType[int.type].totalSeconds += int.duration_seconds || 0;
+
+    // לפי יום בשבוע
+    const dayOfWeek = new Date(int.started_at).getDay();
+    byDayOfWeek[dayOfWeek]++;
+
+    // לפי שעה
+    const hour = new Date(int.started_at).getHours();
+    byHour[hour] = (byHour[hour] || 0) + 1;
+
+    totalSeconds += int.duration_seconds || 0;
+  });
+
+  // מציאת שעות שיא
+  const peakHours = Object.entries(byHour)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([hour, count]) => ({ hour: parseInt(hour), count }));
+
+  return {
+    totalInterruptions: interruptions.length,
+    totalMinutes: Math.round(totalSeconds / 60),
+    avgPerDay: Math.round((interruptions.length / days) * 10) / 10,
+    avgDurationMinutes: interruptions.length > 0 
+      ? Math.round((totalSeconds / interruptions.length) / 60 * 10) / 10 
+      : 0,
+    byType: Object.entries(byType).map(([type, stats]) => ({
+      type,
+      count: stats.count,
+      totalMinutes: Math.round(stats.totalSeconds / 60),
+      avgMinutes: Math.round((stats.totalSeconds / stats.count) / 60 * 10) / 10
+    })),
+    byDayOfWeek,
+    peakHours,
+    recentInterruptions: interruptions.slice(0, 10)
+  };
+}
+
+/**
+ * קבלת סיכום הפרעות יומי
+ */
+export async function getDailyInterruptionSummary(userId, date) {
+  const interruptions = await getInterruptionsByDate(userId, date);
+  
+  const summary = {
+    date,
+    totalCount: interruptions.length,
+    totalMinutes: 0,
+    byType: {}
+  };
+
+  interruptions.forEach(int => {
+    const minutes = Math.round((int.duration_seconds || 0) / 60);
+    summary.totalMinutes += minutes;
+    
+    if (!summary.byType[int.type]) {
+      summary.byType[int.type] = { count: 0, minutes: 0 };
+    }
+    summary.byType[int.type].count++;
+    summary.byType[int.type].minutes += minutes;
+  });
+
+  return summary;
+}
+
 export default supabase;
+
 
