@@ -196,8 +196,8 @@ function WeeklyPlanner() {
 
       {/* תצוגת שבוע */}
       {viewMode === 'week' ? (
-        <div className="flex flex-row-reverse gap-2">
-          {plan.days.map((day, idx) => (
+        <div className="flex gap-2">
+          {[...plan.days].reverse().map((day, idx) => (
             <div key={day.date} className="flex-1">
               <DayColumn
                 day={day}
