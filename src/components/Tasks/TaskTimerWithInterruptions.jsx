@@ -207,24 +207,46 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
     toast(`⏸ ${INTERRUPTION_TYPES[type].icon} ${INTERRUPTION_TYPES[type].name}`);
   };
 
-  // סיום הפרעה
-  const endInterruption = (e) => {
+  // סיום הפרעה - שמירה ב-DB
+  const endInterruption = async (e) => {
     if (e) e.stopPropagation();
     if (!isInterrupted || !interruptionStart) return;
 
-    const duration = Math.ceil(interruptionSeconds / 60); // בדקות
+    const durationSeconds = interruptionSeconds;
+    const duration = Math.ceil(durationSeconds / 60); // בדקות
     
-    // שמירת ההפרעה
+    // שמירת ההפרעה מקומית
     const newInterruption = {
       type: interruptionType,
       duration,
+      durationSeconds,
       startTime: interruptionStart.toISOString(),
       endTime: new Date().toISOString()
     };
     setInterruptions(prev => [...prev, newInterruption]);
     
+    // שמירה ב-DB
+    if (user?.id) {
+      try {
+        const { saveInterruption } = await import('../../services/supabase');
+        await saveInterruption({
+          user_id: user.id,
+          task_id: currentTask?.id || null,
+          type: interruptionType,
+          duration_seconds: durationSeconds,
+          started_at: interruptionStart.toISOString(),
+          ended_at: new Date().toISOString(),
+          task_title: currentTask?.title || null
+        });
+        console.log('✅ הפרעה נשמרה ב-DB');
+      } catch (err) {
+        console.error('❌ שגיאה בשמירת הפרעה:', err);
+        // ממשיכים גם אם השמירה נכשלה
+      }
+    }
+    
     // עדכון סה"כ זמן הפרעות
-    setTotalInterruptionSeconds(prev => prev + interruptionSeconds);
+    setTotalInterruptionSeconds(prev => prev + durationSeconds);
     
     // איפוס
     setIsInterrupted(false);
