@@ -113,6 +113,11 @@ function WeeklyPlanner() {
 
   // הפעלת טיימר למשימה
   const handleStartTimer = (task) => {
+    console.log('🎬 handleStartTimer called with:', task);
+    if (!task) {
+      console.error('❌ No task provided to handleStartTimer');
+      return;
+    }
     setTimerTask(task);
   };
 
@@ -600,6 +605,7 @@ function TaskSlot({ slot, onEdit, onComplete, onStartTimer, compact = false }) {
 
   const handleStartTimer = (e) => {
     e.stopPropagation();
+    console.log('▶ TaskSlot handleStartTimer:', { task, onStartTimer: !!onStartTimer });
     if (task && onStartTimer) {
       onStartTimer();
     }
