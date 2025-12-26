@@ -119,6 +119,14 @@ function SimpleTaskForm({ task, onClose, taskTypes, defaultDate }) {
         page_count: currentTaskType.inputType === 'pages' ? parseFloat(formData.inputValue) : null
       };
 
+      console.log('📝 Saving task:', {
+        taskType: formData.taskType,
+        inputType: currentTaskType.inputType,
+        inputValue: formData.inputValue,
+        calculatedDuration,
+        taskData
+      });
+
       if (isEditing) {
         await editTask(task.id, taskData);
         toast.success('המשימה עודכנה');
