@@ -131,15 +131,15 @@ function FocusedDashboard() {
       
       todayTasks.forEach(task => {
         if (task.is_completed || !task.due_time) return;
-        if (notifiedTasks.current.has(task.id)) return;
         
         const [h, m] = task.due_time.split(':').map(Number);
         const taskMinutes = h * 60 + (m || 0);
         const diff = taskMinutes - currentMinutes;
         
         // התראה 5 דקות לפני
-        if (diff > 0 && diff <= 5) {
-          notifiedTasks.current.add(task.id);
+        const warningKey = `warning-${task.id}`;
+        if (diff > 0 && diff <= 5 && !notifiedTasks.current.has(warningKey)) {
+          notifiedTasks.current.add(warningKey);
           
           // צליל
           if (soundEnabled && audioRef.current) {
@@ -151,7 +151,7 @@ function FocusedDashboard() {
             new Notification('⏰ משימה מתחילה בקרוב', {
               body: `${task.title} - בעוד ${diff} דקות`,
               icon: '/icon.svg',
-              tag: `task-${task.id}`,
+              tag: `task-warning-${task.id}`,
               requireInteraction: true
             });
           }
@@ -163,10 +163,23 @@ function FocusedDashboard() {
           });
         }
         
-        // התראה כשהגיע הזמן
-        if (diff === 0) {
+        // התראה כשהגיע הזמן (או עברו עד 2 דקות)
+        const startKey = `start-${task.id}`;
+        if (diff <= 0 && diff >= -2 && !notifiedTasks.current.has(startKey)) {
+          notifiedTasks.current.add(startKey);
+          
           if (soundEnabled && audioRef.current) {
             audioRef.current.play().catch(() => {});
+          }
+          
+          // התראת מערכת
+          if (notificationsEnabled) {
+            new Notification('🚀 הגיע הזמן!', {
+              body: task.title,
+              icon: '/icon.svg',
+              tag: `task-start-${task.id}`,
+              requireInteraction: true
+            });
           }
           
           toast.success(`🚀 הגיע הזמן: ${task.title}`, {
@@ -176,9 +189,9 @@ function FocusedDashboard() {
       });
     };
     
-    // בדיקה כל 30 שניות
+    // בדיקה כל 15 שניות
     checkNotifications();
-    const interval = setInterval(checkNotifications, 30000);
+    const interval = setInterval(checkNotifications, 15000);
     
     return () => clearInterval(interval);
   }, [todayTasks, notificationsEnabled, soundEnabled]);
