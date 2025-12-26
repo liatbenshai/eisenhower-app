@@ -46,24 +46,21 @@ function Header() {
     }
   };
 
-  // קישורי ניווט
+  // קישורי ניווט - 5 עמודים
   const navLinks = [
-    { path: '/focus', label: 'עכשיו', icon: '🎯' },
-    { path: '/planner', label: 'תכנון', icon: '📋' },
-    { path: '/insights', label: 'תובנות', icon: '📊' },
+    { path: '/dashboard', label: 'דשבורד', icon: '🏠' },
+    { path: '/daily', label: 'יומי', icon: '📅' },
+    { path: '/weekly', label: 'שבועי', icon: '📆' },
+    { path: '/insights', label: 'תובנות', icon: '💡' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];
-
-  if (isAdmin()) {
-    navLinks.push({ path: '/admin', label: 'ניהול', icon: '🛡️' });
-  }
 
   return (
     <header className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* לוגו */}
-          <Link to="/focus" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <span className="text-2xl">⏰</span>
             <span className="font-bold text-xl text-gray-900 dark:text-white hidden sm:block">
               ניהול זמן
