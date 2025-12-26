@@ -51,6 +51,9 @@ function App() {
       {/* הודעת התקנת PWA */}
       <InstallPrompt />
 
+      {/* כותרת עליונה */}
+      {user && <Header />}
+
       {/* ניתוב */}
       <Routes>
         {/* דף בית */}
