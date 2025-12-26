@@ -326,8 +326,10 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
   const stopAndSaveRef = useRef(null);
   
   const stopAndSave = async (e) => {
+    console.log('⏹ stopAndSave called');
     if (e) e.stopPropagation();
     const result = await saveProgress(true);
+    console.log('⏹ saveProgress result:', result);
     if (result?.success) {
       toast.success(`💾 נשמר! ${result.minutesToAdd} דקות נוספו`);
     }
@@ -532,7 +534,10 @@ function TaskTimerWithInterruptions({ task, onUpdate, onComplete }) {
                     ⏸ השהה
                   </Button>
                   <Button
-                    onClick={stopAndSave}
+                    onClick={(e) => {
+                      console.log('⏹ Stop button clicked!');
+                      stopAndSave(e);
+                    }}
                     className="flex-1 bg-red-500 hover:bg-red-600 text-white"
                   >
                     ⏹ עצור
