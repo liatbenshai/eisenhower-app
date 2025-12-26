@@ -1408,6 +1408,62 @@ export async function getDailyInterruptionSummary(userId, date) {
   return summary;
 }
 
+/**
+ * קבלת נתוני למידה - ניתוח משימות שהושלמו
+ */
+export async function getLearningData(userId) {
+  // קבלת משימות שהושלמו ב-30 יום אחרונים
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_completed', true)
+    .gte('completed_at', thirtyDaysAgo.toISOString())
+    .not('time_spent', 'is', null)
+    .not('estimated_duration', 'is', null);
+
+  if (error) {
+    console.error('Error fetching learning data:', error);
+    return [];
+  }
+
+  // ניתוח לפי סוג משימה
+  const byType = {};
+  
+  tasks?.forEach(task => {
+    const type = task.task_type || 'other';
+    
+    if (!byType[type]) {
+      byType[type] = {
+        task_type: type,
+        total_tasks: 0,
+        total_estimated_minutes: 0,
+        total_actual_minutes: 0,
+        ratios: []
+      };
+    }
+    
+    byType[type].total_tasks++;
+    byType[type].total_estimated_minutes += task.estimated_duration || 0;
+    byType[type].total_actual_minutes += task.time_spent || 0;
+    
+    if (task.estimated_duration > 0) {
+      byType[type].ratios.push(task.time_spent / task.estimated_duration);
+    }
+  });
+
+  // חישוב יחס ממוצע
+  return Object.values(byType).map(data => ({
+    ...data,
+    average_ratio: data.ratios.length > 0 
+      ? Math.round((data.ratios.reduce((a, b) => a + b, 0) / data.ratios.length) * 100) / 100
+      : 1
+  }));
+}
+
 export default supabase;
 
 
