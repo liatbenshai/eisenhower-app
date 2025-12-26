@@ -78,34 +78,99 @@ export const SMART_SCHEDULE_CONFIG = {
 export function smartScheduleWeek(weekStart, allTasks) {
   const config = SMART_SCHEDULE_CONFIG;
   
+  // תאריך היום
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayISO = today.toISOString().split('T')[0];
+  
+  // סוף השבוע המבוקש
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  const weekEndISO = weekEnd.toISOString().split('T')[0];
+  const weekStartISO = weekStart.toISOString().split('T')[0];
+  
   console.log('🚀 Smart Scheduler v3 - Starting week planning');
-  console.log(`📅 Week starts: ${weekStart.toISOString().split('T')[0]}`);
-  console.log(`📋 Total tasks: ${allTasks.length}`);
+  console.log(`📅 Week: ${weekStartISO} - ${weekEndISO}`);
+  console.log(`📅 Today: ${todayISO}`);
   
   // שלב 1: יצירת מבנה ימים
   const days = initializeDays(weekStart, config);
   
-  // שלב 2: סינון ומיון משימות
+  // שלב 2: בדיקה אם זה שבוע בעבר
+  if (weekEndISO < todayISO) {
+    console.log('⏪ שבוע בעבר - לא משבצים משימות');
+    return {
+      weekStart: weekStartISO,
+      days: days.map(formatDayForOutput),
+      summary: { totalScheduledMinutes: 0, totalAvailableMinutes: 0, usagePercent: 0 },
+      warnings: [],
+      unscheduledTasks: [],
+      isPastWeek: true
+    };
+  }
+  
+  // שלב 3: סינון משימות
   const pendingTasks = allTasks.filter(t => !t.is_completed);
-  const sortedTasks = prioritizeTasks(pendingTasks, days[0].date);
   
+  // אם זה שבוע עתידי (לא השבוע הנוכחי), לא משבצים
+  // המשימות ישובצו כשנגיע לשבוע הזה
+  const isCurrentWeek = weekStartISO <= todayISO && todayISO <= weekEndISO;
+  const isFutureWeek = weekStartISO > todayISO;
+  
+  if (isFutureWeek) {
+    console.log('⏩ שבוע עתידי - מציג תצוגה מקדימה');
+    // בשבוע עתידי, נציג רק משימות עם due_date בשבוע הזה
+    const tasksForThisWeek = pendingTasks.filter(t => {
+      if (!t.due_date) return false;
+      return t.due_date >= weekStartISO && t.due_date <= weekEndISO;
+    });
+    
+    if (tasksForThisWeek.length === 0) {
+      return {
+        weekStart: weekStartISO,
+        days: days.map(formatDayForOutput),
+        summary: { totalScheduledMinutes: 0, totalAvailableMinutes: 0, usagePercent: 0 },
+        warnings: [],
+        unscheduledTasks: [],
+        isFutureWeek: true
+      };
+    }
+    
+    const sortedTasks = prioritizeTasks(tasksForThisWeek, days[0].date);
+    const schedulingResult = scheduleAllTasks(sortedTasks, days, config);
+    const stats = calculateStats(days, schedulingResult, config);
+    
+    return {
+      weekStart: weekStartISO,
+      days: days.map(formatDayForOutput),
+      summary: stats,
+      warnings: schedulingResult.warnings,
+      unscheduledTasks: schedulingResult.unscheduledTasks,
+      isFutureWeek: true
+    };
+  }
+  
+  // שבוע נוכחי - שיבוץ רגיל
   console.log(`✅ Pending tasks: ${pendingTasks.length}`);
-  console.log(`📊 Sorted tasks:`, sortedTasks.map(t => `${t.title} (${t.estimated_duration}min, due: ${t.due_date || 'ASAP'})`));
   
-  // שלב 3: שיבוץ משימות - למלא ימים למקסימום!
-  const schedulingResult = scheduleAllTasks(sortedTasks, days, config);
+  const sortedTasks = prioritizeTasks(pendingTasks, todayISO);
   
-  // שלב 4: חישוב סטטיסטיקות
+  // שלב 4: שיבוץ משימות - רק מהיום והלאה
+  const schedulingResult = scheduleAllTasksFromToday(sortedTasks, days, todayISO, config);
+  
+  // שלב 5: חישוב סטטיסטיקות
   const stats = calculateStats(days, schedulingResult, config);
   
   console.log('📈 Week stats:', stats);
   
   return {
-    weekStart: weekStart.toISOString().split('T')[0],
+    weekStart: weekStartISO,
     days: days.map(formatDayForOutput),
     summary: stats,
     warnings: schedulingResult.warnings,
-    unscheduledTasks: schedulingResult.unscheduledTasks
+    unscheduledTasks: schedulingResult.unscheduledTasks,
+    isCurrentWeek: true
   };
 }
 
@@ -253,6 +318,69 @@ function scheduleAllTasks(tasks, days, config) {
         remainingMinutes: progress.remaining,
         reason: 'לא מספיק זמן בשבוע'
       });
+    }
+  }
+  
+  return { taskProgress, warnings, unscheduledTasks };
+}
+
+/**
+ * שיבוץ כל המשימות - רק מהיום והלאה!
+ */
+function scheduleAllTasksFromToday(tasks, days, todayISO, config) {
+  const taskProgress = new Map();
+  const warnings = [];
+  const unscheduledTasks = [];
+  
+  // סינון ימים - רק מהיום והלאה
+  const relevantDays = days.filter(day => day.date >= todayISO);
+  
+  for (const task of tasks) {
+    const duration = task.estimated_duration || 30;
+    taskProgress.set(task.id, { 
+      total: duration,
+      scheduled: 0, 
+      remaining: duration,
+      blocks: []
+    });
+    
+    // בדיקה: האם יש מספיק זמן עד הדדליין?
+    if (task.due_date) {
+      const feasibility = checkFeasibility(task, relevantDays, config);
+      if (!feasibility.canComplete) {
+        warnings.push({
+          type: 'deadline_risk',
+          taskId: task.id,
+          taskTitle: task.title,
+          message: `⚠️ "${task.title}" - לא בטוח שניתן לעמוד בדדליין ${task.due_date}`,
+          details: feasibility
+        });
+      }
+    }
+    
+    // שיבוץ המשימה - רק בימים הרלוונטיים
+    scheduleTask(task, relevantDays, taskProgress, config);
+    
+    // בדיקה אם נשאר זמן לא משובץ
+    const progress = taskProgress.get(task.id);
+    if (progress.remaining > 0) {
+      unscheduledTasks.push({
+        ...task,
+        scheduledMinutes: progress.scheduled,
+        remainingMinutes: progress.remaining,
+        reason: 'לא מספיק זמן בשבוע'
+      });
+    }
+  }
+  
+  // העתקת הבלוקים מהימים הרלוונטיים לימים המקוריים
+  for (const relevantDay of relevantDays) {
+    const originalDay = days.find(d => d.date === relevantDay.date);
+    if (originalDay) {
+      originalDay.blocks = relevantDay.blocks;
+      originalDay.totalScheduledMinutes = relevantDay.totalScheduledMinutes;
+      originalDay.morningMinutesUsed = relevantDay.morningMinutesUsed;
+      originalDay.afternoonMinutesUsed = relevantDay.afternoonMinutesUsed;
     }
   }
   
