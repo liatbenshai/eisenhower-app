@@ -2,22 +2,19 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { Toaster } from 'react-hot-toast';
 
-// דפים
-import Home from './pages/Home';
+// דפים - 5 עמודים בלבד
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import DailyViewPage from './pages/DailyViewPage';
-import PlannerPage from './pages/PlannerPage';
-import FocusPage from './pages/FocusPage';
-import Settings from './pages/Settings';
-import Admin from './pages/Admin';
-import TaskInsights from './pages/TaskInsights';
-import TimeManagement from './pages/TimeManagement';
+import Dashboard from './pages/Dashboard';           // דשבורד - עמוד הבית
+import DailyViewPage from './pages/DailyViewPage';   // תצוגה יומית
+import WeeklyViewPage from './pages/WeeklyViewPage'; // תצוגה שבועית (חדש)
+import TaskInsights from './pages/TaskInsights';     // תובנות ולמידה
+import Settings from './pages/Settings';             // הגדרות
 
 // רכיבים
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Header from './components/Layout/Header';
+import MobileNav from './components/Layout/MobileNav';
 import InstallPrompt from './components/PWA/InstallPrompt';
 
 function App() {
@@ -54,71 +51,62 @@ function App() {
       {/* כותרת עליונה */}
       {user && <Header />}
 
-      {/* ניתוב */}
-      <Routes>
-        {/* דף בית */}
-        <Route path="/" element={user ? <Navigate to="/focus" /> : <Home />} />
-        
-        {/* התחברות והרשמה */}
-        <Route path="/login" element={user ? <Navigate to="/focus" /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/focus" /> : <Register />} />
-        
-        {/* דפים מוגנים */}
-        <Route path="/focus" element={
-          <ProtectedRoute>
-            <FocusPage />
-          </ProtectedRoute>
-        } />
+      {/* תוכן עם padding לניווט תחתון בנייד */}
+      <main className={user ? 'pb-20 md:pb-0' : ''}>
+        <Routes>
+          {/* דף בית - מפנה לדשבורד */}
+          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
+          
+          {/* התחברות והרשמה */}
+          <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
+          
+          {/* ===== 5 העמודים הראשיים ===== */}
+          
+          {/* 1. דשבורד - עמוד הבית */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/planner" element={
-          <ProtectedRoute>
-            <PlannerPage />
-          </ProtectedRoute>
-        } />
+          {/* 2. תצוגה יומית */}
+          <Route path="/daily" element={
+            <ProtectedRoute>
+              <DailyViewPage />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
+          {/* 3. תצוגה שבועית */}
+          <Route path="/weekly" element={
+            <ProtectedRoute>
+              <WeeklyViewPage />
+            </ProtectedRoute>
+          } />
+          
+          {/* 4. תובנות ולמידה */}
+          <Route path="/insights" element={
+            <ProtectedRoute>
+              <TaskInsights />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/daily" element={
-          <ProtectedRoute>
-            <DailyViewPage />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/settings" element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/insights" element={
-          <ProtectedRoute>
-            <TaskInsights />
-          </ProtectedRoute>
-        } />
+          {/* 5. הגדרות */}
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/time-management" element={
-          <ProtectedRoute>
-            <TimeManagement />
-          </ProtectedRoute>
-        } />
-        
-        {/* פאנל ניהול - רק למנהלים */}
-        <Route path="/admin" element={
-          <ProtectedRoute requireAdmin>
-            <Admin />
-          </ProtectedRoute>
-        } />
+          {/* דף 404 - מפנה לדשבורד */}
+          <Route path="*" element={<Navigate to="/dashboard" />} />
+        </Routes>
+      </main>
 
-        {/* דף 404 */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      {/* ניווט תחתון בנייד */}
+      {user && <MobileNav />}
     </div>
   );
 }
 
 export default App;
-
