@@ -1,325 +1,119 @@
 /**
- * מנוע שיבוץ חכם
- * ================
- * פילוסופיה: לעבוד קדימה, לא לכבות שריפות!
+ * מנוע שיבוץ חכם - גרסה 3 (Ultimate)
+ * =====================================
  * 
- * כללים:
- * 1. ניצולת 100% - למלא את כל הזמן
- * 2. עדיפות לפי דדליין - קרוב יותר = קודם
- * 3. משימות בלי דדליין = לעשות היום
- * 4. תמלול בבוקר (08:15-12:00) - שעות עירנות
- * 5. בלוקים של 45 דקות + 5 דקות הפסקה
- * 6. אדמיניסטרציה רק 15 דקות בתחילת היום (08:00-08:15)
+ * פילוסופיה מרכזית:
+ * "לסיים כל משימה כמה שיותר מהר - לא לדחות לדדליין"
+ * 
+ * עקרונות:
+ * 1. מילוי ימים למקסימום (100%) לפני מעבר ליום הבא
+ * 2. משימה חדשה = משבצים מיד, לא מחכים לדדליין
+ * 3. דדליין = בדיקת היתכנות, לא מטרת תכנון
+ * 4. תמיד יש גמישות להפרעות - כי משימות מסתיימות מוקדם
+ * 
+ * סדר עדיפויות:
+ * 1. משימות עם דדליין היום (חייבים לסיים!)
+ * 2. משימות עם דדליין קרוב (לפי קרבה)
+ * 3. משימות בלי דדליין (לסיים כמה שיותר מהר)
+ * 
+ * חוקי שיבוץ:
+ * - בלוקים של 45 דקות + 5 דקות הפסקה
+ * - תמלול: 08:15-12:00 (שעות עירנות)
+ * - הגהה/תרגום/אחר: 12:00-16:00
+ * - אדמיניסטרציה: 08:00-08:15 קבוע
  */
 
-import { WORK_HOURS, formatTime } from '../config/workSchedule';
+import { WORK_HOURS } from '../config/workSchedule';
 
-/**
- * הגדרות השיבוץ החכם
- */
+// ============================================
+// הגדרות
+// ============================================
+
 export const SMART_SCHEDULE_CONFIG = {
-  // מבנה היום
-  dayStart: 8 * 60,           // 08:00 בדקות
-  dayEnd: 16 * 60,            // 16:00 בדקות
+  // שעות עבודה
+  dayStart: 8 * 60,           // 08:00
+  dayEnd: 16 * 60,            // 16:00
   
-  // אדמיניסטרציה
+  // אדמיניסטרציה קבועה
   adminStart: 8 * 60,         // 08:00
   adminEnd: 8 * 60 + 15,      // 08:15
-  adminDuration: 15,          // 15 דקות
+  adminDuration: 15,
   
-  // שעות תמלול (עירנות גבוהה)
-  transcriptionStart: 8 * 60 + 15,  // 08:15
-  transcriptionEnd: 12 * 60,        // 12:00
+  // חלון בוקר (תמלול)
+  morningStart: 8 * 60 + 15,  // 08:15
+  morningEnd: 12 * 60,        // 12:00
   
-  // שעות הגהה/תרגום (אחה"צ)
+  // חלון אחה"צ (הגהה, תרגום, אחר)
   afternoonStart: 12 * 60,    // 12:00
   afternoonEnd: 16 * 60,      // 16:00
   
   // בלוקים
-  blockDuration: 45,          // 45 דקות לבלוק
+  blockDuration: 45,          // 45 דקות
   breakDuration: 5,           // 5 דקות הפסקה
   
   // סוגי משימות לבוקר
   morningTaskTypes: ['transcription', 'תמלול'],
   
-  // סוגי משימות לאחה"צ
-  afternoonTaskTypes: ['proofreading', 'translation', 'הגהה', 'תרגום', 'admin', 'other']
+  // זמן עבודה נטו ביום (בדקות)
+  get workMinutesPerDay() {
+    return this.dayEnd - this.adminEnd; // 465 דקות = 7:45 שעות
+  },
+  
+  // כמה בלוקים מקסימום ביום
+  get maxBlocksPerDay() {
+    return Math.floor(this.workMinutesPerDay / (this.blockDuration + this.breakDuration)); // 9 בלוקים
+  }
 };
 
+// ============================================
+// פונקציה ראשית - שיבוץ שבועי
+// ============================================
+
 /**
- * שיבוץ חכם ליום
- * @param {Date} date - התאריך
+ * שיבוץ חכם לשבוע
+ * @param {Date} weekStart - תחילת השבוע (יום ראשון)
  * @param {Array} allTasks - כל המשימות
- * @returns {Object} תוכנית היום
+ * @returns {Object} תוכנית שבועית
  */
-export function smartScheduleDay(date, allTasks) {
-  const dateISO = date.toISOString().split('T')[0];
-  const dayOfWeek = date.getDay();
-  
-  // בדיקה אם יום עבודה
-  if (!WORK_HOURS[dayOfWeek]?.enabled) {
-    return {
-      date: dateISO,
-      isWorkDay: false,
-      blocks: [],
-      scheduledBlocks: [],
-      stats: { scheduled: 0, available: 0, utilization: 0 }
-    };
-  }
-  
+export function smartScheduleWeek(weekStart, allTasks) {
   const config = SMART_SCHEDULE_CONFIG;
-  const blocks = [];
   
-  // סינון משימות רלוונטיות (לא הושלמו)
+  console.log('🚀 Smart Scheduler v3 - Starting week planning');
+  console.log(`📅 Week starts: ${weekStart.toISOString().split('T')[0]}`);
+  console.log(`📋 Total tasks: ${allTasks.length}`);
+  
+  // שלב 1: יצירת מבנה ימים
+  const days = initializeDays(weekStart, config);
+  
+  // שלב 2: סינון ומיון משימות
   const pendingTasks = allTasks.filter(t => !t.is_completed);
+  const sortedTasks = prioritizeTasks(pendingTasks, days[0].date);
   
-  // מיון לפי דחיפות
-  const sortedTasks = sortByUrgency(pendingTasks, dateISO);
+  console.log(`✅ Pending tasks: ${pendingTasks.length}`);
+  console.log(`📊 Sorted tasks:`, sortedTasks.map(t => `${t.title} (${t.estimated_duration}min, due: ${t.due_date || 'ASAP'})`));
   
-  // הפרדה לפי סוג
-  const { morningTasks, afternoonTasks } = categorizeTasks(sortedTasks);
+  // שלב 3: שיבוץ משימות - למלא ימים למקסימום!
+  const schedulingResult = scheduleAllTasks(sortedTasks, days, config);
   
-  // === שלב 1: אדמיניסטרציה (08:00-08:15) ===
-  blocks.push({
-    id: 'admin-block',
-    type: 'admin',
-    title: '📧 אדמיניסטרציה',
-    description: 'מיילים, דוח בנק',
-    startMinute: config.adminStart,
-    endMinute: config.adminEnd,
-    startTime: minutesToTime(config.adminStart),
-    endTime: minutesToTime(config.adminEnd),
-    duration: config.adminDuration,
-    isFixed: true,
-    isAdmin: true
-  });
+  // שלב 4: חישוב סטטיסטיקות
+  const stats = calculateStats(days, schedulingResult, config);
   
-  // === שלב 2: תמלול בבוקר (08:15-12:00) ===
-  let currentMinute = config.transcriptionStart;
-  const morningEnd = config.transcriptionEnd;
-  
-  for (const task of morningTasks) {
-    if (currentMinute >= morningEnd) break;
-    
-    const taskBlocks = scheduleTaskInBlocks(task, currentMinute, morningEnd, config);
-    blocks.push(...taskBlocks);
-    
-    if (taskBlocks.length > 0) {
-      currentMinute = taskBlocks[taskBlocks.length - 1].endMinute + config.breakDuration;
-    }
-  }
-  
-  // === שלב 3: הגהה/תרגום אחה"צ (12:00-16:00) ===
-  currentMinute = Math.max(currentMinute, config.afternoonStart);
-  const afternoonEnd = config.afternoonEnd;
-  
-  // קודם משימות אחה"צ, אז משימות בוקר שנשארו
-  const remainingMorningTasks = morningTasks.filter(t => 
-    !blocks.some(b => b.taskId === t.id)
-  );
-  const allAfternoonTasks = [...afternoonTasks, ...remainingMorningTasks];
-  
-  for (const task of allAfternoonTasks) {
-    if (currentMinute >= afternoonEnd) break;
-    
-    // בדיקה אם המשימה כבר שובצה
-    if (blocks.some(b => b.taskId === task.id)) continue;
-    
-    const taskBlocks = scheduleTaskInBlocks(task, currentMinute, afternoonEnd, config);
-    blocks.push(...taskBlocks);
-    
-    if (taskBlocks.length > 0) {
-      currentMinute = taskBlocks[taskBlocks.length - 1].endMinute + config.breakDuration;
-    }
-  }
-  
-  // === שלב 4: מילוי זמן שנותר עם משימות נוספות ===
-  const unscheduledTasks = sortedTasks.filter(t => 
-    !blocks.some(b => b.taskId === t.id)
-  );
-  
-  // מציאת חלונות פנויים ומילוי אותם
-  const freeSlots = findFreeSlots(blocks, config.adminEnd, config.dayEnd, config);
-  
-  for (const slot of freeSlots) {
-    for (const task of unscheduledTasks) {
-      if (blocks.some(b => b.taskId === task.id)) continue;
-      
-      const taskBlocks = scheduleTaskInBlocks(task, slot.start, slot.end, config);
-      if (taskBlocks.length > 0) {
-        blocks.push(...taskBlocks);
-        break;
-      }
-    }
-  }
-  
-  // מיון לפי שעה
-  blocks.sort((a, b) => a.startMinute - b.startMinute);
-  
-  // חישוב סטטיסטיקות
-  const totalAvailable = config.dayEnd - config.dayStart;
-  const totalScheduled = blocks.reduce((sum, b) => sum + b.duration, 0);
+  console.log('📈 Week stats:', stats);
   
   return {
-    date: dateISO,
-    dayName: WORK_HOURS[dayOfWeek].name,
-    isWorkDay: true,
-    blocks,
-    scheduledBlocks: blocks, // תאימות לאחור
-    workHours: { start: 8, end: 16 },
-    unscheduledTasks: unscheduledTasks.filter(t => !blocks.some(b => b.taskId === t.id)),
-    scheduledMinutes: totalScheduled,
-    availableMinutes: totalAvailable,
-    freeMinutes: totalAvailable - totalScheduled,
-    usagePercent: Math.round((totalScheduled / totalAvailable) * 100),
-    stats: {
-      scheduled: totalScheduled,
-      available: totalAvailable,
-      utilization: Math.round((totalScheduled / totalAvailable) * 100),
-      blocksCount: blocks.length
-    }
+    weekStart: weekStart.toISOString().split('T')[0],
+    days: days.map(formatDayForOutput),
+    summary: stats,
+    warnings: schedulingResult.warnings,
+    unscheduledTasks: schedulingResult.unscheduledTasks
   };
 }
 
-/**
- * מיון משימות לפי דחיפות
- */
-function sortByUrgency(tasks, todayISO) {
-  const today = new Date(todayISO);
-  
-  return [...tasks].sort((a, b) => {
-    // משימות בלי דדליין = דדליין היום (הכי דחוף!)
-    const aDue = a.due_date ? new Date(a.due_date) : today;
-    const bDue = b.due_date ? new Date(b.due_date) : today;
-    
-    // לפי תאריך יעד
-    const dateDiff = aDue - bDue;
-    if (dateDiff !== 0) return dateDiff;
-    
-    // אם אותו תאריך - לפי עדיפות
-    const priorityOrder = { urgent: 0, high: 1, normal: 2 };
-    const aPriority = priorityOrder[a.priority] ?? 2;
-    const bPriority = priorityOrder[b.priority] ?? 2;
-    
-    return aPriority - bPriority;
-  });
-}
+// ============================================
+// שלב 1: אתחול ימים
+// ============================================
 
-/**
- * הפרדת משימות לבוקר ואחה"צ
- */
-function categorizeTasks(tasks) {
-  const config = SMART_SCHEDULE_CONFIG;
-  
-  const morningTasks = [];
-  const afternoonTasks = [];
-  
-  for (const task of tasks) {
-    const taskType = task.task_type?.toLowerCase() || '';
-    const taskTitle = task.title?.toLowerCase() || '';
-    
-    // בדיקה אם זו משימת תמלול
-    const isMorningType = config.morningTaskTypes.some(type => 
-      taskType.includes(type.toLowerCase()) || taskTitle.includes(type.toLowerCase())
-    );
-    
-    if (isMorningType) {
-      morningTasks.push(task);
-    } else {
-      afternoonTasks.push(task);
-    }
-  }
-  
-  return { morningTasks, afternoonTasks };
-}
-
-/**
- * שיבוץ משימה בבלוקים של 45 דקות
- */
-function scheduleTaskInBlocks(task, startMinute, endMinute, config) {
-  const blocks = [];
-  const taskDuration = task.estimated_duration || 30;
-  let remainingDuration = taskDuration;
-  let currentStart = startMinute;
-  let blockIndex = 1;
-  
-  // כמה בלוקים צריך
-  const totalBlocks = Math.ceil(taskDuration / config.blockDuration);
-  
-  while (remainingDuration > 0 && currentStart < endMinute) {
-    const blockDuration = Math.min(remainingDuration, config.blockDuration);
-    const blockEnd = currentStart + blockDuration;
-    
-    // בדיקה שלא חורגים מסוף הזמן
-    if (blockEnd > endMinute) break;
-    
-    blocks.push({
-      id: `${task.id}-block-${blockIndex}`,
-      taskId: task.id,
-      task: task,
-      type: task.task_type || 'other',
-      title: totalBlocks > 1 ? `${task.title} (${blockIndex}/${totalBlocks})` : task.title,
-      startMinute: currentStart,
-      endMinute: blockEnd,
-      startTime: minutesToTime(currentStart),
-      endTime: minutesToTime(blockEnd),
-      duration: blockDuration,
-      isFixed: !!task.due_time,
-      blockIndex,
-      totalBlocks
-    });
-    
-    remainingDuration -= blockDuration;
-    currentStart = blockEnd + config.breakDuration;
-    blockIndex++;
-  }
-  
-  return blocks;
-}
-
-/**
- * מציאת חלונות פנויים
- */
-function findFreeSlots(blocks, dayStart, dayEnd, config) {
-  const slots = [];
-  const sortedBlocks = [...blocks].sort((a, b) => a.startMinute - b.startMinute);
-  
-  let currentStart = dayStart;
-  
-  for (const block of sortedBlocks) {
-    if (block.startMinute > currentStart + config.blockDuration) {
-      slots.push({
-        start: currentStart,
-        end: block.startMinute - config.breakDuration
-      });
-    }
-    currentStart = Math.max(currentStart, block.endMinute + config.breakDuration);
-  }
-  
-  // חלון בסוף היום
-  if (currentStart + config.blockDuration <= dayEnd) {
-    slots.push({
-      start: currentStart,
-      end: dayEnd
-    });
-  }
-  
-  return slots;
-}
-
-/**
- * המרת דקות לפורמט שעה
- */
-function minutesToTime(minutes) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-}
-
-/**
- * שיבוץ חכם לשבוע שלם
- */
-export function smartScheduleWeek(weekStart, allTasks) {
+function initializeDays(weekStart, config) {
   const days = [];
   
   for (let i = 0; i < 7; i++) {
@@ -327,32 +121,378 @@ export function smartScheduleWeek(weekStart, allTasks) {
     date.setDate(date.getDate() + i);
     date.setHours(12, 0, 0, 0);
     
-    const dayPlan = smartScheduleDay(date, allTasks);
-    days.push(dayPlan);
+    const dateISO = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const dayConfig = WORK_HOURS[dayOfWeek];
+    const isWorkDay = dayConfig?.enabled || false;
+    
+    const day = {
+      date: dateISO,
+      dayName: dayConfig?.name || '',
+      dayOfWeek,
+      isWorkDay,
+      blocks: [],
+      morningMinutesUsed: 0,
+      afternoonMinutesUsed: 0,
+      totalScheduledMinutes: 0,
+      workHours: isWorkDay ? { start: 8, end: 16 } : null
+    };
+    
+    // הוספת בלוק אדמיניסטרציה קבוע
+    if (isWorkDay) {
+      day.blocks.push({
+        id: 'admin-block',
+        type: 'admin',
+        title: '📧 אדמיניסטרציה',
+        description: 'מיילים, דוח בנק',
+        startMinute: config.adminStart,
+        endMinute: config.adminEnd,
+        startTime: minutesToTime(config.adminStart),
+        endTime: minutesToTime(config.adminEnd),
+        duration: config.adminDuration,
+        isFixed: true,
+        isAdmin: true
+      });
+      day.totalScheduledMinutes = config.adminDuration;
+    }
+    
+    days.push(day);
   }
   
-  // סטטיסטיקות שבועיות
-  const workDays = days.filter(d => d.isWorkDay);
-  const totalScheduled = workDays.reduce((sum, d) => sum + d.stats.scheduled, 0);
-  const totalAvailable = workDays.reduce((sum, d) => sum + d.stats.available, 0);
+  return days;
+}
+
+// ============================================
+// שלב 2: מיון משימות לפי עדיפות
+// ============================================
+
+/**
+ * מיון משימות - הכי דחוף קודם, אבל תמיד לסיים מהר!
+ */
+function prioritizeTasks(tasks, todayISO) {
+  const today = new Date(todayISO);
+  
+  return [...tasks].sort((a, b) => {
+    const aDue = a.due_date ? new Date(a.due_date) : null;
+    const bDue = b.due_date ? new Date(b.due_date) : null;
+    
+    // 1. משימות עם דדליין היום - הכי דחוף!
+    const aIsToday = aDue && isSameDay(aDue, today);
+    const bIsToday = bDue && isSameDay(bDue, today);
+    if (aIsToday && !bIsToday) return -1;
+    if (bIsToday && !aIsToday) return 1;
+    
+    // 2. משימות עם דדליין קרוב (עד שבוע)
+    const aIsUrgent = aDue && daysBetween(today, aDue) <= 7;
+    const bIsUrgent = bDue && daysBetween(today, bDue) <= 7;
+    
+    if (aIsUrgent && bIsUrgent) {
+      // שניהם דחופים - לפי קרבת דדליין
+      return aDue - bDue;
+    }
+    if (aIsUrgent && !bIsUrgent) return -1;
+    if (bIsUrgent && !aIsUrgent) return 1;
+    
+    // 3. לפי עדיפות מוגדרת
+    const priorityOrder = { urgent: 0, high: 1, normal: 2 };
+    const aPriority = priorityOrder[a.priority] ?? 2;
+    const bPriority = priorityOrder[b.priority] ?? 2;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    
+    // 4. משימות ארוכות יותר קודם (כדי למלא ימים)
+    const aDuration = a.estimated_duration || 30;
+    const bDuration = b.estimated_duration || 30;
+    return bDuration - aDuration;
+  });
+}
+
+// ============================================
+// שלב 3: שיבוץ משימות
+// ============================================
+
+/**
+ * שיבוץ כל המשימות - למלא ימים למקסימום!
+ */
+function scheduleAllTasks(tasks, days, config) {
+  const taskProgress = new Map();
+  const warnings = [];
+  const unscheduledTasks = [];
+  
+  for (const task of tasks) {
+    const duration = task.estimated_duration || 30;
+    taskProgress.set(task.id, { 
+      total: duration,
+      scheduled: 0, 
+      remaining: duration,
+      blocks: []
+    });
+    
+    // בדיקה: האם יש מספיק זמן עד הדדליין?
+    if (task.due_date) {
+      const feasibility = checkFeasibility(task, days, config);
+      if (!feasibility.canComplete) {
+        warnings.push({
+          type: 'deadline_risk',
+          taskId: task.id,
+          taskTitle: task.title,
+          message: `⚠️ "${task.title}" - לא בטוח שניתן לעמוד בדדליין ${task.due_date}`,
+          details: feasibility
+        });
+      }
+    }
+    
+    // שיבוץ המשימה - מתחילים מהיום הראשון!
+    scheduleTask(task, days, taskProgress, config);
+    
+    // בדיקה אם נשאר זמן לא משובץ
+    const progress = taskProgress.get(task.id);
+    if (progress.remaining > 0) {
+      unscheduledTasks.push({
+        ...task,
+        scheduledMinutes: progress.scheduled,
+        remainingMinutes: progress.remaining,
+        reason: 'לא מספיק זמן בשבוע'
+      });
+    }
+  }
+  
+  return { taskProgress, warnings, unscheduledTasks };
+}
+
+/**
+ * שיבוץ משימה בודדת - למלא ימים ברצף!
+ */
+function scheduleTask(task, days, taskProgress, config) {
+  const progress = taskProgress.get(task.id);
+  if (!progress || progress.remaining <= 0) return;
+  
+  const isMorningTask = isMorningTaskType(task, config);
+  const totalBlocks = Math.ceil(progress.total / config.blockDuration);
+  
+  // עובר על כל הימים - ממלא כל יום למקסימום לפני מעבר להבא
+  for (const day of days) {
+    if (!day.isWorkDay) continue;
+    if (progress.remaining <= 0) break;
+    
+    // שיבוץ בחלון המועדף
+    const preferredWindow = isMorningTask 
+      ? { start: config.morningStart, end: config.morningEnd }
+      : { start: config.afternoonStart, end: config.afternoonEnd };
+    
+    scheduleInWindow(task, day, preferredWindow, progress, totalBlocks, config);
+    
+    // אם נשאר - שיבוץ בחלון האחר
+    if (progress.remaining > 0) {
+      const altWindow = isMorningTask
+        ? { start: config.afternoonStart, end: config.afternoonEnd }
+        : { start: config.morningStart, end: config.morningEnd };
+      
+      scheduleInWindow(task, day, altWindow, progress, totalBlocks, config);
+    }
+  }
+}
+
+/**
+ * שיבוץ בלוקים בחלון זמן מסוים
+ */
+function scheduleInWindow(task, day, window, progress, totalBlocks, config) {
+  // מציאת סלוטים פנויים בחלון
+  const freeSlots = findFreeSlots(day.blocks, window.start, window.end, config);
+  
+  for (const slot of freeSlots) {
+    if (progress.remaining <= 0) break;
+    
+    let currentStart = slot.start;
+    
+    // שיבוץ בלוקים בסלוט
+    while (progress.remaining > 0 && currentStart + config.blockDuration <= slot.end) {
+      const blockDuration = Math.min(progress.remaining, config.blockDuration);
+      const blockEnd = currentStart + blockDuration;
+      
+      const blockIndex = progress.blocks.length + 1;
+      
+      const block = {
+        id: `${task.id}-block-${blockIndex}`,
+        taskId: task.id,
+        task: task,
+        type: task.task_type || 'other',
+        title: totalBlocks > 1 ? `${task.title} (${blockIndex}/${totalBlocks})` : task.title,
+        startMinute: currentStart,
+        endMinute: blockEnd,
+        startTime: minutesToTime(currentStart),
+        endTime: minutesToTime(blockEnd),
+        duration: blockDuration,
+        blockIndex,
+        totalBlocks,
+        dayDate: day.date
+      };
+      
+      day.blocks.push(block);
+      progress.blocks.push(block);
+      progress.scheduled += blockDuration;
+      progress.remaining -= blockDuration;
+      day.totalScheduledMinutes += blockDuration;
+      
+      // עדכון שימוש בחלונות
+      if (currentStart < config.morningEnd) {
+        day.morningMinutesUsed += blockDuration;
+      } else {
+        day.afternoonMinutesUsed += blockDuration;
+      }
+      
+      currentStart = blockEnd + config.breakDuration;
+    }
+  }
+  
+  // מיון בלוקים לפי שעה
+  day.blocks.sort((a, b) => a.startMinute - b.startMinute);
+}
+
+/**
+ * מציאת סלוטים פנויים בחלון
+ */
+function findFreeSlots(blocks, windowStart, windowEnd, config) {
+  const slots = [];
+  const sortedBlocks = blocks
+    .filter(b => b.endMinute > windowStart && b.startMinute < windowEnd)
+    .sort((a, b) => a.startMinute - b.startMinute);
+  
+  let current = windowStart;
+  
+  for (const block of sortedBlocks) {
+    if (block.startMinute > current) {
+      const gapSize = block.startMinute - current;
+      if (gapSize >= config.blockDuration) {
+        slots.push({ start: current, end: block.startMinute });
+      }
+    }
+    current = Math.max(current, block.endMinute + config.breakDuration);
+  }
+  
+  // סלוט בסוף החלון
+  if (windowEnd > current) {
+    const gapSize = windowEnd - current;
+    if (gapSize >= config.blockDuration) {
+      slots.push({ start: current, end: windowEnd });
+    }
+  }
+  
+  return slots;
+}
+
+/**
+ * בדיקת היתכנות - האם אפשר לסיים לפני הדדליין?
+ */
+function checkFeasibility(task, days, config) {
+  const duration = task.estimated_duration || 30;
+  const deadline = task.due_date;
+  
+  let availableMinutes = 0;
+  
+  for (const day of days) {
+    if (!day.isWorkDay) continue;
+    if (day.date > deadline) break;
+    
+    // זמן פנוי ביום
+    const dayCapacity = config.workMinutesPerDay - day.totalScheduledMinutes;
+    availableMinutes += Math.max(0, dayCapacity);
+  }
   
   return {
-    weekStart: weekStart.toISOString().split('T')[0],
-    days,
-    summary: {
-      totalScheduledMinutes: totalScheduled,
-      totalAvailableMinutes: totalAvailable,
-      usagePercent: totalAvailable > 0 ? Math.round((totalScheduled / totalAvailable) * 100) : 0,
-      overloadDays: 0
-    },
-    stats: {
-      totalScheduled,
-      totalAvailable,
-      utilization: totalAvailable > 0 ? Math.round((totalScheduled / totalAvailable) * 100) : 0,
-      workDaysCount: workDays.length
-    }
+    canComplete: availableMinutes >= duration,
+    availableMinutes,
+    requiredMinutes: duration,
+    deficit: Math.max(0, duration - availableMinutes)
   };
 }
+
+// ============================================
+// שלב 4: סטטיסטיקות
+// ============================================
+
+function calculateStats(days, schedulingResult, config) {
+  const workDays = days.filter(d => d.isWorkDay);
+  const totalAvailable = workDays.length * (config.dayEnd - config.dayStart);
+  const totalScheduled = workDays.reduce((sum, d) => sum + d.totalScheduledMinutes, 0);
+  
+  return {
+    totalScheduledMinutes: totalScheduled,
+    totalAvailableMinutes: totalAvailable,
+    usagePercent: totalAvailable > 0 ? Math.round((totalScheduled / totalAvailable) * 100) : 0,
+    workDaysCount: workDays.length,
+    overloadDays: workDays.filter(d => d.totalScheduledMinutes > (config.dayEnd - config.dayStart)).length,
+    warningsCount: schedulingResult.warnings.length,
+    unscheduledCount: schedulingResult.unscheduledTasks.length
+  };
+}
+
+function formatDayForOutput(day) {
+  const config = SMART_SCHEDULE_CONFIG;
+  const dayCapacity = day.isWorkDay ? (config.dayEnd - config.dayStart) : 0;
+  
+  return {
+    ...day,
+    scheduledBlocks: day.blocks, // תאימות לאחור
+    usagePercent: dayCapacity > 0 ? Math.round((day.totalScheduledMinutes / dayCapacity) * 100) : 0,
+    freeMinutes: Math.max(0, dayCapacity - day.totalScheduledMinutes),
+    scheduledMinutes: day.totalScheduledMinutes,
+    availableMinutes: dayCapacity
+  };
+}
+
+// ============================================
+// פונקציות עזר
+// ============================================
+
+function minutesToTime(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
+
+function isSameDay(date1, date2) {
+  return date1.toISOString().split('T')[0] === date2.toISOString().split('T')[0];
+}
+
+function daysBetween(date1, date2) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.ceil((date2 - date1) / msPerDay);
+}
+
+function isMorningTaskType(task, config) {
+  const taskType = task.task_type?.toLowerCase() || '';
+  const taskTitle = task.title?.toLowerCase() || '';
+  
+  return config.morningTaskTypes.some(type => 
+    taskType.includes(type.toLowerCase()) || 
+    taskTitle.includes(type.toLowerCase())
+  );
+}
+
+// ============================================
+// פונקציה לתאימות לאחור
+// ============================================
+
+export function smartScheduleDay(date, allTasks) {
+  const weekStart = new Date(date);
+  const dayOfWeek = weekStart.getDay();
+  weekStart.setDate(weekStart.getDate() - dayOfWeek);
+  weekStart.setHours(12, 0, 0, 0);
+  
+  const weekPlan = smartScheduleWeek(weekStart, allTasks);
+  const dateISO = date.toISOString().split('T')[0];
+  
+  return weekPlan.days.find(d => d.date === dateISO) || {
+    date: dateISO,
+    isWorkDay: false,
+    blocks: [],
+    scheduledBlocks: []
+  };
+}
+
+// ============================================
+// ייצוא
+// ============================================
 
 export default {
   smartScheduleDay,
