@@ -206,8 +206,8 @@ function WeeklyPlanner() {
 
       {/* תצוגת שבוע */}
       {viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-2">
-          {[...plan.days].reverse().map((day, idx) => (
+        <div className="grid grid-cols-7 gap-2 direction-rtl" style={{ direction: 'rtl' }}>
+          {plan.days.map((day, idx) => (
             <DayColumn
               key={day.date}
               day={day}
@@ -440,11 +440,11 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
         {/* ניווט בין ימים */}
         <div className="flex items-center justify-between">
           <button
-            onClick={() => nextDay && onSelectDay(nextDay)}
-            disabled={!nextDay}
-            className={`p-2 rounded-lg ${nextDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
+            onClick={() => prevDay && onSelectDay(prevDay)}
+            disabled={!prevDay}
+            className={`p-2 rounded-lg ${prevDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
           >
-            ◄ {nextDay ? dayNames[new Date(nextDay.date + 'T12:00:00').getDay()] : ''}
+            ◄ {prevDay ? dayNames[new Date(prevDay.date + 'T12:00:00').getDay()] : ''}
           </button>
           
           <div className="text-center">
@@ -457,11 +457,11 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
           </div>
           
           <button
-            onClick={() => prevDay && onSelectDay(prevDay)}
-            disabled={!prevDay}
-            className={`p-2 rounded-lg ${prevDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
+            onClick={() => nextDay && onSelectDay(nextDay)}
+            disabled={!nextDay}
+            className={`p-2 rounded-lg ${nextDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
           >
-            {prevDay ? dayNames[new Date(prevDay.date + 'T12:00:00').getDay()] : ''} ►
+            {nextDay ? dayNames[new Date(nextDay.date + 'T12:00:00').getDay()] : ''} ►
           </button>
         </div>
       </div>
