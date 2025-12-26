@@ -362,8 +362,8 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
             <TaskSlot
               key={block.id || `block-${idx}`}
               slot={block}
-              onEdit={() => onEditTask(block.task)}
-              onComplete={() => onComplete(block.task)}
+              onEdit={() => block.task && onEditTask(block.task)}
+              onComplete={() => block.task && onComplete(block.task)}
               compact
             />
           ))
@@ -544,7 +544,11 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
  * חריץ משימה
  */
 function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
-  const taskType = TASK_TYPES[slot.task?.task_type] || TASK_TYPES.other;
+  const task = slot.task || slot; // תמיכה בשני הפורמטים
+  const taskType = TASK_TYPES[task?.task_type] || TASK_TYPES.other;
+  
+  // לא מציגים בלוק אדמיניסטרציה עם כפתור השלמה
+  const isAdminBlock = slot.isAdmin || slot.isFixed;
   
   // צבעים לפי מצב המשימה
   const priorityColors = {
@@ -553,9 +557,16 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
     normal: 'border-r-blue-500 bg-blue-50 dark:bg-blue-900/20'
   };
 
-  const colorClass = slot.isFixed 
+  const colorClass = isAdminBlock 
     ? 'border-r-purple-500 bg-purple-50 dark:bg-purple-900/20'
-    : priorityColors[slot.task?.priority] || 'border-r-gray-300 bg-gray-50 dark:bg-gray-700';
+    : priorityColors[task?.priority] || 'border-r-gray-300 bg-gray-50 dark:bg-gray-700';
+
+  const handleComplete = (e) => {
+    e.stopPropagation();
+    if (task && onComplete) {
+      onComplete();
+    }
+  };
 
   return (
     <motion.div
@@ -575,7 +586,7 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
         <div className="flex-1 min-w-0">
           {/* כותרת */}
           <div className={`font-medium text-gray-900 dark:text-white truncate ${compact ? 'text-xs' : 'text-sm'}`}>
-            {slot.task?.title}
+            {slot.title || task?.title}
           </div>
           
           {/* שעות */}
@@ -584,21 +595,19 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
           </div>
           
           {/* תגית שעה קבועה */}
-          {slot.isFixed && !compact && (
+          {isAdminBlock && !compact && (
             <span className="inline-block mt-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200 text-xs rounded">
-              📍 שעה קבועה
+              📍 קבוע
             </span>
           )}
         </div>
 
-        {/* כפתור השלמה */}
-        {!compact && (
+        {/* כפתור השלמה - תמיד מוצג אלא אם זה בלוק קבוע */}
+        {!isAdminBlock && task && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onComplete();
-            }}
-            className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-400 hover:text-green-600"
+            onClick={handleComplete}
+            className={`${compact ? 'p-0.5' : 'p-1'} rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-400 hover:text-green-600 transition-colors`}
+            title="סמן כהושלם"
           >
             ✓
           </button>
