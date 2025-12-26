@@ -14,9 +14,8 @@ function Sidebar({ isOpen, onClose }) {
 
   // קישורי ניווט
   const navLinks = [
-    { path: '/planner', label: 'תכנון חכם', icon: '🎯' },
-    { path: '/daily', label: 'יומן משימות', icon: '📅' },
-    { path: '/dashboard', label: 'לוח משימות', icon: '📋' },
+    { path: '/focus', label: 'עכשיו', icon: '🎯' },
+    { path: '/planner', label: 'תכנון שבועי', icon: '📋' },
     { path: '/insights', label: 'תובנות למידה', icon: '📊' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];

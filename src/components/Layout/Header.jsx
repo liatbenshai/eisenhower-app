@@ -48,9 +48,8 @@ function Header() {
 
   // קישורי ניווט
   const navLinks = [
-    { path: '/planner', label: 'תכנון חכם', icon: '🎯' },
-    { path: '/daily', label: 'יומן', icon: '📅' },
-    { path: '/dashboard', label: 'דשבורד', icon: '📋' },
+    { path: '/focus', label: 'עכשיו', icon: '🎯' },
+    { path: '/planner', label: 'תכנון', icon: '📋' },
     { path: '/insights', label: 'תובנות', icon: '📊' },
     { path: '/settings', label: 'הגדרות', icon: '⚙️' }
   ];
@@ -64,7 +63,7 @@ function Header() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* לוגו */}
-          <Link to="/planner" className="flex items-center gap-2">
+          <Link to="/focus" className="flex items-center gap-2">
             <span className="text-2xl">⏰</span>
             <span className="font-bold text-xl text-gray-900 dark:text-white hidden sm:block">
               ניהול זמן

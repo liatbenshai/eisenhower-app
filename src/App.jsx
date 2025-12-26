@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DailyViewPage from './pages/DailyViewPage';
 import SmartPlannerPage from './pages/SmartPlannerPage';
+import FocusPage from './pages/FocusPage';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import TaskInsights from './pages/TaskInsights';
@@ -50,19 +51,28 @@ function App() {
       {/* הודעת התקנת PWA */}
       <InstallPrompt />
 
-      {/* כותרת עליונה */}
-      {user && <Header />}
-
       {/* ניתוב */}
       <Routes>
         {/* דף בית */}
-        <Route path="/" element={user ? <Navigate to="/planner" /> : <Home />} />
+        <Route path="/" element={user ? <Navigate to="/focus" /> : <Home />} />
         
         {/* התחברות והרשמה */}
-        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
+        <Route path="/login" element={user ? <Navigate to="/focus" /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/focus" /> : <Register />} />
         
         {/* דפים מוגנים */}
+        <Route path="/focus" element={
+          <ProtectedRoute>
+            <FocusPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/planner" element={
+          <ProtectedRoute>
+            <SmartPlannerPage />
+          </ProtectedRoute>
+        } />
+
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
@@ -72,12 +82,6 @@ function App() {
         <Route path="/daily" element={
           <ProtectedRoute>
             <DailyViewPage />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/planner" element={
-          <ProtectedRoute>
-            <SmartPlannerPage />
           </ProtectedRoute>
         } />
         
