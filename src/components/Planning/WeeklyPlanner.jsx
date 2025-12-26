@@ -206,20 +206,21 @@ function WeeklyPlanner() {
 
       {/* תצוגת שבוע */}
       {viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-2 direction-rtl" style={{ direction: 'rtl' }}>
+        <div className="flex flex-row-reverse gap-2">
           {plan.days.map((day, idx) => (
-            <DayColumn
-              key={day.date}
-              day={day}
-              isToday={isToday(day.date)}
-              onAddTask={() => handleAddTask(day.date)}
-              onEditTask={handleEditTask}
-              onComplete={handleComplete}
-              onSelectDay={() => {
-                setSelectedDay(day);
-                setViewMode('day');
-              }}
-            />
+            <div key={day.date} className="flex-1">
+              <DayColumn
+                day={day}
+                isToday={isToday(day.date)}
+                onAddTask={() => handleAddTask(day.date)}
+                onEditTask={handleEditTask}
+                onComplete={handleComplete}
+                onSelectDay={() => {
+                  setSelectedDay(day);
+                  setViewMode('day');
+                }}
+              />
+            </div>
           ))}
         </div>
       ) : (
