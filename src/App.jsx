@@ -8,7 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DailyViewPage from './pages/DailyViewPage';
-import SmartPlannerPage from './pages/SmartPlannerPage';
+import PlannerPage from './pages/PlannerPage';
 import FocusPage from './pages/FocusPage';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
@@ -72,7 +72,7 @@ function App() {
 
         <Route path="/planner" element={
           <ProtectedRoute>
-            <SmartPlannerPage />
+            <PlannerPage />
           </ProtectedRoute>
         } />
 
