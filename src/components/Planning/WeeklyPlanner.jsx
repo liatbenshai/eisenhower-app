@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '../../hooks/useTasks';
-import { planWeek } from '../../utils/dayPlanner';
+import { smartScheduleWeek } from '../../utils/smartScheduler';
 import { TASK_TYPES } from '../../config/taskTypes';
 import { formatDuration } from '../../config/workSchedule';
 import SimpleTaskForm from '../DailyView/SimpleTaskForm';
@@ -45,22 +45,12 @@ function WeeklyPlanner() {
   // היום הנוכחי
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // תכנון שבועי - משתמש ב-planWeek הקיים
+  // תכנון שבועי - משתמש במנוע החכם
   const plan = useMemo(() => {
     if (!tasks) return null;
-    console.log('🔄 WeeklyPlanner calling planWeek:', {
-      weekStart: weekStart.toISOString(),
-      tasksCount: tasks.length
-    });
-    const weekPlan = planWeek(weekStart, tasks);
-    console.log('📊 Week plan result:', {
-      days: weekPlan.days?.map(d => ({
-        date: d.date,
-        dayName: d.dayName,
-        isWorkDay: d.isWorkDay,
-        blocksCount: d.scheduledBlocks?.length || 0
-      }))
-    });
+    console.log('🔄 WeeklyPlanner calling smartScheduleWeek with', tasks.length, 'tasks');
+    const weekPlan = smartScheduleWeek(weekStart, tasks);
+    console.log('📊 Smart week plan result:', weekPlan);
     return weekPlan;
   }, [tasks, weekStart]);
 
@@ -309,9 +299,9 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
     ? 'border-blue-400 dark:border-blue-600' 
     : 'border-gray-200 dark:border-gray-700';
 
-  // שימוש ב-scheduledBlocks מתוך planDay
-  const blocks = day.scheduledBlocks || [];
-  const usagePercent = day.usagePercent || 0;
+  // שימוש ב-blocks או scheduledBlocks (תאימות)
+  const blocks = day.blocks || day.scheduledBlocks || [];
+  const usagePercent = day.usagePercent || day.stats?.utilization || 0;
 
   // חישוב שם היום והתאריך מתוך day.date
   const dateObj = new Date(day.date + 'T12:00:00'); // הוספת שעה למניעת בעיות timezone
@@ -406,7 +396,7 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
     }
   }
 
-  const blocks = day.scheduledBlocks || [];
+  const blocks = day.blocks || day.scheduledBlocks || [];
   
   // חישוב שם היום מתוך day.date
   const dateObj = new Date(day.date + 'T12:00:00');
