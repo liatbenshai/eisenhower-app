@@ -5,6 +5,7 @@ import { smartScheduleWeek } from '../../utils/smartScheduler';
 import { TASK_TYPES } from '../../config/taskTypes';
 import { formatDuration } from '../../config/workSchedule';
 import SimpleTaskForm from '../DailyView/SimpleTaskForm';
+import TaskTimerWithInterruptions from '../Tasks/TaskTimerWithInterruptions';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 import toast from 'react-hot-toast';
@@ -22,6 +23,7 @@ function WeeklyPlanner() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [viewMode, setViewMode] = useState('week'); // 'week' | 'day'
   const [selectedDay, setSelectedDay] = useState(null);
+  const [timerTask, setTimerTask] = useState(null); // משימה עם טיימר פעיל
 
   // חישוב תחילת השבוע - יום ראשון של השבוע הנוכחי
   const weekStart = useMemo(() => {
@@ -107,6 +109,17 @@ function WeeklyPlanner() {
     } catch (err) {
       toast.error('שגיאה בעדכון');
     }
+  };
+
+  // הפעלת טיימר למשימה
+  const handleStartTimer = (task) => {
+    setTimerTask(task);
+  };
+
+  // סגירת טיימר
+  const handleCloseTimer = () => {
+    setTimerTask(null);
+    loadTasks(); // רענון לאחר עבודה
   };
 
   // פורמט תאריך לכותרת
@@ -221,6 +234,7 @@ function WeeklyPlanner() {
                 onAddTask={() => handleAddTask(day.date)}
                 onEditTask={handleEditTask}
                 onComplete={handleComplete}
+                onStartTimer={handleStartTimer}
                 onSelectDay={() => {
                   setSelectedDay(day);
                   setViewMode('day');
@@ -275,6 +289,24 @@ function WeeklyPlanner() {
           defaultDate={selectedDate}
         />
       </Modal>
+
+      {/* מודל טיימר */}
+      <Modal
+        isOpen={!!timerTask}
+        onClose={handleCloseTimer}
+        title={`⏱️ ${timerTask?.title || 'טיימר'}`}
+        size="lg"
+      >
+        {timerTask && (
+          <TaskTimerWithInterruptions
+            task={timerTask}
+            onComplete={() => {
+              handleComplete(timerTask);
+              handleCloseTimer();
+            }}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -304,7 +336,7 @@ function StatCard({ icon, label, value, subtext, color = 'gray' }) {
 /**
  * עמודת יום
  */
-function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDay }) {
+function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onStartTimer, onSelectDay }) {
   const bgColor = !day.isWorkDay 
     ? 'bg-gray-100 dark:bg-gray-800/50' 
     : isToday 
@@ -318,9 +350,6 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
   // שימוש ב-blocks או scheduledBlocks (תאימות)
   const blocks = day.blocks || day.scheduledBlocks || [];
   const usagePercent = day.usagePercent || day.stats?.utilization || 0;
-
-  // Debug log
-  console.log(`🗓️ DayColumn ${day.date}: ${blocks.length} blocks`, blocks.map(b => b.title));
 
   // חישוב שם היום והתאריך מתוך day.date
   const dateObj = new Date(day.date + 'T12:00:00'); // הוספת שעה למניעת בעיות timezone
@@ -364,6 +393,7 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
               slot={block}
               onEdit={() => block.task && onEditTask(block.task)}
               onComplete={() => block.task && onComplete(block.task)}
+              onStartTimer={() => block.task && onStartTimer(block.task)}
               compact
             />
           ))
@@ -543,7 +573,7 @@ function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete
 /**
  * חריץ משימה
  */
-function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
+function TaskSlot({ slot, onEdit, onComplete, onStartTimer, compact = false }) {
   const task = slot.task || slot; // תמיכה בשני הפורמטים
   const taskType = TASK_TYPES[task?.task_type] || TASK_TYPES.other;
   
@@ -565,6 +595,13 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
     e.stopPropagation();
     if (task && onComplete) {
       onComplete();
+    }
+  };
+
+  const handleStartTimer = (e) => {
+    e.stopPropagation();
+    if (task && onStartTimer) {
+      onStartTimer();
     }
   };
 
@@ -602,15 +639,26 @@ function TaskSlot({ slot, onEdit, onComplete, compact = false }) {
           )}
         </div>
 
-        {/* כפתור השלמה - תמיד מוצג אלא אם זה בלוק קבוע */}
+        {/* כפתורים - הפעלה והשלמה */}
         {!isAdminBlock && task && (
-          <button
-            onClick={handleComplete}
-            className={`${compact ? 'p-0.5' : 'p-1'} rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-400 hover:text-green-600 transition-colors`}
-            title="סמן כהושלם"
-          >
-            ✓
-          </button>
+          <div className="flex gap-1">
+            {/* כפתור הפעלת טיימר */}
+            <button
+              onClick={handleStartTimer}
+              className={`${compact ? 'p-0.5' : 'p-1'} rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-400 hover:text-blue-600 transition-colors`}
+              title="הפעל טיימר"
+            >
+              ▶
+            </button>
+            {/* כפתור השלמה */}
+            <button
+              onClick={handleComplete}
+              className={`${compact ? 'p-0.5' : 'p-1'} rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-400 hover:text-green-600 transition-colors`}
+              title="סמן כהושלם"
+            >
+              ✓
+            </button>
+          </div>
         )}
       </div>
     </motion.div>
