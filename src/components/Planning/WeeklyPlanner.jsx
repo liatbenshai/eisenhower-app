@@ -206,8 +206,8 @@ function WeeklyPlanner() {
 
       {/* תצוגת שבוע */}
       {viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-2" dir="rtl">
-          {plan.days.map((day, idx) => (
+        <div className="grid grid-cols-7 gap-2">
+          {[...plan.days].reverse().map((day, idx) => (
             <DayColumn
               key={day.date}
               day={day}
@@ -225,10 +225,12 @@ function WeeklyPlanner() {
       ) : (
         <DayDetailView
           day={selectedDay || plan.days.find(d => isToday(d.date)) || plan.days[0]}
+          allDays={plan.days}
           onBack={() => setViewMode('week')}
           onAddTask={handleAddTask}
           onEditTask={handleEditTask}
           onComplete={handleComplete}
+          onSelectDay={(day) => setSelectedDay(day)}
         />
       )}
 
@@ -395,7 +397,7 @@ function DayColumn({ day, isToday, onAddTask, onEditTask, onComplete, onSelectDa
 /**
  * תצוגת יום מפורטת
  */
-function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
+function DayDetailView({ day, allDays, onBack, onAddTask, onEditTask, onComplete, onSelectDay }) {
   const hours = [];
   if (day.workHours) {
     for (let h = day.workHours.start; h < day.workHours.end; h++) {
@@ -410,32 +412,58 @@ function DayDetailView({ day, onBack, onAddTask, onEditTask, onComplete }) {
   const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
   const dayName = dayNames[dateObj.getDay()];
 
+  // מציאת היום הקודם והבא
+  const currentIndex = allDays?.findIndex(d => d.date === day.date) ?? -1;
+  const prevDay = currentIndex > 0 ? allDays[currentIndex - 1] : null;
+  const nextDay = currentIndex < (allDays?.length || 0) - 1 ? allDays[currentIndex + 1] : null;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* כותרת */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600"
-        >
-          ← חזרה לשבוע
-        </button>
-        
-        <div className="text-center">
-          <div className="text-xl font-bold text-gray-900 dark:text-white">
-            יום {dayName}
-          </div>
-          <div className="text-sm text-gray-500">
-            {dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })}
-          </div>
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={onBack}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600"
+          >
+            ← חזרה לשבוע
+          </button>
+          
+          <button
+            onClick={() => onAddTask(day.date)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            + משימה
+          </button>
         </div>
         
-        <button
-          onClick={() => onAddTask(day.date)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          + משימה
-        </button>
+        {/* ניווט בין ימים */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => nextDay && onSelectDay(nextDay)}
+            disabled={!nextDay}
+            className={`p-2 rounded-lg ${nextDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
+          >
+            ◄ {nextDay ? dayNames[new Date(nextDay.date + 'T12:00:00').getDay()] : ''}
+          </button>
+          
+          <div className="text-center">
+            <div className="text-xl font-bold text-gray-900 dark:text-white">
+              יום {dayName}
+            </div>
+            <div className="text-sm text-gray-500">
+              {dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })}
+            </div>
+          </div>
+          
+          <button
+            onClick={() => prevDay && onSelectDay(prevDay)}
+            disabled={!prevDay}
+            className={`p-2 rounded-lg ${prevDay ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
+          >
+            {prevDay ? dayNames[new Date(prevDay.date + 'T12:00:00').getDay()] : ''} ►
+          </button>
+        </div>
       </div>
 
       {/* ציר זמן */}
